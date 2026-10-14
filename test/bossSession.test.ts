@@ -189,6 +189,7 @@ describe('task-finished chat entry', () => {
     await manager.hire('frontend');
     const t = await manager.createTask({ assignee: 'Pixel', title: 'a', brief: 'a', createdBy: 'boss' });
     const entry = await until((e) => e.kind === 'event' && e.taskId === t.id);
+    if (entry.kind !== 'event') throw new Error('expected an event entry');
     expect(entry.text).toMatch(/^\*\*T-101 by Pixel finished successfully\.\*\*/);
     expect(entry.text).not.toContain('get_task');
     await until((e) => e.kind === 'boss' && e.text.includes('[AgentOffice] T-101 by Pixel finished successfully. Summary:'));
