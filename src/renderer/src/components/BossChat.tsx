@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Agent, ChatEntry, Look, MergeRequest } from '../../../shared/types';
 import { describeToolCall } from '../chat/describe';
+import { Markdown } from '../chat/Markdown';
 import { Avatar } from '../sprites/Avatar';
 import { STATUS_COLORS, STATUS_LABEL } from '../sprites/sprite';
 
 function Entry({ e }: { e: ChatEntry }) {
   switch (e.kind) {
     case 'user': return <div className="msg user pre">{e.text}</div>;
-    case 'boss': return <div className="msg boss pre">{e.text}</div>;
-    case 'report': return <div className="msg report pre">{e.text}</div>;
+    case 'boss': return <div className="msg boss"><Markdown text={e.text} /></div>;
+    case 'report': return <div className="msg report"><Markdown text={e.text} /></div>;
     case 'error': return <div className="msg error pre" role="alert">{e.text}</div>;
     case 'event': return <div className="msg event small"><span className="dot" style={{ background: 'var(--green)' }} aria-hidden="true" /> <span className="pre">{e.text}</span></div>;
     case 'tool': return (
@@ -20,21 +21,38 @@ function Entry({ e }: { e: ChatEntry }) {
   }
 }
 
-interface Props { chat: ChatEntry[]; merges: MergeRequest[]; boss: Agent | undefined; bossLook: Look; bossModel: string; onError: (m: string) => void }
+interface Props { chat: ChatEntry[]; merges: MergeRequest[]; boss: Agent | undefined; bossLook: Look; bossModel: string; stream: string | null; busy: boolean; onError: (m: string) => void }
 
-export function BossChat({ chat, merges, boss, bossLook, bossModel, onError }: Props) {
+export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy, onError }: Props) {
   const [draft, setDraft] = useState('');
-  const end = useRef<HTMLDivElement>(null);
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [chat.length, merges.length]);
+  const box = useRef<HTMLDivElement>(null);
+  // Follow new output only while the reader is at the bottom; otherwise offer a jump button.
+  const [atBottom, setAtBottom] = useState(true);
+  const [unseen, setUnseen] = useState(false);
+  const toBottom = () => { const el = box.current; if (el) el.scrollTop = el.scrollHeight; setAtBottom(true); setUnseen(false); };
+  const onScroll = () => {
+    const el = box.current;
+    if (!el) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setAtBottom(near);
+    if (near) setUnseen(false);
+  };
+  useEffect(() => {
+    if (atBottom) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; } else setUnseen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.length, merges.length, stream, busy]);
 
   const send = async () => {
     const text = draft.trim();
     if (!text) return;
     setDraft('');
+    toBottom();
     try { await window.agentOffice.sendToBoss(text); } catch (e) { onError(String(e)); setDraft(text); }
   };
   const answer = (id: string, ok: boolean) => { window.agentOffice.answerMerge(id, ok).catch((e: unknown) => onError(String(e))); };
   const status = boss?.status ?? 'idle';
+  const name = boss?.name ?? 'The boss';
+  const activity = boss?.status === 'working' ? boss.bubble : 'thinking';
 
   return (
     <section className="chat" aria-label="Boss chat">
@@ -46,13 +64,25 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, onError }: P
         </div>
         <span className="status-chip" style={{ background: STATUS_COLORS[status].dot }}>{STATUS_LABEL[status]}</span>
       </div>
-      <div className="messages">
+      <div className="messages" ref={box} onScroll={onScroll} role="log" aria-label="Conversation with the boss">
         {chat.length === 0 && <p className="muted">Tell the boss what to build. It will hire people and hand out tasks.</p>}
         {chat.map((e, i) => <Entry key={i} e={e} />)}
+        {stream && (
+          <div className="msg boss streaming" aria-busy="true">
+            <Markdown text={stream} />
+            <span className="cursor-blink stream-cursor" aria-hidden="true">▌</span>
+          </div>
+        )}
+        {busy && !stream && (
+          <div className="msg thinking small" role="status">
+            <span className="dots" aria-hidden="true"><span /><span /><span /></span>
+            {name} is {activity}…
+          </div>
+        )}
         {merges.map((m) => (
           <div key={m.requestId} className="merge-card" role="group" aria-label={`Merge request for ${m.taskId}`}>
             <div><strong>Merge {m.taskId}?</strong> {m.title} <span className="muted">by {m.agentName}</span></div>
-            {m.summary && <p className="small pre">{m.summary}</p>}
+            {m.summary && <div className="small"><Markdown text={m.summary} /></div>}
             {m.diffStat.length > 0 && <ul className="mono small files">{m.diffStat.map((f) => <li key={f.path}>{f.path} <span className="add">+{f.add}</span> <span className="del">−{f.del}</span></li>)}</ul>}
             <div className="row">
               <button type="button" className="btn primary small" onClick={() => answer(m.requestId, true)}>Merge</button>
@@ -60,8 +90,8 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, onError }: P
             </div>
           </div>
         ))}
-        <div ref={end} />
       </div>
+      {unseen && <button type="button" className="btn small jump" onClick={toBottom}>↓ New messages</button>}
       <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
         <label htmlFor="boss-msg" className="small muted">Message the boss</label>
         <textarea id="boss-msg" className="input" rows={3} value={draft} placeholder="Describe what the team should build…"

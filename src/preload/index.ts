@@ -4,6 +4,7 @@ import type { WorkspaceEvent } from '../shared/types';
 
 const api: AgentOfficeApi = {
   getStatus: () => ipcRenderer.invoke(IPC.appStatus),
+  openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
   pickFolder: () => ipcRenderer.invoke(IPC.pickFolder),
   listProjects: () => ipcRenderer.invoke(IPC.listProjects),
   openProject: (repoPath, opts) => ipcRenderer.invoke(IPC.openProject, repoPath, opts),

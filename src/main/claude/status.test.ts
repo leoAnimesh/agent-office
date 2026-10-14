@@ -32,6 +32,10 @@ describe('reduceStatus', () => {
     expect(reduceStatus(s, { type: 'exit', code: 0, signal: null })).toEqual({ status: 'done', bubble: 'Done' });
   });
 
+  it('shows that a reply is being written while text streams in', () => {
+    expect(reduceStatus(idle, { type: 'text_delta', text: 'Hel' })).toEqual({ status: 'thinking', bubble: 'Writing a reply…' });
+  });
+
   it('shows an error when the process dies without a result', () => {
     const s = reduceStatus({ status: 'working', bubble: 'x' }, { type: 'exit', code: 3, signal: null });
     expect(s).toEqual({ status: 'error', bubble: 'Exited (3)' });

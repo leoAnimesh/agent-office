@@ -43,6 +43,18 @@ describe('ui reducer', () => {
     expect(t.logs.a.map((e) => (e.event as { text: string }).text)).toEqual(['older', 'disk', 'live']);
   });
 
+  it('tracks the streaming boss reply and busy state, clearing the stream when the message lands', () => {
+    let s = reducer(opened, { type: 'event', event: { type: 'boss-busy', busy: true } });
+    s = reducer(s, { type: 'event', event: { type: 'boss-stream', text: 'Hel' } });
+    s = reducer(s, { type: 'event', event: { type: 'boss-stream', text: 'Hello' } });
+    expect(s).toMatchObject({ bossBusy: true, bossStream: 'Hello' });
+    s = reducer(s, { type: 'event', event: { type: 'chat', entry: { kind: 'boss', at: 't', text: 'Hello' } } });
+    expect(s.bossStream).toBeNull();
+    s = reducer(s, { type: 'event', event: { type: 'boss-busy', busy: false } });
+    expect(s.bossBusy).toBe(false);
+    expect(reducer(s, { type: 'snapshot', ws })).toMatchObject({ bossBusy: false, bossStream: null });
+  });
+
   it('stores roles and keeps the last five errors', () => {
     expect(reducer(opened, { type: 'roles', roles: [] }).roles).toEqual([]);
     let s = opened;

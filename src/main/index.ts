@@ -3,6 +3,7 @@ import path from 'node:path';
 import { IPC } from '../shared/ipc';
 import type { AppSettings, AppStatus } from '../shared/types';
 import { getAppStatus } from './appStatus';
+import { isWebUrl } from './externalUrl';
 import { isTrustedSender } from './ipcGuard';
 import { claudeVersion, locateClaude, systemLocateEnv } from './claude/locate';
 import { readTestOverrides } from './testOverrides';
@@ -73,6 +74,10 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
     if (OVR.pickFolder) return OVR.pickFolder;
     const r = win ? await dialog.showOpenDialog(win, { properties: ['openDirectory'] }) : await dialog.showOpenDialog({ properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0] ?? null;
+  });
+  handle(IPC.openExternal, async (url: unknown) => {
+    if (typeof url !== 'string' || !isWebUrl(url)) throw new Error('Only web links can be opened');
+    await shell.openExternal(url);
   });
   handle(IPC.listProjects, () => svc.listProjects());
   handle(IPC.openProject, (repoPath: unknown, opts: unknown) => {

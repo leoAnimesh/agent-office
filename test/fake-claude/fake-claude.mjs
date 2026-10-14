@@ -54,6 +54,15 @@ async function handle(line) {
   }
   if (env.FAKE_CLAUDE_HANG === '1') return;
   const fail = env.FAKE_CLAUDE_FAIL === '1';
+  if (!fail && argv.includes('--include-partial-messages')) {
+    // Like the real CLI: stream the reply in small pieces, then send the complete message.
+    const reply = `echo: ${content.slice(0, 200)}`;
+    for (let i = 0; i < reply.length; i += 6) {
+      out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: reply.slice(i, i + 6) } }, session_id: sessionId });
+      await sleep(2);
+    }
+    out({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: reply }] }, session_id: sessionId });
+  }
   out({
     type: 'result', subtype: fail ? 'error_during_execution' : 'success', is_error: fail,
     result: fail ? 'simulated failure' : `echo: ${content.slice(0, 200)}`,

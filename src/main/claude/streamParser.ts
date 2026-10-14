@@ -58,6 +58,13 @@ export function parseLine(line: string): RunnerEvent[] {
         .filter((c): c is Json => isObj(c) && c.type === 'tool_result')
         .map((c) => ({ type: 'tool_result' as const, toolUseId: String(c.tool_use_id ?? ''), isError: c.is_error === true, preview: textOf(c.content).slice(0, 300) }));
     }
+    case 'stream_event': {
+      // Only present with --include-partial-messages: pieces of the reply as it is written.
+      const ev = isObj(d.event) ? d.event : undefined;
+      const delta = ev && ev.type === 'content_block_delta' && isObj(ev.delta) ? ev.delta : undefined;
+      if (delta && delta.type === 'text_delta' && typeof delta.text === 'string' && delta.text) return [{ type: 'text_delta', text: delta.text }];
+      return [];
+    }
     case 'result':
       return [{
         type: 'result',

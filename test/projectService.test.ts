@@ -59,6 +59,17 @@ describe('ProjectService', () => {
     expect(again.chat.map((c) => c.kind)).toEqual(['user', 'boss']);
   });
 
+  it('forwards the boss reply as it streams, and its busy state', async () => {
+    await svc.open(repo);
+    await svc.sendToBoss('stream please');
+    await until((e) => e.type === 'boss-busy' && e.busy === false);
+    const kinds = events.filter((e) => e.type === 'boss-busy' || e.type === 'boss-stream').map((e) => (e.type === 'boss-busy' ? `busy:${e.busy}` : e.text === null ? 'stream:end' : 'stream'));
+    expect(kinds[0]).toBe('busy:true');
+    expect(kinds).toContain('stream');
+    expect(kinds.at(-2)).toBe('stream:end');
+    expect(kinds.at(-1)).toBe('busy:false');
+  });
+
   it('asks the user before merging, then merges and tells the boss', async () => {
     await svc.open(repo);
     await tool('hire', { role_id: 'frontend' });

@@ -8,6 +8,9 @@ export interface UiState {
   errors: string[];
   view: View;
   roles: Role[];
+  /** The boss reply as it streams in; null when nothing is being written. */
+  bossStream: string | null;
+  bossBusy: boolean;
 }
 
 export type UiAction =
@@ -20,13 +23,13 @@ export type UiAction =
   | { type: 'roles'; roles: Role[] }
   | { type: 'logs-loaded'; agentId: string; entries: LogEntry[] };
 
-export const initialState: UiState = { ws: null, logs: {}, errors: [], view: { name: 'office' }, roles: [] };
+export const initialState: UiState = { ws: null, logs: {}, errors: [], view: { name: 'office' }, roles: [], bossStream: null, bossBusy: false };
 const LOG_CAP = 300;
 
 export function reducer(s: UiState, a: UiAction): UiState {
   switch (a.type) {
-    case 'snapshot': return { ...s, ws: a.ws, logs: {}, view: { name: 'office' } };
-    case 'closed': return { ...s, ws: null, logs: {}, view: { name: 'office' } };
+    case 'snapshot': return { ...s, ws: a.ws, logs: {}, view: { name: 'office' }, bossStream: null, bossBusy: false };
+    case 'closed': return { ...s, ws: null, logs: {}, view: { name: 'office' }, bossStream: null, bossBusy: false };
     case 'error': return { ...s, errors: [...s.errors, a.message].slice(-5) };
     case 'dismiss-error': return { ...s, errors: s.errors.filter((_, i) => i !== a.index) };
     case 'navigate': return { ...s, view: a.view };
@@ -54,7 +57,9 @@ function applyEvent(s: UiState, e: WorkspaceEvent): UiState {
       return { ...s, ws: { ...s.ws, agents: e.agents }, view: gone ? { name: 'team' } : v };
     }
     case 'tasks': return { ...s, ws: { ...s.ws, tasks: e.tasks } };
-    case 'chat': return { ...s, ws: { ...s.ws, chat: [...s.ws.chat, e.entry] } };
+    case 'chat': return { ...s, ws: { ...s.ws, chat: [...s.ws.chat, e.entry] }, bossStream: e.entry.kind === 'boss' ? null : s.bossStream };
+    case 'boss-stream': return { ...s, bossStream: e.text };
+    case 'boss-busy': return { ...s, bossBusy: e.busy };
     case 'project': return { ...s, ws: { ...s.ws, project: e.project } };
     case 'merge-request': return { ...s, ws: { ...s.ws, merges: [...s.ws.merges.filter((m) => m.requestId !== e.request.requestId), e.request] } };
     case 'merge-resolved': return { ...s, ws: { ...s.ws, merges: s.ws.merges.filter((m) => m.requestId !== e.requestId) } };

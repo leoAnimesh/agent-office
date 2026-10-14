@@ -30,6 +30,13 @@ describe('buildClaudeArgs', () => {
   });
 });
 
+describe('buildClaudeArgs streaming', () => {
+  it('asks for partial messages when streaming is wanted', () => {
+    expect(buildClaudeArgs({ includePartialMessages: true })).toContain('--include-partial-messages');
+    expect(buildClaudeArgs({})).not.toContain('--include-partial-messages');
+  });
+});
+
 describe('buildClaudeArgs tools', () => {
   it('limits built-in tools with --tools, keeping both variadic flags last', () => {
     const args = buildClaudeArgs({ tools: ['Read', 'Grep'], allowedTools: ['mcp__agentoffice'] });

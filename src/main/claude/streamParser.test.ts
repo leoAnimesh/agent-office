@@ -27,6 +27,13 @@ describe('parseLine', () => {
     expect(events[5]).toEqual({ type: 'result', ok: true, text: 'DONE', sessionId: 'sess-fixture-1', costUsd: 0.0057, durationMs: 5587, numTurns: 2 });
   });
 
+  it('turns partial-message text deltas into text_delta events and ignores other stream events', () => {
+    const delta = JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '- **Ap' } } });
+    expect(parseLine(delta)).toEqual([{ type: 'text_delta', text: '- **Ap' }]);
+    expect(parseLine(JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: '{"a"' } } }))).toEqual([]);
+    expect(parseLine(JSON.stringify({ type: 'stream_event', event: { type: 'message_stop' } }))).toEqual([]);
+  });
+
   it('never throws on junk and reports it as raw', () => {
     expect(parseLine('not json at all')).toEqual([{ type: 'raw', text: 'not json at all' }]);
     expect(parseLine('{"type":"brand_new_event"}')).toEqual([]);
