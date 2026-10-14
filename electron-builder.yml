@@ -9,8 +9,17 @@ files:
 extraResources:
   - from: resources
     to: resources
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  onlyLoadAppFromAsar: true
+  # Flipping fuses edits the binary; re-sign ad-hoc so Apple silicon still runs the unsigned build.
+  resetAdHocDarwinSignature: true
 mac:
-  target: [dmg]
+  target:
+    - target: dmg
+      arch: [arm64, x64]
   category: public.app-category.developer-tools
 win:
   target: [nsis]

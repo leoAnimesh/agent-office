@@ -16,6 +16,20 @@ describe('SettingsStore', () => {
     expect(await new SettingsStore(path.join(dir, 'settings.json')).get()).toMatchObject({ claudePath: '/opt/claude', isolateUserSettings: true });
   });
 
+  it('refuses a Claude path that does not point at a program, and keeps the old value', async () => {
+    const s = new SettingsStore(path.join(dir, 'settings.json'), (p) => p === '/ok/claude');
+    await s.save({ claudePath: '/ok/claude' });
+    await expect(s.save({ claudePath: '/nope/claude' })).rejects.toThrow('No Claude Code program at /nope/claude');
+    expect((await s.get()).claudePath).toBe('/ok/claude');
+    expect((await s.save({ claudePath: null })).claudePath).toBeNull();
+  });
+
+  it('ignores garbage in a hand-edited settings file', async () => {
+    const file = path.join(dir, 'settings.json');
+    await fs.writeFile(file, JSON.stringify({ claudePath: 5, isolateUserSettings: 'yes' }));
+    expect(await new SettingsStore(file).get()).toEqual(DEFAULT_SETTINGS);
+  });
+
   it('rejects invalid patches', async () => {
     const s = new SettingsStore(path.join(dir, 'settings.json'));
     await expect(s.save({ isolateUserSettings: 'no' } as never)).rejects.toThrow();

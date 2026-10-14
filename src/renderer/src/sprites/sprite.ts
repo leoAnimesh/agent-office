@@ -27,5 +27,7 @@ export function spriteClass(status: AgentStatus): string {
 }
 
 export function clip(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  // Count code points, not UTF-16 units, so emoji are never cut in half.
+  const chars = Array.from(text);
+  return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : text;
 }

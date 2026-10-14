@@ -6,7 +6,7 @@ A desktop app where a **boss** Claude Code agent hires a team of specialist agen
 
 ## Install
 Download the latest build for your OS from [Releases](https://github.com/leoAnimesh/agent-office/releases):
-- **macOS:** `AgentOffice-x.y.z.dmg`. The app is not notarized yet. After dragging it to Applications, right-click it and choose **Open** the first time.
+- **macOS:** `AgentOffice-x.y.z-arm64.dmg` (Apple silicon) or `AgentOffice-x.y.z.dmg` (Intel). The app is not notarized yet, so the first launch is blocked: open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to AgentOffice.
 - **Windows:** `AgentOffice Setup x.y.z.exe`. If SmartScreen warns, choose **More info → Run anyway**.
 - **Linux:** `AgentOffice-x.y.z.AppImage` (`chmod +x` it, then run it) or the `.deb` package.
 

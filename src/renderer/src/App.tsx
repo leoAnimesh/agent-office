@@ -30,6 +30,10 @@ export function App() {
     return window.agentOffice.onEvent((event) => dispatch({ type: 'event', event }));
   }, [refreshRoles]);
 
+  // Opening a project can change the boss role (model picked during onboarding): reload roles.
+  const projectId = state.ws?.project.id;
+  useEffect(() => { if (projectId) refreshRoles(); }, [projectId, refreshRoles]);
+
   if (!status) return <main className="boot"><p>Looking for Claude Code…</p></main>;
   if (!status.claude) return <NoClaude onFound={setStatus} />;
   const ws = state.ws;

@@ -90,7 +90,8 @@ export class ProjectService extends EventEmitter {
     const info = await inspectRepo(repoPath);
     await this.close();
     const id = projectIdFor(info.root);
-    const project: Project = (await this.store.getProject(id)) ?? {
+    const existing = await this.store.getProject(id);
+    const project: Project = existing ?? {
       id, name: path.basename(info.root), repoPath: info.root, baseBranch: info.branch, maxConcurrent: 4, bossCanHire: opts.bossCanHire ?? true, autoMerge: false,
     };
     project.repoPath = info.root;
@@ -103,7 +104,7 @@ export class ProjectService extends EventEmitter {
       createRunner, claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, isolateUserSettings: isolate,
     });
     const requeued = await manager.load();
-    if (opts.bossModel) {
+    if (opts.bossModel && !existing) {
       const bossRole = await this.roles.get('boss');
       if (bossRole) await this.roles.save({ ...bossRole, model: opts.bossModel });
     }

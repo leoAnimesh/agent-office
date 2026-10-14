@@ -22,5 +22,7 @@ describe('sprite helpers', () => {
   it('clips long text with an ellipsis', () => {
     expect(clip('short', 10)).toBe('short');
     expect(clip('a'.repeat(50), 10)).toBe(`${'a'.repeat(9)}…`);
+    expect(clip('😀'.repeat(20), 5)).toBe('😀😀😀😀…');
+    expect(clip('😀😀', 5)).toBe('😀😀');
   });
 });

@@ -45,6 +45,13 @@ describe('ProjectService (UI features)', () => {
     expect((await svc.listRoles()).find((r) => r.id === 'boss')!.model).toBe('sonnet');
   });
 
+  it('applies the boss model only when the project is new', async () => {
+    await svc.open(repo, { bossModel: 'sonnet' });
+    await svc.close();
+    await svc.open(repo, { bossModel: 'haiku' });
+    expect((await svc.listRoles()).find((r) => r.id === 'boss')!.model).toBe('sonnet');
+  });
+
   it('updates project settings with validation and emits the change', async () => {
     await svc.open(repo);
     expect(await svc.updateProject({ maxConcurrent: 2, autoMerge: true })).toMatchObject({ maxConcurrent: 2, autoMerge: true });

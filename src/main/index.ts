@@ -4,7 +4,8 @@ import { IPC } from '../shared/ipc';
 import type { AppSettings, AppStatus } from '../shared/types';
 import { getAppStatus } from './appStatus';
 import { isTrustedSender } from './ipcGuard';
-import { claudeVersion, systemLocateEnv } from './claude/locate';
+import { claudeVersion, locateClaude, systemLocateEnv } from './claude/locate';
+import { readTestOverrides } from './testOverrides';
 import { fixGuiPath } from './claude/shellPath';
 import { dataPaths } from './store/paths';
 import { SettingsStore } from './store/settingsStore';
@@ -38,7 +39,7 @@ function createWindow(): void {
     if (url !== win?.webContents.getURL()) e.preventDefault();
   });
   win.on('closed', () => { win = null; });
-  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
+  if (OVR.rendererUrl) void win.loadURL(OVR.rendererUrl);
   else void win.loadFile(path.join(__dirname, '../renderer/index.html'));
 }
 
@@ -46,16 +47,13 @@ function resourcesDir(): string {
   return app.isPackaged ? path.join(process.resourcesPath, 'resources') : path.join(app.getAppPath(), 'resources');
 }
 
-// Test-only overrides (see README "Develop").
-if (process.env.AO_USER_DATA) app.setPath('userData', process.env.AO_USER_DATA);
-const TEST_BIN = process.env.AO_CLAUDE_BIN;
-const TEST_ARGS: string[] = (() => {
-  try { const v: unknown = JSON.parse(process.env.AO_CLAUDE_ARGS ?? '[]'); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; } catch { return []; }
-})();
+// Test/development hooks (see README "Develop"); a packaged build ignores all of them.
+const OVR = readTestOverrides(process.env, app.isPackaged);
+if (OVR.userData) app.setPath('userData', OVR.userData);
 
 function statusFor(settings: AppSettings): AppStatus {
-  if (process.env.AO_CLAUDE_MISSING === '1') return { platform: process.platform, claude: null };
-  if (TEST_BIN) return { platform: process.platform, claude: { path: TEST_BIN, version: 'test' } };
+  if (OVR.claudeMissing) return { platform: process.platform, claude: null };
+  if (OVR.claudeBin) return { platform: process.platform, claude: { path: OVR.claudeBin, version: 'test' } };
   return getAppStatus({ locate: systemLocateEnv(), override: settings.claudePath ?? undefined, version: claudeVersion });
 }
 
@@ -63,7 +61,7 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   // Every channel checks that the request comes from our own page.
   const handle = (channel: string, fn: (...args: unknown[]) => unknown) =>
     ipcMain.handle(channel, (e, ...args) => {
-      if (!isTrustedSender(e.senderFrame?.url, process.env.ELECTRON_RENDERER_URL)) throw new Error('Untrusted sender');
+      if (!isTrustedSender(e.senderFrame?.url, OVR.rendererUrl)) throw new Error('Untrusted sender');
       return fn(...args);
     });
   handle(IPC.appStatus, async () => {
@@ -72,7 +70,7 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
     return status.current;
   });
   handle(IPC.pickFolder, async () => {
-    if (process.env.AO_E2E_PICK_FOLDER) return process.env.AO_E2E_PICK_FOLDER;
+    if (OVR.pickFolder) return OVR.pickFolder;
     const r = win ? await dialog.showOpenDialog(win, { properties: ['openDirectory'] }) : await dialog.showOpenDialog({ properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0] ?? null;
   });
@@ -117,14 +115,14 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
 app.whenReady().then(async () => {
   fixGuiPath();
   const paths = dataPaths(app.getPath('userData'));
-  const settings = new SettingsStore(paths.settingsFile);
+  const settings = new SettingsStore(paths.settingsFile, (p) => locateClaude(systemLocateEnv(), p) !== null);
   const current = await settings.get();
   const status = { current: statusFor(current) };
   service = new ProjectService({
     paths,
     resourcesDir: resourcesDir(),
     claudeBin: status.current.claude?.path ?? 'claude',
-    claudeBinArgs: TEST_ARGS.length > 0 ? TEST_ARGS : undefined,
+    claudeBinArgs: OVR.claudeArgs.length > 0 ? OVR.claudeArgs : undefined,
     isolateUserSettings: current.isolateUserSettings,
   });
   await service.init();

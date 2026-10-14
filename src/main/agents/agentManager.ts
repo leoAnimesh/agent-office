@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { promises as fs } from 'node:fs';
+import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { Agent, Project, Role, RunnerEvent, Task, TaskStatus } from '../../shared/types';
 import { waitForExit, type AgentRunner, type ClaudeRunnerOptions } from '../claude/runner';
@@ -225,6 +225,10 @@ export class AgentManager extends EventEmitter {
       const open = this.taskList.filter((t) => t.assigneeId === agent.id && ['queued', 'working', 'needs_help', 'review'].includes(t.status));
       if (open.length > 0) throw new UserError(`${agent.name} still has open work: ${open.map((t) => t.id).join(', ')}. Merge or cancel it first.`);
       if (this.live.has(agent.id)) throw new UserError(`${agent.name} is working right now. Wait for them to finish first.`);
+      if (agent.worktreePath && existsSync(agent.worktreePath)) {
+        // Keep anything not yet committed (e.g. a reply that edited files) on the agent's branch.
+        await this.d.worktrees.commitAll(agent.worktreePath, `WIP: saved by AgentOffice before ${agent.name} left the team`).catch(() => undefined);
+      }
       await this.d.worktrees.remove(agent.name);
       this.agentList = this.agentList.filter((a) => a.id !== agent.id);
       await this.saveAgents();

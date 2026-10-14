@@ -6,10 +6,14 @@ export function NoClaude({ onFound }: { onFound: (s: AppStatus) => void }) {
   const [note, setNote] = useState<string | null>(null);
 
   const check = async (saveCustom: boolean) => {
-    if (saveCustom) await window.agentOffice.saveSettings({ claudePath: custom.trim() || null });
-    const s = await window.agentOffice.getStatus();
-    if (s.claude) onFound(s);
-    else setNote(saveCustom && custom.trim() ? `No Claude Code binary at ${custom.trim()}.` : 'Still not found.');
+    try {
+      if (saveCustom) await window.agentOffice.saveSettings({ claudePath: custom.trim() || null });
+      const s = await window.agentOffice.getStatus();
+      if (s.claude) onFound(s);
+      else setNote('Still not found.');
+    } catch (e) {
+      setNote(String(e).replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, ''));
+    }
   };
 
   return (
