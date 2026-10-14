@@ -5,7 +5,7 @@ import type { Task } from '../../shared/types';
 let n = 0;
 const t = (over: Partial<Task>): Task => ({
   id: `T-${101 + n}`, projectId: 'p', title: 'x', brief: '', assigneeId: 'a1', createdBy: 'user', status: 'queued',
-  held: false, attempts: 0, branch: 'b', dependsOn: [], createdAt: `2026-10-14T10:00:${String(n++).padStart(2, '0')}Z`, updatedAt: '', ...over,
+  held: false, attempts: 0, branch: 'b', dependsOn: [], createdAt: `2026-10-14T10:00:${String(n++).padStart(2, '0')}Z`, updatedAt: '', model: 'sonnet', ...over,
 });
 
 describe('transitions', () => {
@@ -20,6 +20,23 @@ describe('transitions', () => {
 });
 
 describe('runnableTasks', () => {
+  it('skips a task that is still being classified, and keeps later tasks for that agent behind it', () => {
+    const tasks = [
+      t({ id: 'A', assigneeId: 'a1', model: undefined }),
+      t({ id: 'B', assigneeId: 'a1' }),
+      t({ id: 'C', assigneeId: 'a2' }),
+    ];
+    expect(runnableTasks(tasks, new Set(), 4).map((x) => x.id)).toEqual(['C']);
+  });
+
+  it('an unclassified task does not use a concurrency slot', () => {
+    const tasks = [
+      t({ id: 'A', assigneeId: 'a1', model: undefined }),
+      t({ id: 'B', assigneeId: 'a2' }),
+    ];
+    expect(runnableTasks(tasks, new Set(), 1).map((x) => x.id)).toEqual(['B']);
+  });
+
   it('picks oldest first, one task per agent, within the concurrency limit', () => {
     const tasks = [
       t({ id: 'A', assigneeId: 'a1' }),
