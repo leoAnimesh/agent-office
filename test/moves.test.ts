@@ -85,3 +85,15 @@ describe('reassignTask', () => {
     expect(toPixel.model).toBe(before);
   });
 });
+
+describe('order when tasks leave and come back', () => {
+  it('drops the order when a task starts, and puts a paused task back at the front', async () => {
+    const { manager, a, b, c } = await busyOffice();
+    await manager.moveTask(c.id, b.id); // C=1, B=2
+    expect(manager.getTask(a.id)!.order).toBeUndefined();
+    await manager.pauseTask(a.id);
+    const order = (id: string) => manager.getTask(id)!.order!;
+    expect(order(a.id)).toBeLessThan(order(c.id));
+    expect(new Set([order(a.id), order(b.id), order(c.id)]).size).toBe(3);
+  });
+});

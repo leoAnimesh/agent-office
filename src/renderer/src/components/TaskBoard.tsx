@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Role, Task, WorkspaceSnapshot } from '../../../shared/types';
 import { Avatar } from '../sprites/Avatar';
 import { lookFor } from '../sprites/sprite';
 import { COLUMNS, cardMeta, filterTasks } from '../tasks/board';
 import { modelChip } from '../tasks/modelChip';
 import { dropAction, dropMode, queueDropBefore, type Column } from '../tasks/moves';
-import { canReassign, queueOf } from '../tasks/taskDetail';
+import { canReassign, queueOf, taskActions } from '../tasks/taskDetail';
 import { TaskDrawer } from './TaskDrawer';
 
 interface Props { ws: WorkspaceSnapshot; roles: Role[]; onOpenAgent: (id: string) => void; onNewTask: () => void; onError: (m: string) => void }
@@ -27,6 +27,15 @@ export function TaskBoard({ ws, roles, onOpenAgent, onNewTask, onError }: Props)
 
   const run = (p: Promise<void>) => { p.catch((e: unknown) => onError(String(e))); };
   const endDrag = () => { setDragId(null); setInsert(null); };
+  // A card can unmount mid-drag (its task moved columns), so its own dragend never arrives: listen on the window too.
+  useEffect(() => {
+    if (!dragId) return;
+    if (!dragged) { endDrag(); return; }
+    const done = () => endDrag();
+    window.addEventListener('dragend', done);
+    window.addEventListener('drop', done);
+    return () => { window.removeEventListener('dragend', done); window.removeEventListener('drop', done); };
+  }, [dragId, dragged]);
 
   const dropOn = (column: Column) => {
     if (!dragged) return;
@@ -75,7 +84,13 @@ export function TaskBoard({ ws, roles, onOpenAgent, onNewTask, onError }: Props)
           return (
             <section key={c.key} aria-label={c.title}
               className={`column${dragged ? (mode ? ' drop-ok' : ' drop-no') : ''}`}
-              onDragOver={(e) => { if (mode) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+              onDragOver={(e) => {
+                if (!mode) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                // Off the cards (empty space below them): forget the last card hovered, so the drop goes to the end.
+                if (insert && !(e.target as HTMLElement).closest('.task-card')) setInsert(null);
+              }}
               onDrop={(e) => { e.preventDefault(); if (mode) dropOn(c.key); else endDrag(); }}>
               <h2><span className="dot" style={{ background: c.color }} aria-hidden="true" />{c.title}<span className="mono small muted" style={{ marginLeft: 'auto' }}>{items.length}</span></h2>
               {handover.length > 0 && (
@@ -109,7 +124,7 @@ export function TaskBoard({ ws, roles, onOpenAgent, onNewTask, onError }: Props)
                       {agent && <Avatar look={lookFor(agent, roles)} size={22} />}
                       <span className="small">{agent?.name ?? 'unassigned'}</span>
                     </div>
-                    {confirmCancel === t.id && (
+                    {confirmCancel === t.id && taskActions(t).includes('cancel') && (
                       <div className="card-confirm" role="group" aria-label={`Cancel ${t.id}?`} onClick={(e) => e.stopPropagation()}>
                         <span className="small">Cancel {t.id}?</span>
                         <button type="button" className="btn small danger" onClick={() => { setConfirmCancel(null); run(window.agentOffice.cancelTask(t.id)); }}>Cancel task</button>

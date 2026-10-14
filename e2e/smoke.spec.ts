@@ -191,6 +191,9 @@ test('task cards open a details drawer', async () => {
     await win.getByRole('button', { name: /^Frontend Engineer/ }).click();
     await win.getByRole('button', { name: 'Hire Frontend Engineer' }).click();
     await expect(win.getByRole('button', { name: 'Options for Pixel' })).toBeVisible();
+    await win.getByRole('button', { name: /^Backend Engineer/ }).click();
+    await win.getByRole('button', { name: 'Hire Backend Engineer' }).click();
+    await expect(win.getByRole('button', { name: 'Options for Byte' })).toBeVisible();
     await app.close();
 
     // Seed a reviewed task with a markdown result, then reopen the app on the same data.
@@ -245,6 +248,19 @@ test('task cards open a details drawer', async () => {
     await win.getByRole('dialog', { name: 'Queue two' }).getByRole('button', { name: 'Move down' }).click();
     await expect.poll(titles).toEqual(['Queue one', 'Queue two']);
     await win.keyboard.press('Escape');
+
+    // Drop a queued card on a teammate's avatar to hand it over (the strip appears once the drag starts).
+    const one = queued.locator('.task-card', { hasText: 'Queue one' });
+    const box = (await one.boundingBox())!;
+    await win.mouse.move(box.x + 20, box.y + 20);
+    await win.mouse.down();
+    await win.mouse.move(box.x + 30, box.y + 40, { steps: 4 });
+    const toByte = queued.locator('.handover-target', { hasText: 'Byte' });
+    await expect(toByte).toBeVisible();
+    const tb = (await toByte.boundingBox())!;
+    await win.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2, { steps: 6 });
+    await win.mouse.up();
+    await expect(one).toContainText('Byte');
 
     // Review to Done merges it.
     await card.dragTo(win.getByRole('region', { name: 'Done' }));

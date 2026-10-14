@@ -29,6 +29,8 @@ export function TaskDrawer({ task, ws, roles, onClose, onOpenAgent, onError }: P
   const nb = queueNeighbours(task, ws.tasks);
   const others = ws.agents.filter((a) => a.kind === 'employee' && a.id !== task.assigneeId);
   const [assignTo, setAssignTo] = useState(others[0]?.name ?? '');
+  // After a reassign the old choice is the current assignee and no longer listed: fall back to the first option.
+  const assignee = others.some((a) => a.name === assignTo) ? assignTo : others[0]?.name ?? '';
   const copyBranch = () => { navigator.clipboard.writeText(task.branch).catch((e: unknown) => onError(`Could not copy: ${String(e)}`)); };
 
   return (
@@ -89,10 +91,10 @@ export function TaskDrawer({ task, ws, roles, onClose, onOpenAgent, onError }: P
             {canReassign(task) && others.length > 0 && (
               <div className="row">
                 <label htmlFor="drawer-assign" className="small">Assign to</label>
-                <select id="drawer-assign" className="input" value={assignTo} onChange={(e) => setAssignTo(e.target.value)}>
+                <select id="drawer-assign" className="input" value={assignee} onChange={(e) => setAssignTo(e.target.value)}>
                   {others.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}
                 </select>
-                <button type="button" className="btn small" onClick={act(() => window.agentOffice.reassignTask(task.id, assignTo))}>Assign</button>
+                <button type="button" className="btn small" onClick={act(() => window.agentOffice.reassignTask(task.id, assignee))}>Assign</button>
               </div>
             )}
           </section>

@@ -110,6 +110,18 @@ describe('ProjectService', () => {
     expect(events.filter((e) => e.type === 'error')).toEqual([]);
   });
 
+  it('reports a blocked merge to the user even when it answers a pending card', async () => {
+    await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    await tool('assign_task', { agent: 'Pixel', title: 'Notes', brief: 'write notes' });
+    await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.id === 'T-101' && t.status === 'review'));
+    await tool('request_merge', { task_id: 'T-101' });
+    await until((e) => e.type === 'merge-request');
+    await fs.appendFile(path.join(repo, 'README.md'), 'local edit\n');
+    await expect(svc.mergeNow('T-101')).rejects.toThrow(/uncommitted/i);
+    expect((await svc.snapshot()).tasks.find((t) => t.id === 'T-101')!.status).toBe('review');
+  });
+
   it('leaves the task in review and reports why when the merge is blocked', async () => {
     await svc.open(repo);
     await tool('hire', { role_id: 'frontend' });

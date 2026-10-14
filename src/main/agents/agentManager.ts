@@ -90,7 +90,7 @@ export class AgentManager extends EventEmitter {
     for (const a of this.agentList) { a.status = 'idle'; a.bubble = 'Idle'; }
     const requeued: string[] = [];
     for (const t of this.taskList) {
-      if (t.status === 'working') { t.status = 'queued'; t.updatedAt = this.now(); requeued.push(t.id); }
+      if (t.status === 'working') { t.status = 'queued'; t.updatedAt = this.now(); this.toFrontOfQueue(t); requeued.push(t.id); }
     }
     if (requeued.length > 0) await this.saveTasks();
     for (const t of this.taskList) if (t.status === 'queued' && !t.model) this.classifyTask(t.id);
@@ -559,8 +559,18 @@ export class AgentManager extends EventEmitter {
 
   private setStatus(task: Task, to: TaskStatus, patch: Partial<Task> = {}): void {
     assertTransition(task, to);
+    const from = task.status;
     Object.assign(task, patch, { status: to, updatedAt: this.now() });
+    // A queue position only means something while queued: drop it on the way out, go to the front on the way back.
+    if (from === 'queued' && to !== 'queued') task.order = undefined;
+    if (from !== 'queued' && to === 'queued') this.toFrontOfQueue(task);
     this.emitEvent({ type: 'tasks-changed' });
+  }
+
+  /** Work that comes back to the queue (paused, or interrupted by a restart) goes ahead of what has not started yet. */
+  private toFrontOfQueue(task: Task): void {
+    const orders = this.taskList.filter((x) => x !== task && x.status === 'queued' && x.order !== undefined).map((x) => x.order!);
+    task.order = (orders.length > 0 ? Math.min(...orders) : 1) - 1;
   }
 
   private run<T>(fn: () => Promise<T>): Promise<T> {
