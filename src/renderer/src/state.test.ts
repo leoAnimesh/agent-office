@@ -25,7 +25,7 @@ describe('ui reducer', () => {
 
   it('caps per-agent logs at 200 events and keeps the latest', () => {
     let s = opened;
-    for (let i = 0; i < 250; i++) s = reducer(s, { type: 'event', event: { type: 'agent-event', agentId: 'a', event: { type: 'text', text: String(i) } } });
+    for (let i = 0; i < 250; i++) s = reducer(s, { type: 'event', event: { type: 'agent-event', agentId: 'a', event: { type: 'text', text: String(i) }, at: 't' } });
     expect(s.logs.a).toHaveLength(200);
     expect(s.logs.a.at(-1)).toEqual({ type: 'text', text: '249' });
   });

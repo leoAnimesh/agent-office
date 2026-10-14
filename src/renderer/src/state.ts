@@ -38,6 +38,7 @@ function applyEvent(s: UiState, e: WorkspaceEvent): UiState {
   switch (e.type) {
     case 'agents': return { ...s, ws: { ...s.ws, agents: e.agents } };
     case 'tasks': return { ...s, ws: { ...s.ws, tasks: e.tasks } };
+    case 'project': return { ...s, ws: { ...s.ws, project: e.project } };
     case 'chat': return { ...s, ws: { ...s.ws, chat: [...s.ws.chat, e.entry] } };
     case 'merge-request': return { ...s, ws: { ...s.ws, merges: [...s.ws.merges.filter((m) => m.requestId !== e.request.requestId), e.request] } };
     case 'merge-resolved': return { ...s, ws: { ...s.ws, merges: s.ws.merges.filter((m) => m.requestId !== e.requestId) } };

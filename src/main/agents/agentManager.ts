@@ -214,6 +214,20 @@ export class AgentManager extends EventEmitter {
     await this.pump();
   }
 
+  fire(agentId: string): Promise<void> {
+    return this.run(async () => {
+      this.assertOpen();
+      const agent = this.mustAgent(agentId);
+      if (agent.kind === 'boss') throw new Error('The boss cannot be fired');
+      const open = this.taskList.filter((t) => t.assigneeId === agent.id && ['queued', 'working', 'needs_help', 'review'].includes(t.status));
+      if (open.length > 0) throw new Error(`${agent.name} still has open work: ${open.map((t) => t.id).join(', ')}. Merge or cancel it first.`);
+      if (this.live.has(agent.id)) throw new Error(`${agent.name} is working right now. Wait for them to finish first.`);
+      await this.d.worktrees.remove(agent.name);
+      this.agentList = this.agentList.filter((a) => a.id !== agent.id);
+      await this.saveAgents();
+    });
+  }
+
   getTask(id: string): Task | undefined {
     const t = this.taskList.find((x) => x.id === id);
     return t ? { ...t } : undefined;

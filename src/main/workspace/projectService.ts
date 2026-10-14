@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import type { Agent, Project, Role, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
-import { AgentManager, type ManagerEvent, type MergeOutcome } from '../agents/agentManager';
+import type { Agent, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
+import { AgentManager, type ManagerEvent, type MergeOutcome, type MessageResult } from '../agents/agentManager';
 import { bossTools, type ToolDef } from '../agents/bossTools';
 import { BossSession } from '../boss/bossSession';
 import { ClaudeRunner, type ClaudeRunnerOptions } from '../claude/runner';
@@ -12,6 +12,7 @@ import type { DataPaths } from '../store/paths';
 import { ProjectStore } from '../store/projectStore';
 import { RoleStore } from '../store/roleStore';
 import { SkillStore } from '../store/skillStore';
+import { parseOrThrow, projectPatchSchema, roleSchema, skillSchema } from '../store/validate';
 import { ApprovalBroker } from './approvalBroker';
 
 export interface ProjectServiceDeps {
@@ -47,14 +48,23 @@ function describeMerge(taskId: string, r: MergeOutcome): string {
   }
 }
 
+export function isInside(child: string, parent: string): boolean {
+  const rel = path.relative(path.resolve(parent), path.resolve(child));
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
 export class ProjectService extends EventEmitter {
   private readonly store: ProjectStore;
   private readonly roles: RoleStore;
   private readonly skills: SkillStore;
   private ws: Workspace | null = null;
+  private claudeBin: string;
+  private isolate: boolean;
 
   constructor(private readonly d: ProjectServiceDeps) {
     super();
+    this.claudeBin = d.claudeBin;
+    this.isolate = d.isolateUserSettings ?? true;
     this.store = new ProjectStore(d.paths);
     this.roles = new RoleStore(d.paths.rolesDir);
     this.skills = new SkillStore(d.paths.skillsDir);
@@ -70,24 +80,34 @@ export class ProjectService extends EventEmitter {
   current(): Project | null { return this.ws?.project ?? null; }
   tools(): ToolDef[] { return this.mustWs().tools; }
 
-  async open(repoPath: string, bossName = 'Max'): Promise<WorkspaceSnapshot> {
+  /** Applies to sessions started from now on. */
+  configure(o: { claudeBin?: string; isolateUserSettings?: boolean }): void {
+    if (o.claudeBin) this.claudeBin = o.claudeBin;
+    if (o.isolateUserSettings !== undefined) this.isolate = o.isolateUserSettings;
+  }
+
+  async open(repoPath: string, opts: OpenOptions = {}): Promise<WorkspaceSnapshot> {
     const info = await inspectRepo(repoPath);
     await this.close();
     const id = projectIdFor(info.root);
     const project: Project = (await this.store.getProject(id)) ?? {
-      id, name: path.basename(info.root), repoPath: info.root, baseBranch: info.branch, maxConcurrent: 4, bossCanHire: true, autoMerge: false,
+      id, name: path.basename(info.root), repoPath: info.root, baseBranch: info.branch, maxConcurrent: 4, bossCanHire: opts.bossCanHire ?? true, autoMerge: false,
     };
     project.repoPath = info.root;
     await this.store.saveProject(project);
 
     const createRunner = (o: ClaudeRunnerOptions) => new ClaudeRunner({ ...o, binArgs: this.d.claudeBinArgs, env: this.d.claudeEnv ? { ...process.env, ...this.d.claudeEnv } : undefined });
-    const isolate = this.d.isolateUserSettings ?? true;
+    const isolate = this.isolate;
     const manager = new AgentManager({
       project, store: this.store, roles: this.roles, skills: this.skills, worktrees: new WorktreeManager(info.root),
-      createRunner, claudeBin: this.d.claudeBin, promptDir: this.d.paths.promptDir, isolateUserSettings: isolate,
+      createRunner, claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, isolateUserSettings: isolate,
     });
     const requeued = await manager.load();
-    const bossAgent = await manager.createBoss(bossName);
+    if (opts.bossModel) {
+      const bossRole = await this.roles.get('boss');
+      if (bossRole) await this.roles.save({ ...bossRole, model: opts.bossModel });
+    }
+    const bossAgent = await manager.createBoss(opts.bossName?.trim() || 'Max');
     project.bossId = bossAgent.id;
     await this.store.saveProject(project);
 
@@ -105,7 +125,7 @@ export class ProjectService extends EventEmitter {
     await host.writeConfig(mcpConfigPath);
     const boss = new BossSession({
       project, manager, roles: this.roles, skills: this.skills, store: this.store, createRunner,
-      claudeBin: this.d.claudeBin, promptDir: this.d.paths.promptDir, mcpConfigPath, isolateUserSettings: isolate,
+      claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, mcpConfigPath, isolateUserSettings: isolate,
     });
     ws = { project, manager, host, boss, broker, tools };
     manager.on('event', (e: ManagerEvent) => this.forward(ws, e));
@@ -136,6 +156,48 @@ export class ProjectService extends EventEmitter {
   }
 
   sendToBoss(text: string): Promise<void> { return this.mustWs().boss.send(text); }
+
+  async updateProject(patch: unknown): Promise<Project> {
+    const ws = this.mustWs();
+    const clean: ProjectPatch = parseOrThrow(projectPatchSchema, patch, 'project settings');
+    Object.assign(ws.project, clean);
+    await this.store.saveProject(ws.project);
+    this.emitWs(ws, { type: 'project', project: { ...ws.project } });
+    return { ...ws.project };
+  }
+
+  async saveRole(role: unknown): Promise<Role> {
+    const clean = parseOrThrow(roleSchema, role, 'role');
+    await this.roles.save(clean);
+    return clean;
+  }
+
+  listSkills(): Promise<Skill[]> { return this.skills.list(); }
+
+  async saveSkill(skill: unknown): Promise<Skill> {
+    const clean = parseOrThrow(skillSchema, skill, 'skill');
+    await this.skills.save(clean);
+    return clean;
+  }
+
+  fire(agentId: string): Promise<void> { return this.mustWs().manager.fire(agentId); }
+  messageAgent(ref: string, text: string): Promise<MessageResult> { return this.mustWs().manager.messageAgent(ref, text); }
+
+  async agentLog(agentId: string, limit = 300): Promise<LogEntry[]> {
+    const ws = this.mustWs();
+    const raw = (await this.store.readLog(ws.project.id, agentId, limit)) as { at?: unknown; event?: unknown }[];
+    return raw.filter((r): r is LogEntry => typeof r.at === 'string' && typeof r.event === 'object' && r.event !== null);
+  }
+
+  worktreeFor(agentId: string): string {
+    const ws = this.mustWs();
+    const agent = ws.manager.findAgent(agentId);
+    const wt = agent?.worktreePath;
+    const root = path.join(ws.project.repoPath, '.agentoffice', 'wt');
+    if (!agent || !wt) throw new Error(`${agent?.name ?? 'That agent'} has no worktree yet`);
+    if (!isInside(wt, root)) throw new Error('Refusing to open a folder outside the project worktrees');
+    return wt;
+  }
   hire(roleId: string, name?: string): Promise<Agent> { return this.mustWs().manager.hire(roleId, name); }
   pauseTask(id: string): Promise<void> { return this.mustWs().manager.pauseTask(id); }
   resumeTask(id: string): Promise<void> { return this.mustWs().manager.resumeTask(id); }
@@ -191,7 +253,7 @@ export class ProjectService extends EventEmitter {
       case 'agents-changed': return this.emitWs(ws, { type: 'agents', agents: ws.manager.agents() });
       case 'tasks-changed':
       case 'task-finished': return this.emitWs(ws, { type: 'tasks', tasks: ws.manager.tasks() });
-      case 'agent-event': return this.emitWs(ws, { type: 'agent-event', agentId: e.agentId, event: e.event });
+      case 'agent-event': return this.emitWs(ws, { type: 'agent-event', agentId: e.agentId, event: e.event, at: new Date().toISOString() });
       case 'error': return this.emitWs(ws, { type: 'error', message: e.message });
       default: return undefined;
     }

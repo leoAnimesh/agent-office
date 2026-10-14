@@ -1,0 +1,85 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { ProjectService, isInside } from '../src/main/workspace/projectService';
+import { dataPaths } from '../src/main/store/paths';
+import type { WorkspaceEvent } from '../src/shared/types';
+import { makeRepo } from './helpers/repo';
+import { FAKE_CLAUDE } from './helpers/runner';
+
+let repo: string;
+let data: string;
+let svc: ProjectService;
+let events: WorkspaceEvent[];
+const fakeEnv: Record<string, string> = { FAKE_CLAUDE_FILE: 'notes.txt' };
+
+beforeEach(async () => {
+  repo = await makeRepo();
+  data = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-svcui-'));
+  svc = new ProjectService({ paths: dataPaths(data), resourcesDir: path.resolve('resources'), claudeBin: process.execPath, claudeBinArgs: [FAKE_CLAUDE], claudeEnv: fakeEnv as NodeJS.ProcessEnv });
+  await svc.init();
+  events = [];
+  svc.on('event', (e) => events.push(e));
+});
+afterEach(async () => {
+  await svc.close();
+  await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  await fs.rm(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+});
+
+const until = (pred: (e: WorkspaceEvent) => boolean, ms = 20000) => new Promise<WorkspaceEvent>((resolve, reject) => {
+  const hit = events.find(pred);
+  if (hit) return resolve(hit);
+  const timer = setTimeout(() => reject(new Error('timed out')), ms);
+  svc.on('event', function l(e: WorkspaceEvent) { if (pred(e)) { clearTimeout(timer); svc.off('event', l); resolve(e); } });
+});
+
+describe('ProjectService (UI features)', () => {
+  it('applies open options to a new project and its boss', async () => {
+    const snap = await svc.open(repo, { bossName: 'Ada', bossModel: 'sonnet', bossCanHire: false });
+    expect(snap.agents.find((a) => a.kind === 'boss')!.name).toBe('Ada');
+    expect(snap.project.bossCanHire).toBe(false);
+    expect((await svc.listRoles()).find((r) => r.id === 'boss')!.model).toBe('sonnet');
+  });
+
+  it('updates project settings with validation and emits the change', async () => {
+    await svc.open(repo);
+    expect(await svc.updateProject({ maxConcurrent: 2, autoMerge: true })).toMatchObject({ maxConcurrent: 2, autoMerge: true });
+    expect(events.some((e) => e.type === 'project' && e.project.maxConcurrent === 2)).toBe(true);
+    await expect(svc.updateProject({ maxConcurrent: 99 })).rejects.toThrow(/maxConcurrent/);
+    expect((await svc.snapshot()).project.maxConcurrent).toBe(2);
+  });
+
+  it('saves roles and skills after validating them', async () => {
+    await svc.open(repo);
+    const fe = (await svc.listRoles()).find((r) => r.id === 'frontend')!;
+    await svc.saveRole({ ...fe, model: 'opus' });
+    expect((await svc.listRoles()).find((r) => r.id === 'frontend')!.model).toBe('opus');
+    await expect(svc.saveRole({ ...fe, id: '../evil' })).rejects.toThrow(/Invalid role/);
+    const skill = await svc.saveSkill({ id: 'house-style', name: 'House style', description: 'How we write code', body: '- Use tabs.' });
+    expect(skill.id).toBe('house-style');
+    expect((await svc.listSkills()).map((s) => s.id)).toContain('house-style');
+  });
+
+  it('streams agent events with timestamps, serves their log, and guards worktree paths', async () => {
+    await svc.open(repo);
+    const pixel = await svc.hire('frontend');
+    await svc.tools().find((t) => t.name === 'assign_task')!.run({ agent: 'Pixel', title: 'Notes', brief: 'write notes' });
+    const ev = await until((e) => e.type === 'agent-event');
+    expect(ev).toMatchObject({ agentId: pixel.id, at: expect.stringMatching(/^\d{4}-/) });
+    await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.status === 'review'));
+    const log = await svc.agentLog(pixel.id);
+    expect(log.map((l) => l.event.type)).toContain('result');
+    expect(svc.worktreeFor(pixel.id)).toBe(path.join(repo, '.agentoffice', 'wt', 'pixel'));
+    const boss = (await svc.snapshot()).agents.find((a) => a.kind === 'boss')!;
+    expect(() => svc.worktreeFor(boss.id)).toThrow(/no worktree/);
+  });
+
+  it('isInside only accepts real children', () => {
+    expect(isInside(path.join('/a', 'b', 'c'), path.join('/a', 'b'))).toBe(true);
+    expect(isInside(path.join('/a', 'b'), path.join('/a', 'b'))).toBe(false);
+    expect(isInside(path.join('/a', 'bc'), path.join('/a', 'b'))).toBe(false);
+    expect(isInside(path.join('/a', 'b', '..', 'x'), path.join('/a', 'b'))).toBe(false);
+  });
+});
