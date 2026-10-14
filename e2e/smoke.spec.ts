@@ -62,7 +62,10 @@ test('marks new messages that arrive while you are scrolled up', async () => {
       await win.evaluate((t) => window.agentOffice.sendToBoss(t), `filler message number ${i} with enough words to take some space in the chat`);
       await expect(log.locator('.msg.boss', { hasText: `number ${i} ` })).toBeVisible();
     }
+    // Let the last reply settle (result, busy indicator) before scrolling away from the bottom.
+    await expect(win.getByRole('status')).toHaveCount(0);
     await log.evaluate((el) => { el.scrollTop = 0; el.dispatchEvent(new Event('scroll')); });
+    await expect.poll(() => log.evaluate((el) => el.scrollTop)).toBe(0);
 
     // Arrives without the composer, so nothing forces a scroll: you are still reading older messages.
     await win.evaluate(() => window.agentOffice.sendToBoss('ping while you are away'));

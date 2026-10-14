@@ -1,7 +1,8 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Agent, ChatEntry, Look, MergeRequest } from '../../../shared/types';
 import { describeToolCall } from '../chat/describe';
 import { Markdown } from '../chat/Markdown';
+import { useReveal } from '../chat/reveal';
 import { NO_UNSEEN, onMessages, onReachedBottom, onSent, type Unseen } from '../chat/unseen';
 import { Avatar } from '../sprites/Avatar';
 import { STATUS_COLORS, STATUS_LABEL } from '../sprites/sprite';
@@ -48,16 +49,29 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy
     setAtBottom(near);
     if (near) setUnseen(onReachedBottom);
   };
+  // Typewriter: the streaming reply and, once it lands, the same message keep revealing smoothly.
+  const [liveIndex, setLiveIndex] = useState<number | null>(null);
+  useLayoutEffect(() => { if (stream !== null && liveIndex === null) setLiveIndex(chat.length); }, [stream, liveIndex, chat.length]);
+  const liveEntry = liveIndex !== null ? chat[liveIndex] : undefined;
+  const landed = stream === null && liveEntry?.kind === 'boss' ? liveEntry.text : null;
+  const liveText = stream ?? landed;
+  const shown = useReveal(liveText);
   useEffect(() => {
+    if (liveIndex !== null && stream === null && (landed === null || shown >= landed.length)) setLiveIndex(null);
+  }, [liveIndex, stream, landed, shown]);
+
+  // Layout effects: stick to the bottom before the browser paints, so there is no flicker and no
+  // late scroll that would wrongly mark the reader as "at the bottom".
+  useLayoutEffect(() => {
     setUnseen((u) => onMessages(u, { prevCount: prevCount.current, count: chat.length, atBottom }));
     prevCount.current = chat.length;
     if (atBottom) scrollToEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat.length]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (atBottom) scrollToEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [merges.length, stream, busy]);
+  }, [merges.length, stream, busy, shown]);
 
   const send = async () => {
     const text = draft.trim();
@@ -90,12 +104,17 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy
             {unseen.markerIndex === i && (
               <div ref={marker} className="new-marker" role="separator" aria-label="New messages"><span>New messages</span></div>
             )}
-            <Entry e={e} />
+            {i === liveIndex && landed !== null && shown < landed.length ? (
+              <div className="msg boss streaming" aria-busy="true">
+                <Markdown text={landed.slice(0, shown)} />
+                <span className="cursor-blink stream-cursor" aria-hidden="true">▌</span>
+              </div>
+            ) : <Entry e={e} />}
           </Fragment>
         ))}
         {stream && (
           <div className="msg boss streaming" aria-busy="true">
-            <Markdown text={stream} />
+            <Markdown text={stream.slice(0, shown)} />
             <span className="cursor-blink stream-cursor" aria-hidden="true">▌</span>
           </div>
         )}
