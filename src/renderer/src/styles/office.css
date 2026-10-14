@@ -69,3 +69,8 @@ button.wash-door:hover { border-color: var(--amber); }
 .desk.away .desk-bubble { background: #d8d2c4; color: #4a4f66; }
 .empty-desk.compact { width: 136px; height: 150px; font-size: 12px; gap: 6px; }
 @media (max-width: 1100px) { .rooms { grid-template-columns: 1fr; } .side-rooms { grid-template-columns: 1fr 1fr; grid-template-rows: auto; } }
+
+.idle-stretch .ao-stretch { animation: ao-bob 1.2s steps(1) infinite; }
+.idle-coffee .ao-sip-arm { animation: ao-sip 3s steps(1) infinite; }
+.idle-read .ao-head { animation: ao-bob 3s steps(1) infinite; }
+.idle-phone .ao-phone { animation: ao-blink 2s steps(2) infinite; }

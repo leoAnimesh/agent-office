@@ -3,7 +3,8 @@ import { displayState, type DisplayState } from './model';
 
 export type CafeActivity = 'coffee' | 'snack' | 'chat';
 
-export interface DeskSpot { agent: Agent; state: DisplayState; away: boolean }
+export type DeskAction = 'stretch' | 'read' | 'coffee' | 'phone';
+export interface DeskSpot { agent: Agent; state: DisplayState; away: boolean; idle?: { action: DeskAction; label: string } }
 export interface CafeSpot { agent: Agent; activity: CafeActivity; label: string }
 
 export interface FloorPlan {
@@ -14,7 +15,14 @@ export interface FloorPlan {
 }
 
 /** How long an idle agent keeps doing the same thing before picking something new. */
-export const SLOT_MS = 120_000;
+export const SLOT_MS = 90_000;
+
+const DESK_ACTIONS: { action: DeskAction; label: string }[] = [
+  { action: 'stretch', label: 'Stretching' },
+  { action: 'read', label: 'Reading docs' },
+  { action: 'coffee', label: 'Sipping coffee' },
+  { action: 'phone', label: 'Checking phone' },
+];
 
 function hash(s: string): number {
   let h = 0x811c9dc5;
@@ -41,11 +49,18 @@ export function planFloor(agents: Agent[], tasks: Task[], slot: number): FloorPl
 
   let washroom: FloorPlan['washroom'] = null;
   const picks: { agent: Agent; activity: CafeActivity }[] = [];
-  const away = desks.filter((d) => d.away).map((d) => d.agent).sort((a, b) => hash(`${a.id}:${slot}`) - hash(`${b.id}:${slot}`));
-  for (const agent of away) {
+  const free = desks.filter((d) => d.away).map((d) => d.agent).sort((a, b) => hash(`${a.id}:${slot}`) - hash(`${b.id}:${slot}`));
+  const stayAtDesk = (agent: Agent) => {
+    const spot = desks.find((d) => d.agent.id === agent.id)!;
+    spot.away = false;
+    spot.idle = DESK_ACTIONS[hash(`${agent.id}~${slot}`) % DESK_ACTIONS.length];
+  };
+  for (const agent of free) {
+    // 40% idle at the desk, 10% washroom (one at a time), the rest in the cafeteria.
     const roll = hash(`${agent.id}#${slot}`) % 10;
-    if (roll === 0 && !washroom) washroom = { agent };
-    else picks.push({ agent, activity: roll <= 4 ? 'coffee' : roll <= 7 ? 'snack' : 'chat' });
+    if (roll >= 6) stayAtDesk(agent);
+    else if (roll === 0) { if (washroom) stayAtDesk(agent); else washroom = { agent }; }
+    else picks.push({ agent, activity: roll <= 2 ? 'coffee' : roll === 3 ? 'snack' : 'chat' });
   }
 
   // Chatting needs a partner: pair them up in order; a leftover goes for coffee instead.

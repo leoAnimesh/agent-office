@@ -1,4 +1,5 @@
 import type { AgentStatus, Look } from '../../../shared/types';
+import type { DeskAction } from '../office/floor';
 import { STATUS_COLORS, STATUS_LABEL, clip, spriteClass } from './sprite';
 
 interface Props {
@@ -8,14 +9,16 @@ interface Props {
   compact?: boolean;
   /** The agent is away (cafeteria, washroom): draw the empty chair only. */
   away?: boolean;
+  /** Idle at the desk: what they are doing. */
+  idle?: DeskAction;
 }
 
-export function DeskSprite({ name, role, look, status, bubble, onClick, selected, compact, away }: Props) {
+export function DeskSprite({ name, role, look, status, bubble, onClick, selected, compact, away, idle }: Props) {
   const c = STATUS_COLORS[status];
   const body = (
     <>
       <span className="desk-bubble" title={bubble}>{clip(bubble, 34)}</span>
-      <svg className={spriteClass(status)} viewBox="0 0 48 44" width={compact ? 108 : 192} height={compact ? 99 : 176} shapeRendering="crispEdges" aria-hidden="true">
+      <svg className={`${spriteClass(status)}${idle ? ` idle-${idle}` : ''}`} viewBox="0 0 48 44" width={compact ? 108 : 192} height={compact ? 99 : 176} shapeRendering="crispEdges" aria-hidden="true">
         <rect x="4" y="40" width="40" height="3" fill="#000000" opacity="0.28" />
         <rect x="25" y="13" width="16" height="15" fill="#3A3F58" />
         <rect x="25" y="13" width="16" height="2" fill="#4A5070" />
@@ -34,14 +37,49 @@ export function DeskSprite({ name, role, look, status, bubble, onClick, selected
               <rect x="32" y="15" width="2" height="1" fill="#9A5A4A" />
             </g>
           </g>
-          <g className="ao-armL">
-            <rect x="25" y="19" width="3" height="7" fill={look.shirt} />
-            <rect x="25" y="25" width="3" height="2" fill={look.skin} />
-          </g>
-          <g className="ao-armR">
-            <rect x="38" y="19" width="3" height="7" fill={look.shirt} />
-            <rect x="38" y="25" width="3" height="2" fill={look.skin} />
-          </g>
+          {idle === 'stretch' ? (
+            <g className="ao-stretch">
+              <rect x="24" y="8" width="3" height="11" fill={look.shirt} />
+              <rect x="24" y="6" width="3" height="2" fill={look.skin} />
+              <rect x="39" y="8" width="3" height="11" fill={look.shirt} />
+              <rect x="39" y="6" width="3" height="2" fill={look.skin} />
+            </g>
+          ) : (
+            <>
+              <g className="ao-armL">
+                <rect x="25" y="19" width="3" height="7" fill={look.shirt} />
+                <rect x="25" y="25" width="3" height="2" fill={look.skin} />
+              </g>
+              {idle === 'coffee' ? (
+                <g className="ao-sip-arm">
+                  <rect x="38" y="17" width="3" height="5" fill={look.shirt} />
+                  <rect x="37" y="15" width="3" height="2" fill={look.skin} />
+                  <rect x="35" y="13" width="3" height="3" fill="#ECE8DF" />
+                  <rect x="35" y="13" width="3" height="1" fill="#6B4224" />
+                </g>
+              ) : (
+                <g className="ao-armR">
+                  <rect x="38" y="19" width="3" height="7" fill={look.shirt} />
+                  <rect x="38" y="25" width="3" height="2" fill={look.skin} />
+                </g>
+              )}
+            </>
+          )}
+          {idle === 'read' && (
+            <g className="ao-book">
+              <rect x="28" y="20" width="10" height="6" fill="#5B6CD6" />
+              <rect x="29" y="21" width="4" height="4" fill="#ECE8DF" />
+              <rect x="33" y="21" width="4" height="4" fill="#F2EFE6" />
+              <rect x="30" y="22" width="2" height="1" fill="#A3A6B8" />
+              <rect x="34" y="23" width="2" height="1" fill="#A3A6B8" />
+            </g>
+          )}
+          {idle === 'phone' && (
+            <g className="ao-phone">
+              <rect x="31" y="21" width="4" height="5" fill="#14151F" />
+              <rect x="32" y="22" width="2" height="3" fill="#7AA2FF" />
+            </g>
+          )}
           </>
         )}
         <rect x="4" y="9" width="18" height="14" fill="#2A2E40" />

@@ -6,11 +6,34 @@ const agent = (id: string, over: Partial<Agent> = {}): Agent => ({ id, projectId
 const boss = agent('boss', { kind: 'boss', name: 'Max', roleId: 'boss' });
 
 describe('planFloor', () => {
-  it('keeps working agents at their desks and sends idle ones on a break', () => {
+  it('keeps working agents at their desks; idle ones go on a break or idle at their desk', () => {
     const plan = planFloor([boss, agent('a', { status: 'working', bubble: 'Editing x.ts' }), agent('b')], [], 1);
-    expect(plan.desks.map((d) => [d.agent.id, d.away])).toEqual([['a', false], ['b', true]]);
-    const away = [...plan.cafeteria.map((c) => c.agent.id), ...(plan.washroom ? [plan.washroom.agent.id] : [])];
-    expect(away).toEqual(['b']);
+    const a = plan.desks.find((d) => d.agent.id === 'a')!;
+    expect(a.away).toBe(false);
+    expect(a.idle).toBeUndefined();
+    const b = plan.desks.find((d) => d.agent.id === 'b')!;
+    const inRoom = plan.cafeteria.some((c) => c.agent.id === 'b') || plan.washroom?.agent.id === 'b';
+    expect(b.away).toBe(inRoom);
+    if (!b.away) expect(b.idle).toBeDefined();
+  });
+
+  it('sends an idle agent to their desk for some slots and away for others', () => {
+    const team = [agent('a')];
+    const places = new Set<string>();
+    const actions = new Set<string>();
+    for (let slot = 0; slot < 60; slot++) {
+      const d = planFloor(team, [], slot).desks[0];
+      places.add(d.away ? 'away' : 'desk');
+      if (d.idle) actions.add(d.idle.action);
+    }
+    expect([...places].sort()).toEqual(['away', 'desk']);
+    expect(actions.size).toBeGreaterThan(1);
+  });
+
+  it('labels desk idle actions in plain words', () => {
+    const team = Array.from({ length: 20 }, (_, i) => agent(`a${i}`));
+    const labels = new Set(Array.from({ length: 40 }, (_, s) => planFloor(team, [], s).desks.flatMap((d) => (d.idle ? [d.idle.label] : [])) ).flat());
+    expect([...labels].sort()).toEqual(['Checking phone', 'Reading docs', 'Sipping coffee', 'Stretching']);
   });
 
   it('keeps agents with queued, paused or stuck work at their desks', () => {
@@ -21,8 +44,8 @@ describe('planFloor', () => {
   });
 
   it('treats a just-finished agent as free for a break', () => {
-    const plan = planFloor([agent('d', { status: 'done', bubble: 'Done' })], [], 1);
-    expect(plan.desks[0].away).toBe(true);
+    const seen = new Set(Array.from({ length: 30 }, (_, s) => { const d = planFloor([agent('d', { status: 'done', bubble: 'Done' })], [], s).desks[0]; return d.away ? 'away' : d.idle ? 'idle' : 'busy'; }));
+    expect(seen.has('busy')).toBe(false);
   });
 
   it('never moves the boss out of the corner office', () => {
@@ -36,8 +59,8 @@ describe('planFloor', () => {
     const team = Array.from({ length: 30 }, (_, i) => agent(`a${i}`));
     for (let slot = 0; slot < 50; slot++) {
       const plan = planFloor(team, [], slot);
-      const inCafe = plan.cafeteria.length;
-      expect(inCafe + (plan.washroom ? 1 : 0)).toBe(Math.min(30, 30));
+      const away = plan.desks.filter((d) => d.away).length;
+      expect(plan.cafeteria.length + (plan.washroom ? 1 : 0)).toBe(away);
       expect(plan.cafeteria.some((c) => c.agent.id === plan.washroom?.agent.id)).toBe(false);
     }
   });
@@ -57,7 +80,7 @@ describe('planFloor', () => {
     const seen = new Set<string>();
     for (let slot = 0; slot < 40; slot++) {
       const p = planFloor(team, [], slot);
-      seen.add(p.washroom?.agent.id === 'a' ? 'washroom' : p.cafeteria.find((c) => c.agent.id === 'a')!.activity);
+      seen.add(p.washroom?.agent.id === 'a' ? 'washroom' : p.cafeteria.find((c) => c.agent.id === 'a')?.activity ?? `desk:${p.desks[0].idle?.action}`);
     }
     expect(seen.size).toBeGreaterThan(1);
   });

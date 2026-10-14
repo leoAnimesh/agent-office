@@ -53,7 +53,7 @@ export function OfficeView({ ws, roles, onOpenAgent, onHire }: Props) {
               )}
               {plan.desks.map((d) => (
                 <DeskSprite key={d.agent.id} compact away={d.away} name={d.agent.name} role={roleName(d.agent.roleId)} look={lookFor(d.agent, roles)}
-                  status={d.away ? 'idle' : d.state.status} bubble={d.away ? where(d.agent.id) : d.state.bubble} onClick={() => onOpenAgent(d.agent.id)} />
+                  status={d.away ? 'idle' : d.state.status} bubble={d.away ? where(d.agent.id) : d.idle?.label ?? d.state.bubble} idle={d.idle?.action} onClick={() => onOpenAgent(d.agent.id)} />
               ))}
               <button type="button" className="empty-desk compact" onClick={onHire}>
                 <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M8 2v12M2 8h12" /></svg>
