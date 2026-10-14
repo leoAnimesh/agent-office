@@ -60,6 +60,8 @@ export class AgentManager extends EventEmitter {
   private agentList: Agent[] = [];
   private taskList: Task[] = [];
   private live = new Map<string, Live>();
+  /** Classifications in flight, by task id: started by pump(), cancelled by shutdown(). */
+  private classifying = new Map<string, { abort: AbortController; done: Promise<void> }>();
   /** All mutations run one at a time through this chain. */
   private chain: Promise<void> = Promise.resolve();
   /** Set by shutdown(): no new sessions start and exits no longer change task state. */
@@ -91,7 +93,7 @@ export class AgentManager extends EventEmitter {
       if (t.status === 'working') { t.status = 'queued'; t.updatedAt = this.now(); requeued.push(t.id); }
     }
     if (requeued.length > 0) await this.saveTasks();
-    for (const t of this.taskList) if (t.status === 'queued' && !t.model) void this.classifyTask(t.id);
+    for (const t of this.taskList) if (t.status === 'queued' && !t.model) this.classifyTask(t.id);
     return requeued;
   }
 
@@ -99,6 +101,10 @@ export class AgentManager extends EventEmitter {
 
   async shutdown(): Promise<void> {
     this.closed = true;
+    // Stop classifier processes too: an orphaned Opus call is billed and its result thrown away.
+    const pending = [...this.classifying.values()];
+    for (const c of pending) c.abort.abort();
+    await Promise.all(pending.map((c) => c.done));
     // Wait for the processes to really exit: Windows keeps their working folders locked until then.
     const runners = [...this.live.values()].map((l) => l.runner);
     const exits = runners.map((r) => waitForExit(r));
@@ -161,7 +167,7 @@ export class AgentManager extends EventEmitter {
       await this.saveTasks();
       return { ...t };
     });
-    if (!task.model) void this.classifyTask(task.id);
+    if (!task.model) this.classifyTask(task.id);
     await this.pump();
     return task;
   }
@@ -169,6 +175,8 @@ export class AgentManager extends EventEmitter {
   pump(): Promise<void> {
     return this.run(async () => {
       if (this.closed) return;
+      // Any queued task without a model gets classified, however it got here (new, reloaded, paused, re-queued).
+      for (const t of this.taskList) if (t.status === 'queued' && !t.model) this.classifyTask(t.id);
       for (const t of runnableTasks(this.taskList, new Set(this.live.keys()), this.d.project.maxConcurrent)) {
         try {
           await this.startTask(t);
@@ -361,13 +369,23 @@ export class AgentManager extends EventEmitter {
     return `Feedback on task ${task.id} ("${task.title}") from ${boss}: ${text.trim()}\n\nMake the changes on your current branch, commit them, and reply with a short summary (at most 5 lines).${brief}`;
   }
 
+  /** Starts a classification unless one is already running for this task. */
+  private classifyTask(taskId: string): void {
+    if (this.closed || this.classifying.has(taskId)) return;
+    const abort = new AbortController();
+    const entry = { abort, done: Promise.resolve() };
+    this.classifying.set(taskId, entry);
+    entry.done = this.runClassifier(taskId, abort.signal).finally(() => this.classifying.delete(taskId));
+  }
+
   /** Runs outside run(): a slow classifier must never hold the state chain. Never rejects. */
-  private async classifyTask(taskId: string): Promise<void> {
+  private async runClassifier(taskId: string, signal: AbortSignal): Promise<void> {
     const t = this.taskList.find((x) => x.id === taskId);
     if (!t) return;
     const agent = this.agentList.find((a) => a.id === t.assigneeId);
     const role = agent ? await this.d.roles.get(agent.roleId).catch(() => undefined) : undefined;
-    const pick = await this.d.classify({ title: t.title, brief: t.brief, roleName: role?.name ?? 'Engineer' });
+    if (signal.aborted) return;   // shut down while reading the role: don't start a process
+    const pick = await this.d.classify({ title: t.title, brief: t.brief, roleName: role?.name ?? 'Engineer' }, signal);
     await this.run(async () => {
       if (this.closed) return;   // the next load() classifies again
       const now = this.taskList.find((x) => x.id === taskId);

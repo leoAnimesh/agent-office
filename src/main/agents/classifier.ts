@@ -50,7 +50,8 @@ export function launchModel(roleModel: string, taskModel?: string): string {
   return roleModel === AUTO_MODEL ? FALLBACK_MODEL : roleModel;
 }
 
-export type TaskClassifier = (input: ClassifyInput) => Promise<ModelPick>;
+/** Aborting the signal stops the CLI process and resolves with a fallback. */
+export type TaskClassifier = (input: ClassifyInput, signal?: AbortSignal) => Promise<ModelPick>;
 
 export interface ClassifierDeps {
   createRunner: (o: ClaudeRunnerOptions) => AgentRunner;
@@ -65,7 +66,7 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** One-shot Opus call per task. Never rejects: any failure becomes a sonnet fallback. */
 export function createClassifier(d: ClassifierDeps): TaskClassifier {
-  return async (input) => {
+  return async (input, signal) => {
     let runner: AgentRunner;
     try {
       runner = d.createRunner({
@@ -81,6 +82,7 @@ export function createClassifier(d: ClassifierDeps): TaskClassifier {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
         runner.off('event', listener);
         resolve(r);
       };
@@ -89,6 +91,9 @@ export function createClassifier(d: ClassifierDeps): TaskClassifier {
         else if (ev.type === 'exit') finish({ cause: `exited (${ev.code ?? ev.signal ?? 'unknown'})` });
       };
       const timer = setTimeout(() => finish({ cause: 'timed out' }), d.timeoutMs ?? 60_000);
+      const onAbort = () => finish({ cause: 'cancelled' });
+      if (signal?.aborted) return finish({ cause: 'cancelled' });
+      signal?.addEventListener('abort', onAbort, { once: true });
       runner.on('event', listener);
       try {
         runner.start();

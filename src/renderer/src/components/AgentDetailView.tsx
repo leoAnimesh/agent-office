@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { LogEntry, Role, WorkspaceSnapshot } from '../../../shared/types';
-import { modelChip, roleModelLabel } from '../tasks/modelChip';
+import { chipDetail, modelChip, roleModelLabel } from '../tasks/modelChip';
 import { currentTask, formatLog } from '../agent/logView';
 import { displayState } from '../office/model';
 import { DeskSprite } from '../sprites/DeskSprite';
@@ -84,7 +84,7 @@ export function AgentDetailView({ ws, roles, agentId, logs, onBack, onLogs, onEr
                 <>
                   <div className="card-meta"><span>{task.id}</span><span>from {task.createdBy === 'boss' ? 'the boss' : 'you'}</span><span>{task.status}</span></div>
                   <h3 style={{ margin: 0, fontSize: 16 }}>{task.title}</h3>
-                  {(() => { const chip = modelChip(task); return chip && <p className="small muted" style={{ margin: 0 }} title={chip.title}>{chip.label}{chip.title ? ` — ` : ''}</p>; })()}
+                  {(() => { const chip = modelChip(task); return chip && <p className="small muted" style={{ margin: 0 }} title={chip.title}>{chipDetail(chip)}</p>; })()}
                   <p className="small pre" style={{ margin: 0, color: '#c9cbd8' }}>{task.brief}</p>
                 </>
               ) : <p className="muted" style={{ margin: 0 }}>No open task.</p>}

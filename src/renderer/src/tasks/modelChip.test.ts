@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../../../shared/types';
-import { modelChip, roleModelLabel } from './modelChip';
+import { chipDetail, modelChip, roleModelLabel } from './modelChip';
 
 const base: Task = { id: 'T-101', projectId: 'p', title: 'x', brief: '', assigneeId: 'a', createdBy: 'boss', status: 'queued', held: false, attempts: 0, branch: 'b', dependsOn: [], createdAt: '', updatedAt: '' };
 
@@ -15,6 +15,13 @@ describe('modelChip', () => {
   });
   it('shows nothing for old tasks that never had a model', () => {
     expect(modelChip({ ...base, status: 'done' })).toBeNull();
+  });
+});
+
+describe('chipDetail', () => {
+  it('shows the label and the reason', () => {
+    expect(chipDetail({ label: 'haiku · small', title: 'One-word copy change' })).toBe('haiku · small — One-word copy change');
+    expect(chipDetail({ label: 'classifying…', title: '' })).toBe('classifying…');
   });
 });
 

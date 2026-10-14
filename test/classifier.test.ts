@@ -54,4 +54,13 @@ describe('createClassifier', () => {
     });
     expect(await c(input)).toMatchObject({ model: 'sonnet', source: 'fallback' });
   });
+  it('stops the process at once when aborted', async () => {
+    const ac = new AbortController();
+    const pending = classifier({ FAKE_CLAUDE_HANG: '1' })(input, ac.signal);
+    await new Promise((r) => setTimeout(r, 300));
+    const started = Date.now();
+    ac.abort();
+    expect(await pending).toMatchObject({ model: 'sonnet', source: 'fallback', reason: expect.stringContaining('cancelled') });
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
 });

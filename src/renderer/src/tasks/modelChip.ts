@@ -10,3 +10,8 @@ export function modelChip(task: Task): { label: string; title: string } | null {
 export function roleModelLabel(model: string): string {
   return model === AUTO_MODEL ? 'auto (per task)' : model;
 }
+
+/** "haiku · small — reason" for the task detail. */
+export function chipDetail(chip: { label: string; title: string }): string {
+  return chip.title ? `${chip.label} — ${chip.title}` : chip.label;
+}
