@@ -55,6 +55,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 2. `BossSession` writes it to the boss's `claude` stdin.
 3. The boss calls MCP tools on `McpHost` (`mcp__agentoffice__assign_task`, …), which run `bossTools`, which call `AgentManager`.
 4. `AgentManager.createTask` queues the task, and `pump()` starts it:
+   - queued tasks start in the user's order (`Task.order`, set by dragging in the board or Move up/down; unset tasks follow, oldest first);
    - if the role's model is `auto`, `classifier.ts` first runs a one-shot Opus call (outside `run()`) that sizes the task and sets `task.model` (small→haiku, medium→sonnet, large→opus, sonnet on any failure); `runnableTasks` holds the task until then;
    - `WorktreeManager.prepare` creates or checks out `.agentoffice/wt/<agent>` on branch `ao/<agent>/<slug>-<task id>`;
    - a `ClaudeRunner` spawns `claude -p --input-format stream-json --output-format stream-json …` in that worktree.
@@ -89,6 +90,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - **Names:** worktree and branch names come from `slugify(name)`. `hire()` rejects names whose slug collides with an existing employee's, because two agents must never share a worktree.
 - **Firing** is refused while the agent has open work. Otherwise the app commits leftovers, removes the worktree, and keeps the branches.
 - **Models:** `auto` is a role value, never a CLI flag. Employees launch with `launchModel(role.model, task.model)`; the boss maps `auto` to opus. Classification never runs inside `run()`.
+- **Moving tasks:** `moveTask` only reorders `queued` tasks; `reassignTask` only hands over `queued` tasks with `attempts === 0` (their branch was never created) and regenerates the branch with `slugify`. Board drops go through `tasks/moves.ts`, the same rules the details panel uses.
 
 ## Cross-platform rules
 
