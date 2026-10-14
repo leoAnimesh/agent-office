@@ -110,10 +110,11 @@ claude -p
   --append-system-prompt <rendered role prompt + skills + team context>
   [--mcp-config <tmp json> --strict-mcp-config]   # boss only
   [--session-id <uuid> | --resume <sessionId>]
+  [--setting-sources project,local]   # default on: keeps the user's global hooks/plugins out of agent sessions
 cwd = repo root (boss) or worktree (employee)
 ```
 
-- Long-lived: stdin stays open; the app writes user messages as stream-json lines. This lets the user (or the app on the Boss's behalf) send follow-ups into a running session.
+- Long-lived: stdin stays open (verified: several turns over one open stdin keep context; `system/init` is re-emitted each turn); the app writes user messages as stream-json lines. This lets the user (or the app on the Boss's behalf) send follow-ups into a running session.
 - `StreamParser` turns stdout lines into typed events: `init(sessionId)`, `assistantText`, `toolUse(name, input)`, `toolResult`, `result(success|error, text, usage)`. Unknown lines are logged and ignored.
 - Every event is appended to the agent's `logs/<agentId>.jsonl` and pushed to the renderer.
 - **Status derivation:** `toolUse` → `working` (bubble: "Editing ThemeToggle.tsx", "Running npm test", …); `assistantText` streaming → `thinking`; `result` → `done` or `error`; no live process → `idle`; task queued behind a dependency → `waiting`.
@@ -126,7 +127,8 @@ cwd = repo root (boss) or worktree (employee)
 
 ### Employees
 - One process per task. A follow-up task to the same employee uses `--resume <sessionId>` so the employee keeps its context.
-- Before start: WorktreeManager ensures the worktree exists and checks out `ao/<agent>/<task-slug>` from the project's base branch (or from the branch of a dependency if `dependsOn` is set).
+- Before start: WorktreeManager ensures the worktree exists and checks out `ao/<agent>/<task-slug>` from the project's base branch. A task only starts when all its `dependsOn` tasks are `done` (merged), so the base branch already contains their work.
+- Leftover uncommitted changes are committed by the app when the task ends (using the user's git identity, falling back to `AgentOffice <agentoffice@localhost>`), so the diff stat is always complete.
 - When the process emits `result`: task → `review` (success) or `needs_help` (error); the app computes `git diff --numstat` vs the base branch, stores the summary, and injects a message into the Boss's stdin: `[AgentOffice] T-108 by Pixel finished (success). Summary: … Files: …`.
 
 ### Concurrency and lifecycle
