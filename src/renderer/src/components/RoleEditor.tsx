@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Role, Skill } from '../../../shared/types';
+import { AUTO_MODEL, type Role, type Skill } from '../../../shared/types';
 import { Avatar } from '../sprites/Avatar';
 import { MODELS, roleIdFromName, toggle, toolChoices } from '../team/roleForm';
 
@@ -53,7 +53,8 @@ export function RoleEditor({ role, isNew, takenIds, skills, onSaved, onSkillsCha
         <div className="field">
           <label htmlFor="re-model">Model</label>
           <select id="re-model" className="input" value={draft.model} onChange={(e) => set({ model: e.target.value })}>
-            {[...new Set([...MODELS, draft.model])].map((m) => <option key={m}>{m}</option>)}
+            {draft.id !== 'boss' && <option value={AUTO_MODEL}>Auto (Opus picks per task)</option>}
+            {[...new Set([...MODELS, draft.model])].filter((m) => m !== AUTO_MODEL).map((m) => <option key={m}>{m}</option>)}
           </select>
         </div>
         <div className="field">

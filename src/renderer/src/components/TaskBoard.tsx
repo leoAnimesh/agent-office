@@ -3,6 +3,7 @@ import type { Role, WorkspaceSnapshot } from '../../../shared/types';
 import { Avatar } from '../sprites/Avatar';
 import { lookFor } from '../sprites/sprite';
 import { COLUMNS, cardMeta, filterTasks } from '../tasks/board';
+import { modelChip } from '../tasks/modelChip';
 
 interface Props { ws: WorkspaceSnapshot; roles: Role[]; onOpenAgent: (id: string) => void; onNewTask: () => void; onError: (m: string) => void }
 
@@ -36,6 +37,7 @@ export function TaskBoard({ ws, roles, onOpenAgent, onNewTask, onError }: Props)
                   <article key={t.id} className="card">
                     <div className="card-meta"><span>{t.id}</span><span style={{ marginLeft: 'auto' }}>{cardMeta(t, ws.tasks)}</span></div>
                     <div className="card-title">{t.title}</div>
+                    {(() => { const chip = modelChip(t); return chip && <span className="model-chip" title={chip.title}>{chip.label}</span>; })()}
                     <div className="row">
                       {agent && <Avatar look={lookFor(agent, roles)} size={22} />}
                       {agent ? <button type="button" className="btn small" onClick={() => onOpenAgent(agent.id)}>{agent.name}</button> : <span className="small muted">unassigned</span>}
