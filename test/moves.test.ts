@@ -50,3 +50,38 @@ describe('moveTask', () => {
     await expect(manager.moveTask(b.id, b.id)).rejects.toThrow();
   });
 });
+
+describe('reassignTask', () => {
+  it('hands an unstarted task to another employee with a branch of their own', async () => {
+    const { manager, b, a } = await busyOffice();
+    const moved = await manager.reassignTask(b.id, 'Quinn');
+    const quinn = manager.findAgent('Quinn')!;
+    expect(moved).toMatchObject({ assigneeId: quinn.id, branch: `ao/quinn/b-${b.id.toLowerCase()}` });
+    const started = waitFor(manager, (e) => e.type === 'agent-event' && e.event.type === 'init' && e.agentId === quinn.id);
+    await manager.cancelTask(a.id);
+    await started;
+  });
+
+  it('refuses started tasks, the boss, unknown names and the same agent', async () => {
+    const { manager, a, b } = await busyOffice();
+    await manager.createBoss('Max');
+    await expect(manager.reassignTask(a.id, 'Quinn')).rejects.toThrow(/started|not queued/);
+    await expect(manager.reassignTask(b.id, 'Max')).rejects.toThrow(/No employee/);
+    await expect(manager.reassignTask(b.id, 'Nobody')).rejects.toThrow(/No employee/);
+    await expect(manager.reassignTask(b.id, 'Byte')).rejects.toThrow(/already/);
+  });
+
+  it('keeps an auto pick but takes the new role\'s pinned model', async () => {
+    const env = await busyOffice();
+    const { manager, roles, b, c } = env;
+    const qa = (await roles.get('qa'))!;
+    await roles.save({ ...qa, model: 'opus' });
+    expect(manager.getTask(b.id)!.model).toBe('sonnet');
+    const toQuinn = await manager.reassignTask(b.id, 'Quinn');
+    expect(toQuinn).toMatchObject({ model: 'opus', modelPick: { source: 'role' } });
+    const before = manager.getTask(c.id)!.model;
+    expect(before).toBe('sonnet');
+    const toPixel = await manager.reassignTask(c.id, 'Pixel');
+    expect(toPixel.model).toBe(before);
+  });
+});

@@ -208,6 +208,37 @@ export class AgentManager extends EventEmitter {
     });
   }
 
+  /** Hands a queued task that has not started yet to another employee (their own branch, their role's pinned model). */
+  async reassignTask(taskId: string, ref: string): Promise<Task> {
+    const out = await this.run(async () => {
+      this.assertOpen();
+      const t = this.mustTask(taskId);
+      if (t.status !== 'queued') throw new UserError(`Task ${taskId} is not queued`);
+      if (t.attempts > 0) throw new UserError(`Can't reassign ${taskId}: work has started`);
+      const agent = this.findAgent(ref);
+      if (!agent || agent.kind !== 'employee') throw new UserError(`No employee named ${ref}`);
+      if (agent.id === t.assigneeId) throw new UserError(`${taskId} is already assigned to ${agent.name}`);
+      t.assigneeId = agent.id;
+      // The old branch was never created (the task never started), so a fresh name is safe.
+      t.branch = `ao/${slugify(agent.name)}/${slugify(t.title, 'task')}-${t.id.toLowerCase()}`;
+      const role = await this.d.roles.get(agent.roleId);
+      if (role && role.model !== AUTO_MODEL) {
+        t.model = role.model;
+        t.modelPick = { model: role.model, reason: 'Pinned by role', source: 'role' };
+      } else if (t.modelPick?.source === 'role') {
+        // The old role's pin no longer applies; pump() classifies it for the new agent.
+        t.model = undefined;
+        t.modelPick = undefined;
+      }
+      t.updatedAt = this.now();
+      await this.saveTasks();
+      this.emitEvent({ type: 'tasks-changed' });
+      return { ...t };
+    });
+    await this.pump();
+    return out;
+  }
+
   /** Puts a queued task right before `beforeId` in the queue (or last when null) and renumbers the queue. */
   async moveTask(taskId: string, beforeId: string | null): Promise<void> {
     await this.run(async () => {
