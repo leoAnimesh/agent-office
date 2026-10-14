@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { McpHost } from '../src/main/mcp/mcpHost';
+import { projectIdFor } from '../src/main/workspace/projectService';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -74,6 +76,16 @@ describe('ProjectService (UI features)', () => {
     expect(svc.worktreeFor(pixel.id)).toBe(path.join(repo, '.agentoffice', 'wt', 'pixel'));
     const boss = (await svc.snapshot()).agents.find((a) => a.kind === 'boss')!;
     expect(() => svc.worktreeFor(boss.id)).toThrow(/no worktree/);
+  });
+
+  it('cleans up the MCP server when opening fails part-way', async () => {
+    const paths = dataPaths(data);
+    await fs.mkdir(path.join(paths.projectDir(projectIdFor(repo)), 'mcp.json'), { recursive: true });
+    const close = vi.spyOn(McpHost.prototype, 'close');
+    await expect(svc.open(repo)).rejects.toThrow();
+    expect(close).toHaveBeenCalled();
+    expect(svc.current()).toBeNull();
+    close.mockRestore();
   });
 
   it('isInside only accepts real children', () => {

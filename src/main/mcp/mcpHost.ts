@@ -68,6 +68,7 @@ export class McpHost {
 
   async writeConfig(file: string): Promise<void> {
     await fs.mkdir(path.dirname(file), { recursive: true });
+    // mode 0o600 is ignored on Windows; the file lives in the user's private app-data folder and the token changes on every open.
     await fs.writeFile(file, JSON.stringify(this.mcpConfig(), null, 2), { mode: 0o600 });
     await fs.chmod(file, 0o600).catch(() => undefined);
   }

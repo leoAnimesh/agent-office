@@ -53,7 +53,7 @@ export class BossSession extends EventEmitter {
   start(): void {
     const onEvent = (e: ManagerEvent) => {
       if (e.type === 'task-finished') this.notify(describeFinished(e.task, e.agent.name), e.task.id).catch(() => undefined);
-      if (e.type === 'agent-replied') this.notify(`${e.agent.name} replied: ${e.text}`).catch(() => undefined);
+      if (e.type === 'agent-replied') this.notify(e.ok ? `${e.agent.name} replied: ${e.text}` : `${e.agent.name} could not answer: ${e.text}`).catch(() => undefined);
     };
     this.d.manager.on('event', onEvent);
     this.detach = () => { this.d.manager.off('event', onEvent); };
@@ -143,7 +143,8 @@ export class BossSession extends EventEmitter {
   }
 
   private async onEvent(bossId: string, runner: AgentRunner, ev: RunnerEvent): Promise<void> {
-    await this.d.manager.setLive(bossId, ev).catch(() => undefined);
+    // Fire-and-forget: chat must never wait behind long manager work such as a git merge.
+    void this.d.manager.setLive(bossId, ev).catch(() => undefined);
     switch (ev.type) {
       case 'init':
         this.sawInit = true;
@@ -171,7 +172,7 @@ export class BossSession extends EventEmitter {
           if (this.lastText) void this.deliver(this.lastText);
         } else if (!this.stopping && ev.code !== 0) {
           const tail = runner.lastStderr;
-          await this.add({ kind: 'error', at: this.now(), text: `The boss session stopped (${ev.code ?? ev.signal}). It will restart with your next message.${tail ? `\n${tail}` : ''}` });
+          await this.add({ kind: 'error', at: this.now(), text: `The boss session ${ev.code === null && ev.signal === null ? 'could not start' : `stopped (${ev.code ?? ev.signal})`}. It will restart with your next message.${tail ? `\n${tail}` : ''}` });
         }
         break;
       default:

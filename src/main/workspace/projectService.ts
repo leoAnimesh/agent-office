@@ -122,7 +122,14 @@ export class ProjectService extends EventEmitter {
     const host = new McpHost(tools);
     await host.start();
     const mcpConfigPath = path.join(this.d.paths.projectDir(id), 'mcp.json');
-    await host.writeConfig(mcpConfigPath);
+    try {
+      await host.writeConfig(mcpConfigPath);
+    } catch (err) {
+      // Never leave a listening MCP server or a live manager behind a failed open.
+      await host.close();
+      await manager.shutdown();
+      throw err;
+    }
     const boss = new BossSession({
       project, manager, roles: this.roles, skills: this.skills, store: this.store, createRunner,
       claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, mcpConfigPath, isolateUserSettings: isolate,

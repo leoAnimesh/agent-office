@@ -49,6 +49,12 @@ describe('WorktreeManager.merge', () => {
     expect(await fs.readFile(path.join(repo, 'scratch.txt'), 'utf8')).toBe('mine');
   });
 
+  it('explains a detached checkout', async () => {
+    await workOn('ao/pixel/a', 'hello.txt', 'hi\n');
+    await git(repo, ['checkout', '-q', '--detach']);
+    expect(await wm.merge('main', 'ao/pixel/a', 'Merge')).toMatchObject({ status: 'blocked', reason: expect.stringMatching(/not on a branch/) });
+  });
+
   it('refuses when the checkout is on another branch', async () => {
     await workOn('ao/pixel/a', 'hello.txt', 'hi\n');
     await git(repo, ['checkout', '-qb', 'feature']);

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { IPC } from '../shared/ipc';
 import type { AppSettings, AppStatus } from '../shared/types';
 import { getAppStatus } from './appStatus';
+import { isTrustedSender } from './ipcGuard';
 import { claudeVersion, systemLocateEnv } from './claude/locate';
 import { fixGuiPath } from './claude/shellPath';
 import { dataPaths } from './store/paths';
@@ -59,18 +60,24 @@ function statusFor(settings: AppSettings): AppStatus {
 }
 
 function registerIpc(svc: ProjectService, settings: SettingsStore, status: { current: AppStatus }): void {
-  ipcMain.handle(IPC.appStatus, async () => {
+  // Every channel checks that the request comes from our own page.
+  const handle = (channel: string, fn: (...args: unknown[]) => unknown) =>
+    ipcMain.handle(channel, (e, ...args) => {
+      if (!isTrustedSender(e.senderFrame?.url, process.env.ELECTRON_RENDERER_URL)) throw new Error('Untrusted sender');
+      return fn(...args);
+    });
+  handle(IPC.appStatus, async () => {
     status.current = statusFor(await settings.get());
     if (status.current.claude) svc.configure({ claudeBin: status.current.claude.path });
     return status.current;
   });
-  ipcMain.handle(IPC.pickFolder, async () => {
+  handle(IPC.pickFolder, async () => {
     if (process.env.AO_E2E_PICK_FOLDER) return process.env.AO_E2E_PICK_FOLDER;
     const r = win ? await dialog.showOpenDialog(win, { properties: ['openDirectory'] }) : await dialog.showOpenDialog({ properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0] ?? null;
   });
-  ipcMain.handle(IPC.listProjects, () => svc.listProjects());
-  ipcMain.handle(IPC.openProject, (_e, repoPath: unknown, opts: unknown) => {
+  handle(IPC.listProjects, () => svc.listProjects());
+  handle(IPC.openProject, (repoPath: unknown, opts: unknown) => {
     const o = (typeof opts === 'object' && opts !== null ? opts : {}) as Record<string, unknown>;
     return svc.open(str(repoPath, 'folder'), {
       bossName: typeof o.bossName === 'string' ? o.bossName.slice(0, 40) : undefined,
@@ -78,28 +85,28 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
       bossCanHire: typeof o.bossCanHire === 'boolean' ? o.bossCanHire : undefined,
     });
   });
-  ipcMain.handle(IPC.closeProject, () => svc.close());
-  ipcMain.handle(IPC.updateProject, (_e, patch: unknown) => svc.updateProject(patch));
-  ipcMain.handle(IPC.snapshot, () => (svc.current() ? svc.snapshot() : null));
-  ipcMain.handle(IPC.sendToBoss, (_e, text: unknown) => svc.sendToBoss(str(text, 'message')));
-  ipcMain.handle(IPC.listRoles, () => svc.listRoles());
-  ipcMain.handle(IPC.saveRole, (_e, role: unknown) => svc.saveRole(role));
-  ipcMain.handle(IPC.listSkills, () => svc.listSkills());
-  ipcMain.handle(IPC.saveSkill, (_e, skill: unknown) => svc.saveSkill(skill));
-  ipcMain.handle(IPC.hire, (_e, roleId: unknown, name: unknown) => svc.hire(str(roleId, 'role'), typeof name === 'string' && name.trim() ? name.slice(0, 40) : undefined));
-  ipcMain.handle(IPC.fireAgent, (_e, id: unknown) => svc.fire(str(id, 'agent id')));
-  ipcMain.handle(IPC.agentLog, (_e, id: unknown) => svc.agentLog(str(id, 'agent id')));
-  ipcMain.handle(IPC.messageAgent, async (_e, id: unknown, text: unknown) => { await svc.messageAgent(str(id, 'agent id'), str(text, 'message')); });
-  ipcMain.handle(IPC.openWorktree, async (_e, id: unknown) => {
+  handle(IPC.closeProject, () => svc.close());
+  handle(IPC.updateProject, (patch: unknown) => svc.updateProject(patch));
+  handle(IPC.snapshot, () => (svc.current() ? svc.snapshot() : null));
+  handle(IPC.sendToBoss, (text: unknown) => svc.sendToBoss(str(text, 'message')));
+  handle(IPC.listRoles, () => svc.listRoles());
+  handle(IPC.saveRole, (role: unknown) => svc.saveRole(role));
+  handle(IPC.listSkills, () => svc.listSkills());
+  handle(IPC.saveSkill, (skill: unknown) => svc.saveSkill(skill));
+  handle(IPC.hire, (roleId: unknown, name: unknown) => svc.hire(str(roleId, 'role'), typeof name === 'string' && name.trim() ? name.slice(0, 40) : undefined));
+  handle(IPC.fireAgent, (id: unknown) => svc.fire(str(id, 'agent id')));
+  handle(IPC.agentLog, (id: unknown) => svc.agentLog(str(id, 'agent id')));
+  handle(IPC.messageAgent, async (id: unknown, text: unknown) => { await svc.messageAgent(str(id, 'agent id'), str(text, 'message')); });
+  handle(IPC.openWorktree, async (id: unknown) => {
     const problem = await shell.openPath(svc.worktreeFor(str(id, 'agent id')));
     if (problem) throw new Error(problem);
   });
-  ipcMain.handle(IPC.pauseTask, (_e, id: unknown) => svc.pauseTask(str(id, 'task id')));
-  ipcMain.handle(IPC.resumeTask, (_e, id: unknown) => svc.resumeTask(str(id, 'task id')));
-  ipcMain.handle(IPC.cancelTask, (_e, id: unknown) => svc.cancelTask(str(id, 'task id')));
-  ipcMain.handle(IPC.answerMerge, (_e, requestId: unknown, ok: unknown) => svc.answerMerge(str(requestId, 'request id'), ok === true));
-  ipcMain.handle(IPC.getSettings, () => settings.get());
-  ipcMain.handle(IPC.saveSettings, async (_e, patch: unknown) => {
+  handle(IPC.pauseTask, (id: unknown) => svc.pauseTask(str(id, 'task id')));
+  handle(IPC.resumeTask, (id: unknown) => svc.resumeTask(str(id, 'task id')));
+  handle(IPC.cancelTask, (id: unknown) => svc.cancelTask(str(id, 'task id')));
+  handle(IPC.answerMerge, (requestId: unknown, ok: unknown) => svc.answerMerge(str(requestId, 'request id'), ok === true));
+  handle(IPC.getSettings, () => settings.get());
+  handle(IPC.saveSettings, async (patch: unknown) => {
     const next = await settings.save((typeof patch === 'object' && patch !== null ? patch : {}) as Partial<AppSettings>);
     status.current = statusFor(next);
     svc.configure({ claudeBin: status.current.claude?.path ?? 'claude', isolateUserSettings: next.isolateUserSettings });
