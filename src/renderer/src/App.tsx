@@ -7,6 +7,7 @@ import { OfficeView } from './components/OfficeView';
 import { Onboarding } from './components/Onboarding';
 import { Sidebar } from './components/Sidebar';
 import { TaskBoard } from './components/TaskBoard';
+import { TeamView } from './components/TeamView';
 import { lookFor } from './sprites/sprite';
 import { initialState, reducer, type View } from './state';
 
@@ -49,6 +50,7 @@ export function App() {
     switch (state.view.name) {
       case 'office': return <OfficeView ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onHire={() => go({ name: 'team' })} />;
       case 'agent': return <AgentDetailView ws={ws} roles={state.roles} agentId={state.view.agentId} logs={state.logs[state.view.agentId] ?? []} onBack={() => go({ name: 'office' })} onLogs={onLogs} onError={onError} />;
+      case 'team': return <TeamView ws={ws} roles={state.roles} onRolesChanged={refreshRoles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onError={onError} />;
       case 'tasks': return <TaskBoard ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onNewTask={() => { go({ name: 'office' }); setTimeout(() => document.getElementById('boss-msg')?.focus(), 0); }} onError={onError} />;
       default: return <p className="muted">This view arrives in a later step.</p>;
     }
