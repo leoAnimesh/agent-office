@@ -19,7 +19,7 @@ let argvOut: string;
 let fakeEnv: Record<string, string>;
 let project: Project;
 
-async function makeManager(maxConcurrent = 4): Promise<AgentManager> {
+async function makeManager(maxConcurrent = 4, store?: ProjectStore): Promise<AgentManager> {
   const paths = dataPaths(data);
   const roles = new RoleStore(paths.rolesDir);
   const skills = new SkillStore(paths.skillsDir);
@@ -27,7 +27,7 @@ async function makeManager(maxConcurrent = 4): Promise<AgentManager> {
   await skills.seed(path.resolve('resources/skills'));
   project = { id: 'p1', name: 'demo', repoPath: repo, baseBranch: 'main', maxConcurrent, bossCanHire: true, autoMerge: false };
   const m = new AgentManager({
-    project, store: new ProjectStore(paths), roles, skills, worktrees: new WorktreeManager(repo),
+    project, store: store ?? new ProjectStore(paths), roles, skills, worktrees: new WorktreeManager(repo),
     createRunner: (o) => new ClaudeRunner({ ...o, bin: process.execPath, binArgs: [FAKE_CLAUDE], env: { ...process.env, ...fakeEnv } }),
     claudeBin: 'claude', promptDir: paths.promptDir, isolateUserSettings: true,
   });
@@ -63,6 +63,31 @@ describe('AgentManager', () => {
     expect((await m.hire('backend')).name).toBe('Byte');
     await expect(m.hire('qa', 'pixel')).rejects.toThrow(/already exists/);
     await expect(m.hire('nope')).rejects.toThrow(/Unknown role/);
+    await m.shutdown();
+  });
+
+  it('rejects names that would share a worktree with an existing agent', async () => {
+    const m = await makeManager();
+    await m.hire('frontend', 'Zoë');
+    await expect(m.hire('qa', 'Zoe')).rejects.toThrow(/too similar to Zoë/);
+    await m.hire('qa', '🤖');
+    await expect(m.hire('qa', 'Agent')).rejects.toThrow(/too similar/);
+    await m.shutdown();
+  });
+
+  it('keeps going when the agent log cannot be written', async () => {
+    class BrokenLogStore extends ProjectStore {
+      override appendLog(): Promise<void> { return Promise.reject(new Error('disk full')); }
+    }
+    const m = await makeManager(4, new BrokenLogStore(dataPaths(data)));
+    await m.hire('frontend');
+    const first = finished(m, 'T-101');
+    await m.createTask({ assignee: 'Pixel', title: 'a', brief: 'a', createdBy: 'user' });
+    await first;
+    const second = finished(m, 'T-102');
+    await m.createTask({ assignee: 'Pixel', title: 'b', brief: 'b', createdBy: 'user' });
+    await second;
+    expect(m.tasks().map((t) => t.status)).toEqual(['review', 'review']);
     await m.shutdown();
   });
 
@@ -218,7 +243,7 @@ describe('AgentManager', () => {
     await m1.shutdown();
     const store = new ProjectStore(dataPaths(data));
     const stale: Task = {
-      id: 'T-101', projectId: 'p1', title: 'stale', brief: 'x', assigneeId: pixel.id, createdBy: 'user', status: 'working',
+      id: 'T-101', projectId: 'p1', title: 'stale', brief: 'Fix the stale widget.', assigneeId: pixel.id, createdBy: 'user', status: 'working',
       held: false, attempts: 1, branch: 'ao/pixel/stale-t-101', dependsOn: [], createdAt: '2026-10-14T10:00:00Z', updatedAt: '2026-10-14T10:00:00Z',
     };
     await store.saveTasks('p1', [stale]);
@@ -230,6 +255,8 @@ describe('AgentManager', () => {
     await m2.idle();
     expect(await launches()).toHaveLength(1);
     expect(m2.tasks()[0].status).toBe('review');
+    // A fresh session must still get the brief, not just "continue".
+    expect(m2.tasks()[0].resultSummary).toContain('Fix the stale widget.');
     await m2.shutdown();
   });
 });

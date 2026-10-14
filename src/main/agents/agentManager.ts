@@ -101,6 +101,9 @@ export class AgentManager extends EventEmitter {
       const taken = new Set(this.agentList.map((a) => a.name.toLowerCase()));
       const finalName = name?.trim() || NAME_POOL.find((n) => !taken.has(n.toLowerCase())) || `${role.name} ${this.agentList.length + 1}`;
       if (taken.has(finalName.toLowerCase())) throw new Error(`An agent named ${finalName} already exists`);
+      // Worktrees and branches are keyed by slug, so two employees must never share one.
+      const clash = this.agentList.find((a) => a.kind === 'employee' && slugify(a.name) === slugify(finalName));
+      if (clash) throw new Error(`The name ${finalName} is too similar to ${clash.name}; pick a more distinct name`);
       const agent: Agent = { id: randomUUID(), projectId: this.d.project.id, name: finalName, roleId, kind: 'employee', status: 'idle', bubble: 'Idle' };
       this.agentList.push(agent);
       await this.saveAgents();
@@ -235,9 +238,13 @@ export class AgentManager extends EventEmitter {
   private async onRunnerEvent(agentId: string, taskId: string, runner: AgentRunner, ev: RunnerEvent): Promise<void> {
     const agent = this.mustAgent(agentId);
     const task = this.taskList.find((t) => t.id === taskId);
-    await this.d.store.appendLog(this.d.project.id, agentId, { at: this.now(), taskId, event: ev });
+    // Logging is best-effort: a full disk must never stall the task state machine.
+    await this.d.store.appendLog(this.d.project.id, agentId, { at: this.now(), taskId, event: ev }).catch(() => undefined);
 
-    if (ev.type === 'init' && ev.sessionId) agent.sessionId = ev.sessionId;
+    if (ev.type === 'init' && ev.sessionId && agent.sessionId !== ev.sessionId) {
+      agent.sessionId = ev.sessionId;
+      await this.saveAgents().catch(() => undefined);
+    }
     if (agent.status !== 'paused') Object.assign(agent, reduceStatus(agent, ev));
     if (ev.type === 'exit' && task?.status === 'cancelled') { agent.status = 'idle'; agent.bubble = 'Idle'; }
     this.emitEvent({ type: 'agent-event', agentId, event: ev });
@@ -250,13 +257,16 @@ export class AgentManager extends EventEmitter {
 
     if (ev.type === 'exit') {
       if (this.live.get(agentId)?.runner === runner) this.live.delete(agentId);
-      if (task?.status === 'working') {
-        const tail = runner.lastStderr;
-        await this.finishTask(agent, task, false, `The session exited (code ${ev.code ?? ev.signal}) before finishing.${tail ? `\n${tail}` : ''}`);
+      try {
+        if (task?.status === 'working') {
+          const tail = runner.lastStderr;
+          await this.finishTask(agent, task, false, `The session exited (code ${ev.code ?? ev.signal}) before finishing.${tail ? `\n${tail}` : ''}`);
+        }
+        await this.saveAgents();
+      } finally {
+        // Start whatever was waiting on this agent or on a free slot (queued after this handler).
+        this.pump().catch(() => undefined);
       }
-      await this.saveAgents();
-      // Start whatever was waiting on this agent or on a free slot (queued after this handler).
-      this.pump().catch(() => undefined);
     }
   }
 

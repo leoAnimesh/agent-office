@@ -69,6 +69,16 @@ describe('ClaudeRunner', () => {
     expect(r.running).toBe(false);
   });
 
+  it('stop() force-kills a session that ignores SIGTERM', async () => {
+    const r = new ClaudeRunner({ bin: process.execPath, binArgs: [FAKE_CLAUDE], cwd: dir, launch: {}, killGraceMs: 300, env: { ...process.env, FAKE_CLAUDE_HANG: '1', FAKE_CLAUDE_TRAP_TERM: '1' } });
+    r.start();
+    r.send('x');
+    await waitForEvent(r, (e) => e.type === 'init');
+    r.stop();
+    await waitForEvent(r, (e) => e.type === 'exit', 5000);
+    expect(r.running).toBe(false);
+  });
+
   it('works when the script lives in a folder with a space in its name', async () => {
     const spaced = path.join(dir, 'with space');
     await fs.mkdir(spaced);

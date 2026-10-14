@@ -31,6 +31,8 @@ describe('taskMessage', () => {
     expect(taskMessage(task)).toBe('# Task T-101: Add toggle\n\nMake a toggle.\n\nWhen you are finished, reply with a short summary (at most 5 lines) of what you changed and how you verified it.');
   });
   it('asks to continue on later attempts', () => {
-    expect(taskMessage({ ...task, attempts: 2 })).toMatch(/^Continue working on task T-101 \("Add toggle"\)/);
+    const msg = taskMessage({ ...task, attempts: 2 });
+    expect(msg).toMatch(/^Continue working on task T-101 \("Add toggle"\)/);
+    expect(msg).toContain('Make a toggle.');
   });
 });

@@ -36,7 +36,8 @@ export function renderPrompt(role: Role, skills: Skill[], ctx: PromptContext): s
 
 export function taskMessage(task: Pick<Task, 'id' | 'title' | 'brief' | 'attempts'>): string {
   if (task.attempts > 0) {
-    return `Continue working on task ${task.id} ("${task.title}") from where you left off. When you are finished, reply with a short summary (at most 5 lines).`;
+    // The brief is repeated because the previous session may not have survived (crash, restart).
+    return `Continue working on task ${task.id} ("${task.title}") from where you left off. Check the current state of the files first.\n\nThe brief, for reference:\n\n${task.brief.trim()}\n\nWhen you are finished, reply with a short summary (at most 5 lines).`;
   }
   return `# Task ${task.id}: ${task.title}\n\n${task.brief.trim()}\n\nWhen you are finished, reply with a short summary (at most 5 lines) of what you changed and how you verified it.`;
 }

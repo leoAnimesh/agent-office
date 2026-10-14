@@ -93,6 +93,8 @@ export class WorktreeManager {
       await fs.mkdir(path.dirname(wt), { recursive: true });
       await git(this.repoRoot, exists ? ['worktree', 'add', wt, branch] : ['worktree', 'add', '-b', branch, wt, fromRef]);
     } else {
+      // A paused or cancelled task may have left edits behind: keep them on their own branch.
+      await this.commitAll(wt, 'WIP: unfinished work saved by AgentOffice before switching tasks');
       await git(wt, exists ? ['checkout', branch] : ['checkout', '-b', branch, fromRef]);
     }
     return wt;

@@ -1,14 +1,14 @@
 import { spawn } from 'node:child_process';
 
 /** Kill a process and its children. POSIX children must be spawned with `detached: true`. */
-export function killTree(pid: number, platform: NodeJS.Platform = process.platform): void {
+export function killTree(pid: number, platform: NodeJS.Platform = process.platform, signal: NodeJS.Signals = 'SIGTERM'): void {
   if (platform === 'win32') {
     spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => {});
     return;
   }
   try {
-    process.kill(-pid, 'SIGTERM');
+    process.kill(-pid, signal);
   } catch {
-    try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ }
+    try { process.kill(pid, signal); } catch { /* already gone */ }
   }
 }

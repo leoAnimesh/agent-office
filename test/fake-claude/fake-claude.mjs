@@ -12,6 +12,8 @@ if (argv.includes('--version')) {
   process.exit(0);
 }
 
+if (env.FAKE_CLAUDE_TRAP_TERM === '1') process.on('SIGTERM', () => { /* ignore, like a stuck tool */ });
+
 const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
 const sessionId = flag('--resume') ?? flag('--session-id') ?? randomUUID();
 const fixture = env.FAKE_CLAUDE_FIXTURE ? fs.readFileSync(env.FAKE_CLAUDE_FIXTURE, 'utf8').split(/\r?\n/).filter(Boolean) : [];

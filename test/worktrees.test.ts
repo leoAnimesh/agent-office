@@ -62,6 +62,16 @@ describe('WorktreeManager', () => {
     expect(await git(repo, ['rev-parse', '--abbrev-ref', 'HEAD'])).toBe('main');
   });
 
+  it('saves unfinished work on its own branch before switching to the next task', async () => {
+    const wm = new WorktreeManager(repo);
+    const wt = await wm.prepare('Pixel', 'ao/pixel/one', 'main');
+    await fs.writeFile(path.join(wt, 'half-done.txt'), 'wip\n');
+    await wm.prepare('Pixel', 'ao/pixel/two', 'main');
+    expect(existsSync(path.join(wt, 'half-done.txt'))).toBe(false);
+    expect(await wm.diffStat('main', 'ao/pixel/two')).toEqual([]);
+    expect(await wm.diffStat('main', 'ao/pixel/one')).toEqual([{ path: 'half-done.txt', add: 1, del: 0 }]);
+  });
+
   it('recreates a worktree whose folder was deleted by hand', async () => {
     const wm = new WorktreeManager(repo);
     const wt = await wm.prepare('Quinn', 'ao/quinn/a', 'main');

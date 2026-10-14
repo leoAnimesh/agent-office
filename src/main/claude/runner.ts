@@ -25,6 +25,8 @@ export interface ClaudeRunnerOptions {
   launch: ClaudeLaunch;
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
+  /** How long stop() waits after SIGTERM before SIGKILL. */
+  killGraceMs?: number;
 }
 
 export class ClaudeRunner extends EventEmitter implements AgentRunner {
@@ -76,8 +78,13 @@ export class ClaudeRunner extends EventEmitter implements AgentRunner {
   }
 
   stop(): void {
-    const pid = this.child?.pid;
-    if (pid) killTree(pid, this.opts.platform ?? process.platform);
+    const child = this.child;
+    const pid = child?.pid;
+    if (!pid) return;
+    const platform = this.opts.platform ?? process.platform;
+    killTree(pid, platform);
+    // A stuck tool can ignore SIGTERM; force it if the process is still ours after the grace period.
+    setTimeout(() => { if (this.child === child) killTree(pid, platform, 'SIGKILL'); }, this.opts.killGraceMs ?? 5000).unref();
   }
 
   private emitLine(line: string): void {
