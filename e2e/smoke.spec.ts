@@ -73,7 +73,15 @@ test('marks new messages that arrive while you are scrolled up', async () => {
     // Arrives without the composer, so nothing forces a scroll: you are still reading older messages.
     await win.evaluate(() => window.agentOffice.sendToBoss('ping while you are away'));
     const jump = win.getByRole('button', { name: /new messages?/ });
-    await expect(jump).toHaveText('↓ 2 new messages');
+    await expect(log.locator('.msg.boss:not(.streaming)', { hasText: 'echo: ping while you are away' })).toBeAttached();
+    try {
+      await expect(jump).toHaveText('↓ 2 new messages');
+    } catch (err) {
+      const diag = await log.evaluate((el) => ({ ...el.dataset, scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight, window: `${window.innerWidth}x${window.innerHeight}` }));
+      await test.info().attach('chat-diagnostics', { body: JSON.stringify(diag, null, 2), contentType: 'application/json' });
+      console.log('chat-diagnostics', JSON.stringify(diag));
+      throw err;
+    }
     const marker = win.getByRole('separator', { name: 'New messages' });
     await expect(marker).toBeAttached();
     await expect(marker).not.toBeInViewport();

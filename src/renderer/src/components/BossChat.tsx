@@ -46,6 +46,7 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy
     const el = box.current;
     if (!el) return;
     const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (near !== atBottom) el.dataset.trace = `${el.dataset.trace ?? ''}|scroll top=${Math.round(el.scrollTop)} h=${el.scrollHeight} c=${el.clientHeight} near=${near}`.slice(-600);
     setAtBottom(near);
     if (near) setUnseen(onReachedBottom);
   };
@@ -63,7 +64,9 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy
   // Layout effects: stick to the bottom before the browser paints, so there is no flicker and no
   // late scroll that would wrongly mark the reader as "at the bottom".
   useLayoutEffect(() => {
-    setUnseen((u) => onMessages(u, { prevCount: prevCount.current, count: chat.length, atBottom }));
+    const e = { prevCount: prevCount.current, count: chat.length, atBottom };
+    setUnseen((u) => onMessages(u, e));
+    if (box.current) box.current.dataset.trace = `${box.current.dataset.trace ?? ''}|msg ${e.prevCount}->${e.count} bottom=${e.atBottom}`.slice(-600);
     prevCount.current = chat.length;
     if (atBottom) scrollToEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,7 +100,8 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy
         <span className="status-chip" style={{ background: STATUS_COLORS[status].dot }}>{STATUS_LABEL[status]}</span>
       </div>
       <div className="messages-wrap">
-      <div className="messages" ref={box} onScroll={onScroll} role="log" aria-label="Conversation with the boss">
+      <div className="messages" ref={box} onScroll={onScroll} role="log" aria-label="Conversation with the boss"
+        data-at-bottom={atBottom} data-unseen={unseen.count} data-marker={unseen.markerIndex ?? ''} data-count={chat.length}>
         {chat.length === 0 && <p className="muted">Tell the boss what to build. It will hire people and hand out tasks.</p>}
         {chat.map((e, i) => (
           <Fragment key={i}>
