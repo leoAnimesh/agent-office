@@ -48,7 +48,6 @@ export function OfficeView({ ws, roles, onOpenAgent, onHire }: Props) {
             <div className="desks">
               {plan.boss && (
                 <div className="boss-spot">
-                  <span className="room-tag boss-tag">BOSS</span>
                   <DeskSprite compact name={plan.boss.agent.name} role="Boss" look={lookFor(plan.boss.agent, roles)} status={plan.boss.state.status} bubble={plan.boss.state.bubble} onClick={() => onOpenAgent(plan.boss!.agent.id)} />
                 </div>
               )}
