@@ -22,3 +22,24 @@ export function dropAction(task: Task, to: Column): MoveAction | null {
   if (to === 'done' && from !== 'done') return 'cancel';
   return null;
 }
+
+/** Whether a column takes a drop: run an action, reorder the queue, or neither. */
+export function dropMode(task: Task, to: Column): 'action' | 'reorder' | null {
+  if (to === 'queued' && task.status === 'queued') return 'reorder';
+  return dropAction(task, to) ? 'action' : null;
+}
+
+/**
+ * Where a queued card dropped on the top or bottom half of another lands, as moveTask's `beforeId`
+ * (null = the end), or undefined when the drop would leave the queue as it is.
+ */
+export function queueDropBefore(queue: string[], dragged: string, over: string, half: 'top' | 'bottom'): string | null | undefined {
+  if (over === dragged) return undefined;
+  const rest = queue.filter((id) => id !== dragged);
+  const i = rest.indexOf(over);
+  if (i < 0) return undefined;
+  const before = half === 'top' ? over : rest[i + 1] ?? null;
+  const at = queue.indexOf(dragged);
+  const nowBefore = at >= 0 ? queue[at + 1] ?? null : undefined;
+  return before === nowBefore ? undefined : before;
+}

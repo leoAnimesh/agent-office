@@ -1,4 +1,5 @@
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -201,7 +202,13 @@ test('task cards open a details drawer', async () => {
       status: 'review', held: false, attempts: 1, branch: 'ao/pixel/remove-dead-code-t-101', dependsOn: [], createdAt: now, updatedAt: now,
       resultSummary: 'Done.\n\n- Removed `ComingSoonView`\n- Tests pass', diffStat: [{ path: 'src/a.ts', add: 0, del: 12 }],
       model: 'haiku', modelPick: { model: 'haiku', size: 'small', reason: 'Deletes a few files', source: 'classifier' },
-    }]));
+    }, ...['Queue one', 'Queue two'].map((title, i) => ({
+      // Waiting on T-101, so they stay queued until it is merged.
+      id: `T-10${i + 2}`, projectId: path.basename(pdir), title, brief: 'later', assigneeId: pixel.id, createdBy: 'boss', status: 'queued', held: false, attempts: 0,
+      branch: `ao/pixel/q-t-10${i + 2}`, dependsOn: ['T-101'], createdAt: new Date(Date.now() + i * 1000).toISOString(), updatedAt: now, model: 'haiku',
+    }))]));
+    // The reviewed task's branch must exist for the drag-to-Done merge.
+    execFileSync('git', ['branch', 'ao/pixel/remove-dead-code-t-101'], { cwd: repo });
     const base = { ...process.env } as Record<string, string>;
     delete base.ELECTRON_RENDERER_URL;
     app = await electron.launch({ args: process.platform === 'linux' ? ['--no-sandbox', path.resolve('.')] : [path.resolve('.')], env: { ...base, AO_USER_DATA: userData, ...env } });
@@ -227,6 +234,21 @@ test('task cards open a details drawer', async () => {
     await win.keyboard.press('Escape');
     await expect(drawer).toHaveCount(0);
     await expect(card.getByRole('button', { name: 'Remove dead code' })).toBeFocused();
+
+    // Drag and drop: reorder the queue, then the same move back from the details panel.
+    const queued = win.getByRole('region', { name: 'Queued' });
+    const titles = () => queued.locator('.card-open').allTextContents();
+    expect(await titles()).toEqual(['Queue one', 'Queue two']);
+    await queued.locator('.task-card', { hasText: 'Queue two' }).dragTo(queued.locator('.task-card', { hasText: 'Queue one' }), { targetPosition: { x: 20, y: 5 } });
+    await expect.poll(titles).toEqual(['Queue two', 'Queue one']);
+    await queued.getByRole('button', { name: 'Queue two' }).click();
+    await win.getByRole('dialog', { name: 'Queue two' }).getByRole('button', { name: 'Move down' }).click();
+    await expect.poll(titles).toEqual(['Queue one', 'Queue two']);
+    await win.keyboard.press('Escape');
+
+    // Review to Done merges it.
+    await card.dragTo(win.getByRole('region', { name: 'Done' }));
+    await expect(win.getByRole('region', { name: 'Done' }).locator('.task-card', { hasText: 'Remove dead code' })).toBeVisible();
   } finally {
     await app.close();
     await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });

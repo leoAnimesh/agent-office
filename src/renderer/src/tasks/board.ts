@@ -1,11 +1,12 @@
 import type { Task, TaskStatus } from '../../../shared/types';
+import type { Column } from './moves';
 
-export const COLUMNS: { title: string; statuses: TaskStatus[]; color: string }[] = [
-  { title: 'Queued', statuses: ['queued'], color: 'var(--muted)' },
-  { title: 'Working', statuses: ['working'], color: 'var(--teal)' },
-  { title: 'Needs help', statuses: ['needs_help', 'failed'], color: 'var(--red)' },
-  { title: 'Review', statuses: ['review'], color: 'var(--amber)' },
-  { title: 'Done', statuses: ['done', 'cancelled'], color: 'var(--green)' },
+export const COLUMNS: { key: Column; title: string; statuses: TaskStatus[]; color: string }[] = [
+  { key: 'queued', title: 'Queued', statuses: ['queued'], color: 'var(--muted)' },
+  { key: 'working', title: 'Working', statuses: ['working'], color: 'var(--teal)' },
+  { key: 'needs_help', title: 'Needs help', statuses: ['needs_help', 'failed'], color: 'var(--red)' },
+  { key: 'review', title: 'Review', statuses: ['review'], color: 'var(--amber)' },
+  { key: 'done', title: 'Done', statuses: ['done', 'cancelled'], color: 'var(--green)' },
 ];
 
 export function cardMeta(task: Task, tasks: Task[]): string {
