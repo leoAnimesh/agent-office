@@ -65,7 +65,7 @@ async function handle(line) {
   }
   out({
     type: 'result', subtype: fail ? 'error_during_execution' : 'success', is_error: fail,
-    result: fail ? 'simulated failure' : `echo: ${content.slice(0, 200)}`,
+    result: fail ? 'simulated failure' : (env.FAKE_CLAUDE_RESULT ?? `echo: ${content.slice(0, 200)}`),
     session_id: sessionId, num_turns: turns, total_cost_usd: 0, duration_ms: 1,
   });
 }

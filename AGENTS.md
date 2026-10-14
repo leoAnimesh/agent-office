@@ -118,6 +118,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
   - `FAKE_CLAUDE_TRAP_TERM`: ignore SIGTERM;
   - `FAKE_CLAUDE_DELAY_MS`: pause between fixture lines;
   - `FAKE_CLAUDE_ARGV_OUT`: record each launch's argv and cwd.
+  - `FAKE_CLAUDE_RESULT`: use this exact text as the success result (e.g. classifier JSON).
 - Dev and E2E hooks, read only when unpackaged:
   - `AO_USER_DATA`: app data folder;
   - `AO_CLAUDE_BIN` + `AO_CLAUDE_ARGS`: e.g. `node` + `["test/fake-claude/fake-claude.mjs"]`;
