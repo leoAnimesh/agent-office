@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Agent, Role, RunnerEvent } from '../../../shared/types';
+import type { Agent, LogEntry, Role, RunnerEvent } from '../../../shared/types';
 
 const dot: Record<Agent['status'], string> = {
   idle: '#6e7288', thinking: '#f5b942', working: '#52d1be', waiting: '#7aa2ff', done: '#8bd47a', error: '#ff7a6b', paused: '#a3a6b8',
@@ -15,7 +15,7 @@ function logLine(e: RunnerEvent): string | null {
   }
 }
 
-export function TeamPanel({ agents, logs, onError }: { agents: Agent[]; logs: Record<string, RunnerEvent[]>; onError: (m: string) => void }) {
+export function TeamPanel({ agents, logs, onError }: { agents: Agent[]; logs: Record<string, LogEntry[]>; onError: (m: string) => void }) {
   const [roles, setRoles] = useState<Role[]>([]);
   const [roleId, setRoleId] = useState('frontend');
   const [name, setName] = useState('');
@@ -23,7 +23,7 @@ export function TeamPanel({ agents, logs, onError }: { agents: Agent[]; logs: Re
 
   useEffect(() => { window.agentOffice.listRoles().then(setRoles, () => setRoles([])); }, []);
   const roleName = (id: string) => roles.find((r) => r.id === id)?.name ?? id;
-  const lines = (selected ? logs[selected] ?? [] : []).map(logLine).filter((l): l is string => l !== null).slice(-30);
+  const lines = (selected ? logs[selected] ?? [] : []).map((entry) => logLine(entry.event)).filter((l): l is string => l !== null).slice(-30);
 
   const hire = async () => {
     try {
