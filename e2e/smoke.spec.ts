@@ -30,6 +30,12 @@ test('first launch → open a repo → chat with the boss → hire → see the d
     await box.press('Enter');
     await expect(win.getByText(/^echo: Hello <b>team<\/b> 🤖/)).toBeVisible();
 
+    await box.fill('**bold** words\n- one\n- two');
+    await box.press('Enter');
+    const reply = win.locator('.msg.boss', { hasText: 'bold words' });
+    await expect(reply.locator('strong', { hasText: 'bold' })).toBeVisible();
+    await expect(reply.locator('li')).toHaveCount(2);
+
     await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Team' }).click();
     await win.getByRole('button', { name: /^Frontend Engineer/ }).click();
     await win.getByRole('button', { name: 'Hire Frontend Engineer' }).click();

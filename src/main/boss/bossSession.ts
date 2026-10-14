@@ -35,6 +35,10 @@ export function describeFinished(task: Task, agentName: string): string {
 export class BossSession extends EventEmitter {
   private runner: AgentRunner | null = null;
   private textThisTurn = false;
+  /** Reply text streamed so far for the current block (not saved until the full message arrives). */
+  private streamText = '';
+  /** Messages delivered to the boss that have not been answered yet. */
+  private pending = 0;
   /** Whether the current runner was launched with --resume and has reported `init` yet. */
   private resumed = false;
   private sawInit = false;
@@ -96,7 +100,10 @@ export class BossSession extends EventEmitter {
       if (this.stopping) return;
       const runner = await this.ensureRunner();
       this.lastText = text;
-      if (runner.running) runner.send(text);
+      if (runner.running) {
+        runner.send(text);
+        this.setPending(this.pending + 1);
+      }
     });
     this.delivery = next.catch(() => undefined);
     return next.catch(async (err: unknown) => {
@@ -129,6 +136,7 @@ export class BossSession extends EventEmitter {
         resume: boss.sessionId,
         sessionId: boss.sessionId ? undefined : randomUUID(),
         isolateUserSettings: this.d.isolateUserSettings,
+        includePartialMessages: true,
       },
     });
     runner.on('event', (ev) => {
@@ -144,16 +152,22 @@ export class BossSession extends EventEmitter {
 
   private async onEvent(bossId: string, runner: AgentRunner, ev: RunnerEvent): Promise<void> {
     // Fire-and-forget: chat must never wait behind long manager work such as a git merge.
-    void this.d.manager.setLive(bossId, ev).catch(() => undefined);
+    // Status updates are fire-and-forget; skip all but the first piece of a streamed reply.
+    if (ev.type !== 'text_delta' || this.streamText === '') void this.d.manager.setLive(bossId, ev).catch(() => undefined);
     switch (ev.type) {
       case 'init':
         this.sawInit = true;
         this.textThisTurn = false;
         if (ev.sessionId) await this.d.manager.setSessionId(bossId, ev.sessionId).catch(() => undefined);
         break;
+      case 'text_delta':
+        this.streamText += ev.text;
+        this.emit('stream', this.streamText);
+        break;
       case 'text':
         this.textThisTurn = true;
         await this.add({ kind: 'boss', at: this.now(), text: ev.text });
+        this.clearStream();
         break;
       case 'tool_use':
         if (ev.name.startsWith(MCP_PREFIX)) await this.add({ kind: 'tool', at: this.now(), tool: ev.name.slice(MCP_PREFIX.length), input: ev.input });
@@ -162,9 +176,13 @@ export class BossSession extends EventEmitter {
         if (!ev.ok) await this.add({ kind: 'error', at: this.now(), text: `The boss hit a problem: ${ev.text}` });
         else if (!this.textThisTurn && ev.text.trim()) await this.add({ kind: 'boss', at: this.now(), text: ev.text });
         this.textThisTurn = false;
+        this.clearStream();
+        this.setPending(this.pending - 1);
         break;
       case 'exit':
         if (this.runner === runner) this.runner = null;
+        this.clearStream();
+        this.setPending(0);
         if (!this.stopping && ev.code !== 0 && this.resumed && !this.sawInit) {
           // The saved conversation is gone (expired or deleted). Start over instead of failing forever.
           await this.d.manager.setSessionId(bossId, null).catch(() => undefined);
@@ -178,6 +196,19 @@ export class BossSession extends EventEmitter {
       default:
         break;
     }
+  }
+
+  private clearStream(): void {
+    if (this.streamText === '') return;
+    this.streamText = '';
+    this.emit('stream', null);
+  }
+
+  private setPending(n: number): void {
+    const next = Math.max(0, n);
+    const was = this.pending > 0;
+    this.pending = next;
+    if (was !== next > 0) this.emit('busy', next > 0);
   }
 
   private async add(entry: ChatEntry): Promise<void> {

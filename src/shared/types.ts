@@ -67,6 +67,7 @@ export type RunnerEvent =
   | { type: 'init'; sessionId: string; model: string }
   | { type: 'thinking' }
   | { type: 'text'; text: string }
+  | { type: 'text_delta'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; toolUseId: string; isError: boolean; preview: string }
   | { type: 'result'; ok: boolean; text: string; sessionId: string; costUsd: number; durationMs: number; numTurns: number }
@@ -108,6 +109,8 @@ export type WorkspaceEvent =
   | { type: 'agents'; agents: Agent[] }
   | { type: 'tasks'; tasks: Task[] }
   | { type: 'chat'; entry: ChatEntry }
+  | { type: 'boss-stream'; text: string | null }
+  | { type: 'boss-busy'; busy: boolean }
   | { type: 'agent-event'; agentId: string; event: RunnerEvent; at: string }
   | { type: 'project'; project: Project }
   | { type: 'merge-request'; request: MergeRequest }

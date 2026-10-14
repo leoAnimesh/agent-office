@@ -138,6 +138,8 @@ export class ProjectService extends EventEmitter {
     ws = { project, manager, host, boss, broker, tools };
     manager.on('event', (e: ManagerEvent) => this.forward(ws, e));
     boss.on('chat', (entry) => this.emitWs(ws, { type: 'chat', entry }));
+    boss.on('stream', (text: string | null) => this.emitWs(ws, { type: 'boss-stream', text }));
+    boss.on('busy', (busy: boolean) => this.emitWs(ws, { type: 'boss-busy', busy }));
     boss.start();
     this.ws = ws;
 

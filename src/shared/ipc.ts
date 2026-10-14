@@ -2,6 +2,7 @@ import type { Agent, AppSettings, AppStatus, LogEntry, OpenOptions, Project, Pro
 
 export const IPC = {
   appStatus: 'app:status',
+  openExternal: 'app:open-external',
   pickFolder: 'project:pick-folder',
   listProjects: 'project:list',
   openProject: 'project:open',
@@ -29,6 +30,7 @@ export const IPC = {
 
 export interface AgentOfficeApi {
   getStatus(): Promise<AppStatus>;
+  openExternal(url: string): Promise<void>;
   pickFolder(): Promise<string | null>;
   listProjects(): Promise<Project[]>;
   openProject(repoPath: string, opts?: OpenOptions): Promise<WorkspaceSnapshot>;

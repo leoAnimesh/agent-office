@@ -111,6 +111,34 @@ describe('BossSession', () => {
     await boss.stop();
   });
 
+  it('streams the reply in pieces, then saves the whole message once', async () => {
+    const { boss, chat, until } = await setup();
+    const pieces: (string | null)[] = [];
+    boss.on('stream', (t: string | null) => pieces.push(t));
+    await boss.send('Please write a longer answer for me');
+    await until((e) => e.kind === 'boss');
+    await new Promise((r) => setTimeout(r, 100));
+    const texts = pieces.filter((p): p is string => p !== null);
+    expect(texts.length).toBeGreaterThan(2);
+    expect(texts.every((t, i) => i === 0 || t.startsWith(texts[i - 1]))).toBe(true);
+    expect(texts.at(-1)).toBe('echo: Please write a longer answer for me');
+    expect(pieces.at(-1)).toBeNull();
+    expect(chat.filter((e) => e.kind === 'boss')).toEqual([expect.objectContaining({ text: 'echo: Please write a longer answer for me' })]);
+    expect((await h.launches())[0].argv).toContain('--include-partial-messages');
+    await boss.stop();
+  });
+
+  it('says when the boss is busy with a message', async () => {
+    const { boss, until } = await setup();
+    const busy: boolean[] = [];
+    boss.on('busy', (b: boolean) => busy.push(b));
+    await boss.send('hi');
+    await until((e) => e.kind === 'boss');
+    await new Promise((r) => setTimeout(r, 100));
+    expect(busy).toEqual([true, false]);
+    await boss.stop();
+  });
+
   it('keeps reports in the chat', async () => {
     const { boss, chat } = await setup();
     await boss.report('Two of three tasks done');

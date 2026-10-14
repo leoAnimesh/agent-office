@@ -8,6 +8,8 @@ export interface ClaudeLaunch {
   mcpConfigPath?: string;
   sessionId?: string;
   resume?: string;
+  /** Stream the reply as it is written (adds `stream_event` text deltas). */
+  includePartialMessages?: boolean;
   /** Restrict the built-in tools to exactly these (MCP tools stay available). */
   tools?: string[];
   /** Load only project/local settings so the user's global hooks and plugins stay out. */
@@ -23,6 +25,7 @@ export function buildClaudeArgs(l: ClaudeLaunch): string[] {
   if (l.resume) a.push('--resume', l.resume);
   else if (l.sessionId) a.push('--session-id', l.sessionId);
   if (l.isolateUserSettings) a.push('--setting-sources', 'project,local');
+  if (l.includePartialMessages) a.push('--include-partial-messages');
   if (l.tools) a.push('--tools', ...(l.tools.length > 0 ? l.tools : ['']));
   // Variadic flag goes last so it cannot swallow anything after it.
   if (l.allowedTools && l.allowedTools.length > 0) a.push('--allowedTools', ...l.allowedTools);

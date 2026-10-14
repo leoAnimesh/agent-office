@@ -71,7 +71,7 @@ export function App() {
           <div className="view">{view}</div>
           {withChat && (
             <aside className="chat-panel">
-              <BossChat chat={ws.chat} merges={ws.merges} boss={boss} bossLook={boss ? lookFor(boss, state.roles) : lookFor({ roleId: 'boss' }, state.roles)} bossModel={bossRole?.model ?? 'opus'} onError={onError} />
+              <BossChat chat={ws.chat} merges={ws.merges} boss={boss} bossLook={boss ? lookFor(boss, state.roles) : lookFor({ roleId: 'boss' }, state.roles)} bossModel={bossRole?.model ?? 'opus'} stream={state.bossStream} busy={state.bossBusy} onError={onError} />
             </aside>
           )}
         </div>

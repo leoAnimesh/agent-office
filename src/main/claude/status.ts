@@ -31,6 +31,7 @@ export function reduceStatus(prev: LiveState, ev: RunnerEvent): LiveState {
   switch (ev.type) {
     case 'init': return { status: 'thinking', bubble: 'Starting…' };
     case 'thinking': return { status: 'thinking', bubble: 'Thinking…' };
+    case 'text_delta': return { status: 'thinking', bubble: 'Writing a reply…' };
     case 'text': return { status: 'thinking', bubble: clip(ev.text.replace(/\s+/g, ' ').trim(), 40) };
     case 'tool_use': return { status: 'working', bubble: describeTool(ev.name, ev.input) };
     case 'result': return ev.ok ? { status: 'done', bubble: 'Done' } : { status: 'error', bubble: 'Hit a problem' };
