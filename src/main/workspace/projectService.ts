@@ -35,6 +35,8 @@ interface Workspace {
   boss: BossSession;
   broker: ApprovalBroker;
   tools: ToolDef[];
+  /** What each answered approval card led to (null when declined or dropped), so mergeNow can report failures. */
+  outcomes: Map<string, Promise<MergeOutcome | null>>;
 }
 
 export function projectIdFor(root: string): string {
@@ -149,7 +151,7 @@ export class ProjectService extends EventEmitter {
       project, manager, roles: this.roles, skills: this.skills, store: this.store, createRunner,
       claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, mcpConfigPath, isolateUserSettings: isolate,
     });
-    ws = { project, manager, host, boss, broker, tools };
+    ws = { project, manager, host, boss, broker, tools, outcomes: new Map() };
     manager.on('event', (e: ManagerEvent) => this.forward(ws, e));
     boss.on('chat', (entry) => this.emitWs(ws, { type: 'chat', entry }));
     boss.on('stream', (text: string | null) => this.emitWs(ws, { type: 'boss-stream', text }));
@@ -226,6 +228,34 @@ export class ProjectService extends EventEmitter {
   pauseTask(id: string): Promise<void> { return this.mustWs().manager.pauseTask(id); }
   resumeTask(id: string): Promise<void> { return this.mustWs().manager.resumeTask(id); }
   cancelTask(id: string): Promise<void> { return this.mustWs().manager.cancelTask(id); }
+  moveTask(id: string, beforeId: string | null): Promise<void> { return this.mustWs().manager.moveTask(id, beforeId); }
+
+  async reassignTask(id: string, agent: string): Promise<void> {
+    const ws = this.mustWs();
+    const t = await ws.manager.reassignTask(id, agent);
+    void ws.boss.notify(`The user handed ${id} to ${ws.manager.findAgent(t.assigneeId)?.name ?? agent}.`, id).catch(() => undefined);
+  }
+
+  /** The user merges from the board: they are the approver, so no approval card (a pending one is answered instead). */
+  async mergeNow(id: string): Promise<void> {
+    const ws = this.mustWs();
+    const pending = ws.broker.pending().find((r) => r.taskId === id);
+    if (pending) {
+      // Answer the card (its own flow merges and tells the boss), then surface a failed merge to the user.
+      const outcome = ws.outcomes.get(pending.requestId);
+      ws.broker.answer(pending.requestId, true);
+      const r = outcome ? await outcome : null;
+      if (r && r.status !== 'merged') throw new Error(describeMerge(id, r));
+      return;
+    }
+    const outcome = await ws.manager.merge(id);
+    const told = describeMerge(id, outcome);
+    if (outcome.status !== 'merged') {
+      void ws.boss.notify(`The user tried to merge ${id}. ${told}`, id).catch(() => undefined);
+      throw new Error(told);
+    }
+    void ws.boss.notify(`The user merged ${id}. ${told}`, id).catch(() => undefined);
+  }
 
   async answerMerge(requestId: string, ok: boolean): Promise<void> {
     if (!this.mustWs().broker.answer(requestId, ok)) throw new Error('That merge request is no longer pending');
@@ -257,15 +287,18 @@ export class ProjectService extends EventEmitter {
   }
 
   private onDecision(ws: Workspace, taskId: string, requestId: string, decision: Promise<boolean>): void {
-    void decision.then(async (ok) => {
+    const done = decision.then(async (ok): Promise<MergeOutcome | null> => {
       // A closed workspace keeps its saved requests so they come back on the next open.
-      if (this.ws !== ws) return;
+      if (this.ws !== ws) return null;
       await this.savePending(ws);
       this.emitWs(ws, { type: 'merge-resolved', requestId });
-      if (!ok) return ws.boss.notify(`The user declined to merge ${taskId}.`, taskId);
-      const outcome = await ws.manager.merge(taskId).catch((e: unknown) => ({ status: 'blocked' as const, reason: e instanceof Error ? e.message : String(e) }));
-      return ws.boss.notify(describeMerge(taskId, outcome), taskId);
-    }).catch(() => undefined);
+      if (!ok) { await ws.boss.notify(`The user declined to merge ${taskId}.`, taskId); return null; }
+      const outcome: MergeOutcome = await ws.manager.merge(taskId).catch((e: unknown) => ({ status: 'blocked' as const, reason: e instanceof Error ? e.message : String(e) }));
+      await ws.boss.notify(describeMerge(taskId, outcome), taskId);
+      return outcome;
+    }).catch(() => null);
+    ws.outcomes.set(requestId, done);
+    void done.finally(() => ws.outcomes.delete(requestId));
   }
 
   private savePending(ws: Workspace): Promise<void> {

@@ -86,6 +86,64 @@ describe('ProjectService', () => {
     expect((await svc.snapshot()).merges).toEqual([]);
   });
 
+  it('merges straight from the board, and tells the boss the user did it', async () => {
+    await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    await tool('assign_task', { agent: 'Pixel', title: 'Notes', brief: 'write notes' });
+    await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.id === 'T-101' && t.status === 'review'));
+    await svc.mergeNow('T-101');
+    expect((await svc.snapshot()).tasks.find((t) => t.id === 'T-101')!.status).toBe('done');
+    await until((e) => e.type === 'chat' && e.entry.kind === 'event' && /^The user merged T-101\. Merge of T-101: merged/.test(e.entry.text));
+  });
+
+  it('answers a pending approval card instead of merging twice', async () => {
+    await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    await tool('assign_task', { agent: 'Pixel', title: 'Notes', brief: 'write notes' });
+    await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.id === 'T-101' && t.status === 'review'));
+    await tool('request_merge', { task_id: 'T-101' });
+    await until((e) => e.type === 'merge-request');
+    await svc.mergeNow('T-101');
+    await until((e) => e.type === 'merge-resolved');
+    await until((e) => e.type === 'chat' && e.entry.kind === 'event' && /Merge of T-101: merged/.test(e.entry.text));
+    expect((await svc.snapshot()).merges).toEqual([]);
+    expect(events.filter((e) => e.type === 'error')).toEqual([]);
+  });
+
+  it('reports a blocked merge to the user even when it answers a pending card', async () => {
+    await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    await tool('assign_task', { agent: 'Pixel', title: 'Notes', brief: 'write notes' });
+    await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.id === 'T-101' && t.status === 'review'));
+    await tool('request_merge', { task_id: 'T-101' });
+    await until((e) => e.type === 'merge-request');
+    await fs.appendFile(path.join(repo, 'README.md'), 'local edit\n');
+    await expect(svc.mergeNow('T-101')).rejects.toThrow(/uncommitted/i);
+    expect((await svc.snapshot()).tasks.find((t) => t.id === 'T-101')!.status).toBe('review');
+  });
+
+  it('leaves the task in review and reports why when the merge is blocked', async () => {
+    await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    await tool('assign_task', { agent: 'Pixel', title: 'Notes', brief: 'write notes' });
+    await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.id === 'T-101' && t.status === 'review'));
+    await fs.appendFile(path.join(repo, 'README.md'), 'local edit\n');
+    await expect(svc.mergeNow('T-101')).rejects.toThrow(/uncommitted/i);
+    expect((await svc.snapshot()).tasks.find((t) => t.id === 'T-101')!.status).toBe('review');
+  });
+
+  it('tells the boss when the user hands a task to someone else', async () => {
+    await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    await tool('hire', { role_id: 'backend' });
+    await tool('assign_task', { agent: 'Pixel', title: 'First', brief: 'a' });
+    // Waits for T-101 to be merged, so it stays queued and unstarted.
+    await tool('assign_task', { agent: 'Pixel', title: 'Second', brief: 'b', depends_on: ['T-101'] });
+    await svc.reassignTask('T-102', 'Byte');
+    await until((e) => e.type === 'chat' && e.entry.kind === 'event' && e.entry.text === 'The user handed T-102 to Byte.');
+    await svc.moveTask('T-102', null);
+  });
+
   it('tells the boss when the user declines or the merge is blocked', async () => {
     await svc.open(repo);
     await tool('hire', { role_id: 'frontend' });

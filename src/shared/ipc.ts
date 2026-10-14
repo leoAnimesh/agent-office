@@ -24,6 +24,9 @@ export const IPC = {
   pauseTask: 'task:pause',
   resumeTask: 'task:resume',
   cancelTask: 'task:cancel',
+  moveTask: 'task:move',
+  reassignTask: 'task:reassign',
+  mergeNow: 'task:merge-now',
   answerMerge: 'merge:answer',
   getSettings: 'settings:get',
   saveSettings: 'settings:save',
@@ -54,6 +57,12 @@ export interface AgentOfficeApi {
   pauseTask(id: string): Promise<void>;
   resumeTask(id: string): Promise<void>;
   cancelTask(id: string): Promise<void>;
+  /** Put a queued task before `beforeId` in the queue, or last when null. */
+  moveTask(id: string, beforeId: string | null): Promise<void>;
+  /** Hand a queued, unstarted task to another employee. */
+  reassignTask(id: string, agent: string): Promise<void>;
+  /** Merge a reviewed task now; the user is the approver. */
+  mergeNow(id: string): Promise<void>;
   answerMerge(requestId: string, ok: boolean): Promise<void>;
   getSettings(): Promise<AppSettings>;
   saveSettings(patch: Partial<AppSettings>): Promise<AppSettings>;

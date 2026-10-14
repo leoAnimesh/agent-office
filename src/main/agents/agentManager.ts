@@ -12,7 +12,7 @@ import type { RoleStore } from '../store/roleStore';
 import type { SkillStore } from '../store/skillStore';
 import { launchModel, type TaskClassifier } from './classifier';
 import { renderPrompt, taskMessage } from './prompt';
-import { assertTransition, runnableTasks } from './taskRules';
+import { assertTransition, byQueueOrder, runnableTasks } from './taskRules';
 
 export interface AgentManagerDeps {
   project: Project;
@@ -90,7 +90,7 @@ export class AgentManager extends EventEmitter {
     for (const a of this.agentList) { a.status = 'idle'; a.bubble = 'Idle'; }
     const requeued: string[] = [];
     for (const t of this.taskList) {
-      if (t.status === 'working') { t.status = 'queued'; t.updatedAt = this.now(); requeued.push(t.id); }
+      if (t.status === 'working') { t.status = 'queued'; t.updatedAt = this.now(); this.toFrontOfQueue(t); requeued.push(t.id); }
     }
     if (requeued.length > 0) await this.saveTasks();
     for (const t of this.taskList) if (t.status === 'queued' && !t.model) this.classifyTask(t.id);
@@ -158,6 +158,9 @@ export class AgentManager extends EventEmitter {
         status: 'queued', held: false, attempts: 0, branch: `ao/${slugify(agent.name)}/${slugify(input.title, 'task')}-${id.toLowerCase()}`,
         dependsOn: input.dependsOn ?? [], createdAt: now, updatedAt: now,
       };
+      // Once the user has ordered the queue, new work goes to the end of it.
+      const ordered = this.taskList.filter((x) => x.status === 'queued' && x.order !== undefined);
+      if (ordered.length > 0) t.order = Math.max(...ordered.map((x) => x.order!)) + 1;
       const role = await this.d.roles.get(agent.roleId);
       if (role && role.model !== AUTO_MODEL) {
         t.model = role.model;
@@ -203,6 +206,58 @@ export class AgentManager extends EventEmitter {
       await this.saveAgents();
       this.live.get(agent.id)?.runner.stop();
     });
+  }
+
+  /** Hands a queued task that has not started yet to another employee (their own branch, their role's pinned model). */
+  async reassignTask(taskId: string, ref: string): Promise<Task> {
+    const out = await this.run(async () => {
+      this.assertOpen();
+      const t = this.mustTask(taskId);
+      if (t.status !== 'queued') throw new UserError(`Task ${taskId} is not queued`);
+      if (t.attempts > 0) throw new UserError(`Can't reassign ${taskId}: work has started`);
+      const agent = this.findAgent(ref);
+      if (!agent || agent.kind !== 'employee') throw new UserError(`No employee named ${ref}`);
+      if (agent.id === t.assigneeId) throw new UserError(`${taskId} is already assigned to ${agent.name}`);
+      t.assigneeId = agent.id;
+      // The old branch was never created (the task never started), so a fresh name is safe.
+      t.branch = `ao/${slugify(agent.name)}/${slugify(t.title, 'task')}-${t.id.toLowerCase()}`;
+      const role = await this.d.roles.get(agent.roleId);
+      if (role && role.model !== AUTO_MODEL) {
+        t.model = role.model;
+        t.modelPick = { model: role.model, reason: 'Pinned by role', source: 'role' };
+      } else if (t.modelPick?.source === 'role') {
+        // The old role's pin no longer applies; pump() classifies it for the new agent.
+        t.model = undefined;
+        t.modelPick = undefined;
+      }
+      t.updatedAt = this.now();
+      await this.saveTasks();
+      this.emitEvent({ type: 'tasks-changed' });
+      return { ...t };
+    });
+    await this.pump();
+    return out;
+  }
+
+  /** Puts a queued task right before `beforeId` in the queue (or last when null) and renumbers the queue. */
+  async moveTask(taskId: string, beforeId: string | null): Promise<void> {
+    await this.run(async () => {
+      const t = this.mustTask(taskId);
+      if (t.status !== 'queued') throw new UserError(`Task ${taskId} is not queued`);
+      if (beforeId === taskId) throw new UserError(`Task ${taskId} can't move before itself`);
+      const queue = this.taskList.filter((x) => x.status === 'queued' && x.id !== taskId).sort(byQueueOrder);
+      let at = queue.length;
+      if (beforeId !== null) {
+        at = queue.findIndex((x) => x.id === beforeId);
+        if (at < 0) throw new UserError(`Task ${beforeId} is not in the queue`);
+      }
+      queue.splice(at, 0, t);
+      queue.forEach((x, i) => { x.order = i + 1; });
+      t.updatedAt = this.now();
+      await this.saveTasks();
+      this.emitEvent({ type: 'tasks-changed' });
+    });
+    await this.pump();
   }
 
   async resumeTask(taskId: string): Promise<void> {
@@ -504,8 +559,18 @@ export class AgentManager extends EventEmitter {
 
   private setStatus(task: Task, to: TaskStatus, patch: Partial<Task> = {}): void {
     assertTransition(task, to);
+    const from = task.status;
     Object.assign(task, patch, { status: to, updatedAt: this.now() });
+    // A queue position only means something while queued: drop it on the way out, go to the front on the way back.
+    if (from === 'queued' && to !== 'queued') task.order = undefined;
+    if (from !== 'queued' && to === 'queued') this.toFrontOfQueue(task);
     this.emitEvent({ type: 'tasks-changed' });
+  }
+
+  /** Work that comes back to the queue (paused, or interrupted by a restart) goes ahead of what has not started yet. */
+  private toFrontOfQueue(task: Task): void {
+    const orders = this.taskList.filter((x) => x !== task && x.status === 'queued' && x.order !== undefined).map((x) => x.order!);
+    task.order = (orders.length > 0 ? Math.min(...orders) : 1) - 1;
   }
 
   private run<T>(fn: () => Promise<T>): Promise<T> {
