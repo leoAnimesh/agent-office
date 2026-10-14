@@ -12,7 +12,7 @@ describe('planFloor', () => {
     expect(a.away).toBe(false);
     expect(a.idle).toBeUndefined();
     const b = plan.desks.find((d) => d.agent.id === 'b')!;
-    const inRoom = plan.cafeteria.some((c) => c.agent.id === 'b') || plan.washroom?.agent.id === 'b';
+    const inRoom = plan.cafeteria.some((c) => c.agent.id === 'b') || plan.play.some((p) => p.agent.id === 'b') || plan.washroom?.agent.id === 'b';
     expect(b.away).toBe(inRoom);
     if (!b.away) expect(b.idle).toBeDefined();
   });
@@ -60,7 +60,7 @@ describe('planFloor', () => {
     for (let slot = 0; slot < 50; slot++) {
       const plan = planFloor(team, [], slot);
       const away = plan.desks.filter((d) => d.away).length;
-      expect(plan.cafeteria.length + (plan.washroom ? 1 : 0)).toBe(away);
+      expect(plan.cafeteria.length + plan.play.length + (plan.washroom ? 1 : 0)).toBe(away);
       expect(plan.cafeteria.some((c) => c.agent.id === plan.washroom?.agent.id)).toBe(false);
     }
   });
@@ -89,5 +89,47 @@ describe('planFloor', () => {
     const team = Array.from({ length: 12 }, (_, i) => agent(`a${i}`));
     const labels = new Set(Array.from({ length: 30 }, (_, s) => planFloor(team, [], s).cafeteria.map((c) => c.label.replace(/ A\d+$/, ''))).flat());
     expect([...labels].sort()).toEqual(['Chatting with', 'Coffee break', 'Snack time']);
+  });
+});
+
+describe('play area', () => {
+  const team = Array.from({ length: 24 }, (_, i) => agent(`a${i}`));
+  const slots = Array.from({ length: 80 }, (_, s) => planFloor(team, [], s));
+
+  it('puts every away agent in exactly one room', () => {
+    for (const plan of slots) {
+      const ids = [...plan.cafeteria.map((c) => c.agent.id), ...plan.play.map((p) => p.agent.id), ...(plan.washroom ? [plan.washroom.agent.id] : [])];
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids.length).toBe(plan.desks.filter((d) => d.away).length);
+    }
+  });
+
+  it('pairs ping-pong players and names their opponent', () => {
+    for (const plan of slots) {
+      const players = plan.play.filter((p) => p.activity === 'pingpong');
+      expect(players.length % 2).toBe(0);
+      for (const p of players) expect(p.label).toMatch(/^Ping-pong with A\d+$/);
+    }
+  });
+
+  it('lets one person on the arcade and two nap at most', () => {
+    for (const plan of slots) {
+      expect(plan.play.filter((p) => p.activity === 'arcade').length).toBeLessThanOrEqual(1);
+      expect(plan.play.filter((p) => p.activity === 'nap').length).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('uses every activity, with plain labels', () => {
+    const seen = new Map(slots.flatMap((plan) => plan.play.map((p) => [p.activity, p.label] as const)));
+    expect([...seen.keys()].sort()).toEqual(['arcade', 'gaming', 'nap', 'pingpong']);
+    expect(seen.get('arcade')).toBe('High score run');
+    expect(seen.get('gaming')).toBe('Gaming');
+    expect(seen.get('nap')).toBe('Power nap');
+  });
+
+  it('sends about a quarter of idle agents to play', () => {
+    const away = slots.reduce((n, p) => n + p.play.length, 0) / (team.length * slots.length);
+    expect(away).toBeGreaterThan(0.15);
+    expect(away).toBeLessThan(0.35);
   });
 });

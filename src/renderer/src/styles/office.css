@@ -72,3 +72,20 @@ button.wash-door:hover { border-color: var(--amber); }
 .idle-coffee .ao-sip-arm { animation: ao-sip 3s steps(1) infinite; }
 .idle-read .ao-head { animation: ao-bob 3s steps(1) infinite; }
 .idle-phone .ao-phone { animation: ao-blink 2s steps(2) infinite; }
+
+/* Play area: under the open office, carpet in the logo's violet */
+.main-rooms { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.play-area { min-height: 190px; background: repeating-conic-gradient(#2c2550 0 25%, #332b5c 0 50%) 0 0 / 32px 32px; display: flex; flex-direction: column; }
+.play-zones { flex: 1; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-around; gap: 12px 18px; }
+.play-zone { display: flex; align-items: flex-end; gap: 6px; min-width: 0; }
+.play-people { display: flex; align-items: flex-end; gap: 2px; }
+.play-prop { flex: none; }
+.play-empty { position: absolute; top: 9px; right: 12px; color: #d9d2f5; }
+.nap-couch { display: flex; flex-direction: column; align-items: center; }
+.nap-couch .play-people { margin-bottom: -22px; position: relative; z-index: 1; gap: 0; }
+.pong-ball { animation: pong 1.2s steps(6) infinite alternate; }
+@keyframes pong { from { transform: translateX(0); } to { transform: translateX(22px); } }
+.arcade-screen.on { animation: arcade 0.8s steps(2) infinite; }
+@keyframes arcade { 50% { fill: #FF6B5B; } }
+.person-bubble.zzz { animation: zzz 2.4s ease-in-out infinite; }
+@keyframes zzz { 0%, 100% { transform: translateY(0); opacity: .7; } 50% { transform: translateY(-4px); opacity: 1; } }
