@@ -125,6 +125,7 @@ export class WorktreeManager {
   async merge(base: string, branch: string, message: string): Promise<MergeResult> {
     await this.ensureExcluded();
     const head = await git(this.repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    if (head === 'HEAD') return { status: 'blocked', reason: `The project folder is not on a branch (detached HEAD). Check out ${base} to merge.` };
     if (head !== base) {
       return { status: 'blocked', reason: `The project folder is on branch ${head}. Switch it back to ${base} to merge.` };
     }

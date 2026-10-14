@@ -1,7 +1,0 @@
-:root { color-scheme: dark; }
-body { margin: 0; background: #14151f; color: #ece8df; font-family: system-ui, sans-serif; }
-.boot { padding: 48px; }
-.boot h1 { margin: 0 0 8px; }
-.ok { color: #8bd47a; }
-.bad { color: #ff9a8e; }
-code { font-family: ui-monospace, monospace; background: #1f2130; padding: 2px 6px; border-radius: 4px; color: #ece8df; }

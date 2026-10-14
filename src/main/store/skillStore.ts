@@ -47,6 +47,12 @@ export class SkillStore {
     return got.filter((s): s is Skill => s !== null);
   }
 
+  async save(skill: Skill): Promise<void> {
+    if (!ID.test(skill.id)) throw new Error(`Invalid skill id: ${skill.id}`);
+    await fs.mkdir(this.dir, { recursive: true });
+    await fs.writeFile(path.join(this.dir, `${skill.id}.md`), `---\nname: ${skill.name.replace(/\n/g, ' ')}\ndescription: ${skill.description.replace(/\n/g, ' ')}\n---\n${skill.body.trim()}\n`);
+  }
+
   seed(fromDir: string): Promise<number> {
     return copyMissingFiles(fromDir, this.dir);
   }

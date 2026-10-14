@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { promises as fs } from 'node:fs';
+import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { Agent, Project, Role, RunnerEvent, Task, TaskStatus } from '../../shared/types';
 import { waitForExit, type AgentRunner, type ClaudeRunnerOptions } from '../claude/runner';
@@ -47,6 +47,9 @@ interface Live {
 }
 
 export interface MessageResult { delivered: 'sent' | 'started'; taskId: string | null }
+
+/** A mistake in the request (unknown name, duplicate, busy…), not an app failure; not broadcast as an app error. */
+export class UserError extends Error {}
 
 const NAME_POOL = ['Pixel', 'Byte', 'Quinn', 'Ivy', 'Nova', 'Rex', 'Juno', 'Sage', 'Kit', 'Ziggy', 'Milo', 'Tess'];
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -117,13 +120,13 @@ export class AgentManager extends EventEmitter {
   hire(roleId: string, name?: string): Promise<Agent> {
     return this.run(async () => {
       const role = await this.d.roles.get(roleId);
-      if (!role) throw new Error(`Unknown role: ${roleId}`);
+      if (!role) throw new UserError(`Unknown role: ${roleId}`);
       const taken = new Set(this.agentList.map((a) => a.name.toLowerCase()));
       const finalName = name?.trim() || NAME_POOL.find((n) => !taken.has(n.toLowerCase())) || `${role.name} ${this.agentList.length + 1}`;
-      if (taken.has(finalName.toLowerCase())) throw new Error(`An agent named ${finalName} already exists`);
+      if (taken.has(finalName.toLowerCase())) throw new UserError(`An agent named ${finalName} already exists`);
       // Worktrees and branches are keyed by slug, so two employees must never share one.
       const clash = this.agentList.find((a) => a.kind === 'employee' && slugify(a.name) === slugify(finalName));
-      if (clash) throw new Error(`The name ${finalName} is too similar to ${clash.name}; pick a more distinct name`);
+      if (clash) throw new UserError(`The name ${finalName} is too similar to ${clash.name}; pick a more distinct name`);
       const agent: Agent = { id: randomUUID(), projectId: this.d.project.id, name: finalName, roleId, kind: 'employee', status: 'idle', bubble: 'Idle' };
       this.agentList.push(agent);
       await this.saveAgents();
@@ -135,9 +138,9 @@ export class AgentManager extends EventEmitter {
     const task = await this.run(async () => {
       this.assertOpen();
       const agent = this.findAgent(input.assignee);
-      if (!agent || agent.kind !== 'employee') throw new Error(`No employee named ${input.assignee}`);
+      if (!agent || agent.kind !== 'employee') throw new UserError(`No employee named ${input.assignee}`);
       for (const dep of input.dependsOn ?? []) {
-        if (!this.taskList.some((t) => t.id === dep)) throw new Error(`Unknown task ${dep}`);
+        if (!this.taskList.some((t) => t.id === dep)) throw new UserError(`Unknown task ${dep}`);
       }
       const id = nextTaskId(this.taskList);
       const now = this.now();
@@ -173,7 +176,7 @@ export class AgentManager extends EventEmitter {
   pauseTask(taskId: string): Promise<void> {
     return this.run(async () => {
       const t = this.mustTask(taskId);
-      if (t.status !== 'working') throw new Error(`Task ${taskId} is not running`);
+      if (t.status !== 'working') throw new UserError(`Task ${taskId} is not running`);
       t.held = true;
       this.setStatus(t, 'queued');
       const agent = this.mustAgent(t.assigneeId);
@@ -214,6 +217,24 @@ export class AgentManager extends EventEmitter {
     await this.pump();
   }
 
+  fire(agentId: string): Promise<void> {
+    return this.run(async () => {
+      this.assertOpen();
+      const agent = this.mustAgent(agentId);
+      if (agent.kind === 'boss') throw new UserError('The boss cannot be fired');
+      const open = this.taskList.filter((t) => t.assigneeId === agent.id && ['queued', 'working', 'needs_help', 'review'].includes(t.status));
+      if (open.length > 0) throw new UserError(`${agent.name} still has open work: ${open.map((t) => t.id).join(', ')}. Merge or cancel it first.`);
+      if (this.live.has(agent.id)) throw new UserError(`${agent.name} is working right now. Wait for them to finish first.`);
+      if (agent.worktreePath && existsSync(agent.worktreePath)) {
+        // Keep anything not yet committed (e.g. a reply that edited files) on the agent's branch.
+        await this.d.worktrees.commitAll(agent.worktreePath, `WIP: saved by AgentOffice before ${agent.name} left the team`).catch(() => undefined);
+      }
+      await this.d.worktrees.remove(agent.name);
+      this.agentList = this.agentList.filter((a) => a.id !== agent.id);
+      await this.saveAgents();
+    });
+  }
+
   getTask(id: string): Task | undefined {
     const t = this.taskList.find((x) => x.id === id);
     return t ? { ...t } : undefined;
@@ -228,13 +249,13 @@ export class AgentManager extends EventEmitter {
     return this.run(async (): Promise<MessageResult> => {
       this.assertOpen();
       const agent = this.findAgent(ref);
-      if (!agent || agent.kind !== 'employee') throw new Error(`No employee named ${ref}`);
+      if (!agent || agent.kind !== 'employee') throw new UserError(`No employee named ${ref}`);
       const live = this.live.get(agent.id);
       if (live?.runner.running) {
         try {
           live.runner.send(text);
         } catch {
-          throw new Error(`${agent.name} is just finishing up. Try again in a moment.`);
+          throw new UserError(`${agent.name} is just finishing up. Try again in a moment.`);
         }
         return { delivered: 'sent', taskId: live.taskId };
       }
@@ -259,7 +280,7 @@ export class AgentManager extends EventEmitter {
         return { delivered: 'started', taskId: open.id };
       }
 
-      if (!agent.sessionId || !agent.worktreePath) throw new Error(`${agent.name} has not worked on anything yet. Assign a task instead.`);
+      if (!agent.sessionId || !agent.worktreePath) throw new UserError(`${agent.name} has not worked on anything yet. Assign a task instead.`);
       const branch = await git(agent.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
       const runner = this.spawn(agent, role, agent.worktreePath, await this.writePrompt(agent, role, branch), null);
       agent.status = 'thinking';
@@ -332,7 +353,7 @@ export class AgentManager extends EventEmitter {
   }
 
   private assertOpen(): void {
-    if (this.closed) throw new Error('This project is closed');
+    if (this.closed) throw new UserError('This project is closed');
   }
 
   private async writePrompt(agent: Agent, role: Role, branch: string): Promise<string> {
@@ -442,19 +463,19 @@ export class AgentManager extends EventEmitter {
 
   private run<T>(fn: () => Promise<T>): Promise<T> {
     const result = this.chain.then(fn);
-    this.chain = result.then(() => undefined, (e) => { this.emitEvent({ type: 'error', message: msg(e) }); });
+    this.chain = result.then(() => undefined, (e) => { if (!(e instanceof UserError)) this.emitEvent({ type: 'error', message: msg(e) }); });
     return result;
   }
 
   private mustAgent(id: string): Agent {
     const a = this.agentList.find((x) => x.id === id);
-    if (!a) throw new Error(`Unknown agent ${id}`);
+    if (!a) throw new UserError(`Unknown agent ${id}`);
     return a;
   }
 
   private mustTask(id: string): Task {
     const t = this.taskList.find((x) => x.id === id);
-    if (!t) throw new Error(`Unknown task ${id}`);
+    if (!t) throw new UserError(`Unknown task ${id}`);
     return t;
   }
 

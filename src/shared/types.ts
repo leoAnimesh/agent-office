@@ -108,7 +108,13 @@ export type WorkspaceEvent =
   | { type: 'agents'; agents: Agent[] }
   | { type: 'tasks'; tasks: Task[] }
   | { type: 'chat'; entry: ChatEntry }
-  | { type: 'agent-event'; agentId: string; event: RunnerEvent }
+  | { type: 'agent-event'; agentId: string; event: RunnerEvent; at: string }
+  | { type: 'project'; project: Project }
   | { type: 'merge-request'; request: MergeRequest }
   | { type: 'merge-resolved'; requestId: string }
   | { type: 'error'; message: string };
+
+export interface AppSettings { claudePath: string | null; isolateUserSettings: boolean }
+export interface ProjectPatch { maxConcurrent?: number; autoMerge?: boolean; bossCanHire?: boolean }
+export interface OpenOptions { bossName?: string; bossModel?: string; bossCanHire?: boolean }
+export interface LogEntry { at: string; event: RunnerEvent }
