@@ -12,6 +12,7 @@ export interface DataPaths {
   agentsFile(projectId: string): string;
   tasksFile(projectId: string): string;
   chatFile(projectId: string): string;
+  mergesFile(projectId: string): string;
   logFile(projectId: string, agentId: string): string;
 }
 
@@ -30,6 +31,7 @@ export function dataPaths(root: string): DataPaths {
     agentsFile: (id) => path.join(projectDir(id), 'agents.json'),
     tasksFile: (id) => path.join(projectDir(id), 'tasks.json'),
     chatFile: (id) => path.join(projectDir(id), 'chat.jsonl'),
+    mergesFile: (id) => path.join(projectDir(id), 'pending-merges.json'),
     logFile: (id, agentId) => path.join(projectDir(id), 'logs', `${agentId}.jsonl`),
   };
 }

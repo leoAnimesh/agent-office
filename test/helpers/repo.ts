@@ -9,6 +9,7 @@ export async function makeRepo(): Promise<string> {
   await git(dir, ['config', 'user.name', 'Test User']);
   await git(dir, ['config', 'user.email', 'test@example.com']);
   await git(dir, ['config', 'commit.gpgsign', 'false']);
+  await git(dir, ['config', 'core.autocrlf', 'false']);
   await fs.writeFile(path.join(dir, 'README.md'), 'hello\n');
   await git(dir, ['add', '.']);
   await git(dir, ['commit', '-q', '-m', 'init']);

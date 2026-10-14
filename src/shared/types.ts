@@ -78,3 +78,37 @@ export interface AppStatus {
   platform: string;
   claude: { path: string; version: string | null } | null;
 }
+
+export type ChatEntry =
+  | { kind: 'user'; at: string; text: string }
+  | { kind: 'boss'; at: string; text: string }
+  | { kind: 'tool'; at: string; tool: string; input: Record<string, unknown> }
+  | { kind: 'event'; at: string; text: string; taskId?: string }
+  | { kind: 'report'; at: string; text: string }
+  | { kind: 'error'; at: string; text: string };
+
+export interface MergeRequest {
+  requestId: string;
+  taskId: string;
+  title: string;
+  agentName: string;
+  diffStat: DiffStat[];
+  summary: string;
+}
+
+export interface WorkspaceSnapshot {
+  project: Project;
+  agents: Agent[];
+  tasks: Task[];
+  chat: ChatEntry[];
+  merges: MergeRequest[];
+}
+
+export type WorkspaceEvent =
+  | { type: 'agents'; agents: Agent[] }
+  | { type: 'tasks'; tasks: Task[] }
+  | { type: 'chat'; entry: ChatEntry }
+  | { type: 'agent-event'; agentId: string; event: RunnerEvent }
+  | { type: 'merge-request'; request: MergeRequest }
+  | { type: 'merge-resolved'; requestId: string }
+  | { type: 'error'; message: string };

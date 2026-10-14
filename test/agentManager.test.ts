@@ -52,8 +52,8 @@ beforeEach(async () => {
   fakeEnv = { FAKE_CLAUDE_ARGV_OUT: argvOut, FAKE_CLAUDE_FILE: 'notes.txt' };
 });
 afterEach(async () => {
-  await fs.rm(repo, { recursive: true, force: true });
-  await fs.rm(data, { recursive: true, force: true });
+  await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  await fs.rm(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
 
 describe('AgentManager', () => {

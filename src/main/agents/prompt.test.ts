@@ -25,6 +25,16 @@ describe('renderPrompt', () => {
   });
 });
 
+describe('renderPrompt (boss)', () => {
+  it('gives the boss delegation rules and no worktree rules', () => {
+    const out = renderPrompt({ ...role, name: 'Boss', systemPrompt: 'Lead.' }, [], { agentName: 'Max', bossName: 'Max', branch: 'main', projectName: 'demo', kind: 'boss' });
+    expect(out).toContain('You are Max, the boss of the "demo" team in AgentOffice.');
+    expect(out).toContain('## How you work');
+    expect(out).toContain('assign_task');
+    expect(out).not.toContain('## Rules');
+  });
+});
+
 describe('taskMessage', () => {
   const task = { id: 'T-101', title: 'Add toggle', brief: 'Make a toggle.', attempts: 0 } as Task;
   it('sends the full brief on the first attempt', () => {

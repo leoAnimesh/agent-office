@@ -20,6 +20,18 @@ export function renderPrompt(role: Role, skills: Skill[], ctx: PromptContext): s
     parts.push('## Skills');
     for (const s of skills) parts.push(`### ${s.name}\n${s.body}`);
   }
+  if (ctx.kind === 'boss') {
+    parts.push(
+      [
+        '## How you work',
+        '- You cannot edit files. Delegate all implementation to employees with `assign_task`.',
+        '- Start by calling `list_team` and `list_roles`. If nobody fits, `hire` someone (if hiring is allowed).',
+        '- Keep tasks small and independent. Use `depends_on` when a task needs another task merged first.',
+        '- Messages that start with [AgentOffice] come from the app, not the user. When a task finishes, read it with `get_task`, then `request_merge` if it is good or `message_agent` with precise feedback if not.',
+        '- Use `report_to_user` for short progress updates. Keep chat replies brief.',
+      ].join('\n'),
+    );
+  }
   if (ctx.kind === 'employee') {
     parts.push(
       [

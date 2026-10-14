@@ -2,10 +2,10 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { Agent, Project, RunnerEvent, Task, TaskStatus } from '../../shared/types';
-import type { AgentRunner, ClaudeRunnerOptions } from '../claude/runner';
+import type { Agent, Project, Role, RunnerEvent, Task, TaskStatus } from '../../shared/types';
+import { waitForExit, type AgentRunner, type ClaudeRunnerOptions } from '../claude/runner';
 import { reduceStatus } from '../claude/status';
-import { WorktreeManager, slugify } from '../git/worktrees';
+import { WorktreeManager, git, slugify, type MergeResult } from '../git/worktrees';
 import type { ProjectStore } from '../store/projectStore';
 import { nextTaskId } from '../store/projectStore';
 import type { RoleStore } from '../store/roleStore';
@@ -31,11 +31,22 @@ export type ManagerEvent =
   | { type: 'agents-changed' }
   | { type: 'tasks-changed' }
   | { type: 'task-finished'; task: Task; agent: Agent }
+  | { type: 'agent-replied'; agent: Agent; text: string; ok: boolean }
   | { type: 'error'; message: string };
+
+export type MergeOutcome = MergeResult | { status: 'not_ready'; reason: string };
 
 export interface NewTask { assignee: string; title: string; brief: string; dependsOn?: string[]; createdBy: 'boss' | 'user' }
 
-interface Live { runner: AgentRunner; taskId: string }
+interface Live {
+  runner: AgentRunner;
+  taskId: string | null;
+  /** Launched with --resume; if it dies before `init`, the saved session is unusable. */
+  resumed: boolean;
+  sawInit: boolean;
+}
+
+export interface MessageResult { delivered: 'sent' | 'started'; taskId: string | null }
 
 const NAME_POOL = ['Pixel', 'Byte', 'Quinn', 'Ivy', 'Nova', 'Rex', 'Juno', 'Sage', 'Kit', 'Ziggy', 'Milo', 'Tess'];
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -46,6 +57,8 @@ export class AgentManager extends EventEmitter {
   private live = new Map<string, Live>();
   /** All mutations run one at a time through this chain. */
   private chain: Promise<void> = Promise.resolve();
+  /** Set by shutdown(): no new sessions start and exits no longer change task state. */
+  private closed = false;
 
   constructor(private readonly d: AgentManagerDeps) {
     super();
@@ -63,21 +76,28 @@ export class AgentManager extends EventEmitter {
 
   // ---------- lifecycle ----------
 
-  async load(): Promise<void> {
+  /** Loads saved state; tasks that were running when the app stopped go back to the queue. Returns their ids. */
+  async load(): Promise<string[]> {
     this.agentList = await this.d.store.getAgents(this.d.project.id);
     this.taskList = await this.d.store.getTasks(this.d.project.id);
     for (const a of this.agentList) { a.status = 'idle'; a.bubble = 'Idle'; }
-    let changed = false;
+    const requeued: string[] = [];
     for (const t of this.taskList) {
-      if (t.status === 'working') { t.status = 'queued'; t.updatedAt = this.now(); changed = true; }
+      if (t.status === 'working') { t.status = 'queued'; t.updatedAt = this.now(); requeued.push(t.id); }
     }
-    if (changed) await this.saveTasks();
+    if (requeued.length > 0) await this.saveTasks();
+    return requeued;
   }
 
   idle(): Promise<void> { return this.chain; }
 
   async shutdown(): Promise<void> {
-    for (const { runner } of this.live.values()) runner.stop();
+    this.closed = true;
+    // Wait for the processes to really exit: Windows keeps their working folders locked until then.
+    const runners = [...this.live.values()].map((l) => l.runner);
+    const exits = runners.map((r) => waitForExit(r));
+    for (const r of runners) r.stop();
+    await Promise.all(exits);
     await this.chain;
   }
 
@@ -113,6 +133,7 @@ export class AgentManager extends EventEmitter {
 
   async createTask(input: NewTask): Promise<Task> {
     const task = await this.run(async () => {
+      this.assertOpen();
       const agent = this.findAgent(input.assignee);
       if (!agent || agent.kind !== 'employee') throw new Error(`No employee named ${input.assignee}`);
       for (const dep of input.dependsOn ?? []) {
@@ -135,6 +156,7 @@ export class AgentManager extends EventEmitter {
 
   pump(): Promise<void> {
     return this.run(async () => {
+      if (this.closed) return;
       for (const t of runnableTasks(this.taskList, new Set(this.live.keys()), this.d.project.maxConcurrent)) {
         try {
           await this.startTask(t);
@@ -192,6 +214,97 @@ export class AgentManager extends EventEmitter {
     await this.pump();
   }
 
+  getTask(id: string): Task | undefined {
+    const t = this.taskList.find((x) => x.id === id);
+    return t ? { ...t } : undefined;
+  }
+
+  /**
+   * Feedback for an employee. If they have a task in review or needing help, it is reopened and the
+   * follow-up runs as part of that task (so it is committed, diffed and reported). Otherwise the
+   * message is a plain question and the answer comes back as 'agent-replied'.
+   */
+  messageAgent(ref: string, text: string): Promise<MessageResult> {
+    return this.run(async (): Promise<MessageResult> => {
+      this.assertOpen();
+      const agent = this.findAgent(ref);
+      if (!agent || agent.kind !== 'employee') throw new Error(`No employee named ${ref}`);
+      const live = this.live.get(agent.id);
+      if (live?.runner.running) {
+        try {
+          live.runner.send(text);
+        } catch {
+          throw new Error(`${agent.name} is just finishing up. Try again in a moment.`);
+        }
+        return { delivered: 'sent', taskId: live.taskId };
+      }
+      const role = await this.d.roles.get(agent.roleId);
+      if (!role) throw new Error(`Role ${agent.roleId} is missing`);
+
+      const open = this.taskList
+        .filter((t) => t.assigneeId === agent.id && (t.status === 'review' || t.status === 'needs_help'))
+        .sort((x, y) => y.updatedAt.localeCompare(x.updatedAt))[0];
+      if (open) {
+        const wt = await this.d.worktrees.prepare(agent.name, open.branch, this.d.project.baseBranch);
+        agent.worktreePath = wt;
+        const fresh = !agent.sessionId;
+        const runner = this.spawn(agent, role, wt, await this.writePrompt(agent, role, open.branch), open.id);
+        this.setStatus(open, 'queued');
+        this.setStatus(open, 'working', { attempts: open.attempts + 1 });
+        await this.saveTasks();
+        agent.status = 'thinking';
+        agent.bubble = 'Reading feedback…';
+        runner.start();
+        if (runner.running) runner.send(this.feedbackMessage(open, text, fresh));
+        return { delivered: 'started', taskId: open.id };
+      }
+
+      if (!agent.sessionId || !agent.worktreePath) throw new Error(`${agent.name} has not worked on anything yet. Assign a task instead.`);
+      const branch = await git(agent.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
+      const runner = this.spawn(agent, role, agent.worktreePath, await this.writePrompt(agent, role, branch), null);
+      agent.status = 'thinking';
+      agent.bubble = 'Reading a message…';
+      runner.start();
+      if (runner.running) runner.send(text);
+      return { delivered: 'started', taskId: null };
+    });
+  }
+
+  async merge(taskId: string): Promise<MergeOutcome> {
+    const outcome = await this.run(async (): Promise<MergeOutcome> => {
+      const t = this.mustTask(taskId);
+      if (t.status !== 'review') return { status: 'not_ready', reason: `Task ${taskId} is ${t.status}, not waiting for review.` };
+      const r = await this.d.worktrees.merge(this.d.project.baseBranch, t.branch, `Merge ${t.id}: ${t.title}`);
+      if (r.status === 'merged') {
+        this.setStatus(t, 'done');
+        await this.saveTasks();
+      }
+      return r;
+    });
+    if (outcome.status === 'merged') await this.pump();
+    return outcome;
+  }
+
+  /** Pass null to forget a session that can no longer be resumed. */
+  setSessionId(agentId: string, sessionId: string | null): Promise<void> {
+    return this.run(async () => {
+      const a = this.mustAgent(agentId);
+      const next = sessionId ?? undefined;
+      if (a.sessionId === next) return;
+      a.sessionId = next;
+      await this.saveAgents();
+    });
+  }
+
+  /** Live status for agents whose runner lives outside the manager (the boss). */
+  setLive(agentId: string, ev: RunnerEvent): Promise<void> {
+    return this.run(async () => {
+      const a = this.mustAgent(agentId);
+      Object.assign(a, reduceStatus(a, ev));
+      this.emitEvent({ type: 'agents-changed' });
+    });
+  }
+
   // ---------- internals ----------
 
   private async startTask(task: Task): Promise<void> {
@@ -203,17 +316,40 @@ export class AgentManager extends EventEmitter {
     agent.status = 'thinking';
     agent.bubble = 'Starting…';
 
+    const promptFile = await this.writePrompt(agent, role, task.branch);
+    const runner = this.spawn(agent, role, wt, promptFile, task.id);
+    const message = taskMessage(task);
+    this.setStatus(task, 'working', { attempts: task.attempts + 1 });
+    await this.saveTasks();
+    runner.start();
+    if (runner.running) runner.send(message);
+  }
+
+  private feedbackMessage(task: Task, text: string, freshSession: boolean): string {
+    const boss = this.agentList.find((a) => a.kind === 'boss')?.name ?? 'the boss';
+    const brief = freshSession ? `\n\nThe original brief:\n\n${task.brief.trim()}` : '';
+    return `Feedback on task ${task.id} ("${task.title}") from ${boss}: ${text.trim()}\n\nMake the changes on your current branch, commit them, and reply with a short summary (at most 5 lines).${brief}`;
+  }
+
+  private assertOpen(): void {
+    if (this.closed) throw new Error('This project is closed');
+  }
+
+  private async writePrompt(agent: Agent, role: Role, branch: string): Promise<string> {
     const boss = this.agentList.find((a) => a.kind === 'boss');
     const skills = await this.d.skills.getMany(role.skills);
     const promptFile = path.join(this.d.promptDir, `${agent.id}.md`);
     await fs.mkdir(this.d.promptDir, { recursive: true });
     await fs.writeFile(promptFile, renderPrompt(role, skills, {
-      agentName: agent.name, bossName: boss?.name ?? 'the boss', branch: task.branch, projectName: this.d.project.name, kind: 'employee',
+      agentName: agent.name, bossName: boss?.name ?? 'the boss', branch, projectName: this.d.project.name, kind: 'employee',
     }));
+    return promptFile;
+  }
 
+  private spawn(agent: Agent, role: Role, cwd: string, promptFile: string, taskId: string | null): AgentRunner {
     const runner = this.d.createRunner({
       bin: this.d.claudeBin,
-      cwd: wt,
+      cwd,
       launch: {
         model: role.model,
         permissionMode: role.permissionMode,
@@ -224,23 +360,21 @@ export class AgentManager extends EventEmitter {
         isolateUserSettings: this.d.isolateUserSettings,
       },
     });
-    this.live.set(agent.id, { runner, taskId: task.id });
+    this.live.set(agent.id, { runner, taskId, resumed: Boolean(agent.sessionId), sawInit: false });
     // Errors are already reported as { type: 'error' } by run(); swallow here to avoid unhandled rejections.
-    runner.on('event', (ev) => { this.run(() => this.onRunnerEvent(agent.id, task.id, runner, ev)).catch(() => undefined); });
-
-    const message = taskMessage(task);
-    this.setStatus(task, 'working', { attempts: task.attempts + 1 });
-    await this.saveTasks();
-    runner.start();
-    if (runner.running) runner.send(message);
+    runner.on('event', (ev) => { this.run(() => this.onRunnerEvent(agent.id, taskId, runner, ev)).catch(() => undefined); });
+    return runner;
   }
 
-  private async onRunnerEvent(agentId: string, taskId: string, runner: AgentRunner, ev: RunnerEvent): Promise<void> {
+  private async onRunnerEvent(agentId: string, taskId: string | null, runner: AgentRunner, ev: RunnerEvent): Promise<void> {
     const agent = this.mustAgent(agentId);
-    const task = this.taskList.find((t) => t.id === taskId);
+    const task = taskId ? this.taskList.find((t) => t.id === taskId) : undefined;
     // Logging is best-effort: a full disk must never stall the task state machine.
     await this.d.store.appendLog(this.d.project.id, agentId, { at: this.now(), taskId, event: ev }).catch(() => undefined);
 
+    const entry = this.live.get(agentId);
+    const mine = entry?.runner === runner ? entry : undefined;
+    if (ev.type === 'init' && mine) mine.sawInit = true;
     if (ev.type === 'init' && ev.sessionId && agent.sessionId !== ev.sessionId) {
       agent.sessionId = ev.sessionId;
       await this.saveAgents().catch(() => undefined);
@@ -250,15 +384,29 @@ export class AgentManager extends EventEmitter {
     this.emitEvent({ type: 'agent-event', agentId, event: ev });
     this.emitEvent({ type: 'agents-changed' });
 
+    if (this.closed) {
+      // Shutting down: leave tasks as they are so the next load() re-queues them.
+      if (ev.type === 'exit' && mine) this.live.delete(agentId);
+      return;
+    }
+
     if (ev.type === 'result') {
       runner.endInput();
       if (task?.status === 'working') await this.finishTask(agent, task, ev.ok, ev.text);
+      else if (taskId === null) this.emitEvent({ type: 'agent-replied', agent: { ...agent }, text: ev.text, ok: ev.ok });
     }
 
     if (ev.type === 'exit') {
-      if (this.live.get(agentId)?.runner === runner) this.live.delete(agentId);
+      if (mine) this.live.delete(agentId);
       try {
-        if (task?.status === 'working') {
+        if (mine?.resumed && !mine.sawInit && ev.code !== 0) {
+          // The saved session could not be resumed (expired or deleted): forget it and start fresh.
+          agent.sessionId = undefined;
+          if (task?.status === 'working') {
+            this.setStatus(task, 'queued');
+            await this.saveTasks();
+          }
+        } else if (task?.status === 'working') {
           const tail = runner.lastStderr;
           await this.finishTask(agent, task, false, `The session exited (code ${ev.code ?? ev.signal}) before finishing.${tail ? `\n${tail}` : ''}`);
         }
@@ -271,13 +419,17 @@ export class AgentManager extends EventEmitter {
   }
 
   private async finishTask(agent: Agent, task: Task, ok: boolean, text: string): Promise<void> {
-    this.setStatus(task, ok ? 'review' : 'needs_help', { resultSummary: text.trim() });
+    // Runs inside the serialized chain, so nothing else can finish this task meanwhile. Collect the
+    // changes first so the task never shows up as finished without its diff.
+    let summary = text.trim();
+    let diffStat = task.diffStat;
     try {
       if (agent.worktreePath) await this.d.worktrees.commitAll(agent.worktreePath, `${task.id}: ${task.title}\n\nCommitted by AgentOffice for ${agent.name}.`);
-      task.diffStat = await this.d.worktrees.diffStat(this.d.project.baseBranch, task.branch);
+      diffStat = await this.d.worktrees.diffStat(this.d.project.baseBranch, task.branch);
     } catch (e) {
-      task.resultSummary = `${task.resultSummary}\n(Could not read the changes: ${msg(e)})`;
+      summary = `${summary}\n(Could not read the changes: ${msg(e)})`;
     }
+    this.setStatus(task, ok ? 'review' : 'needs_help', { resultSummary: summary, diffStat });
     await this.saveTasks();
     this.emitEvent({ type: 'task-finished', task: { ...task }, agent: { ...agent } });
   }

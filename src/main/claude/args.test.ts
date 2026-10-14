@@ -30,6 +30,14 @@ describe('buildClaudeArgs', () => {
   });
 });
 
+describe('buildClaudeArgs tools', () => {
+  it('limits built-in tools with --tools, keeping both variadic flags last', () => {
+    const args = buildClaudeArgs({ tools: ['Read', 'Grep'], allowedTools: ['mcp__agentoffice'] });
+    expect(args.slice(-5)).toEqual(['--tools', 'Read', 'Grep', '--allowedTools', 'mcp__agentoffice']);
+    expect(buildClaudeArgs({ tools: [] }).slice(-2)).toEqual(['--tools', '']);
+  });
+});
+
 describe('userMessageLine', () => {
   it('encodes one stream-json user message per line', () => {
     expect(userMessageLine('hi\nthere')).toBe('{"type":"user","message":{"role":"user","content":"hi\\nthere"}}\n');

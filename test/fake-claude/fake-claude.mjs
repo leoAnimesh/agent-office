@@ -14,6 +14,11 @@ if (argv.includes('--version')) {
 
 if (env.FAKE_CLAUDE_TRAP_TERM === '1') process.on('SIGTERM', () => { /* ignore, like a stuck tool */ });
 
+if (env.FAKE_CLAUDE_RESUME_FAIL === '1' && argv.includes('--resume')) {
+  process.stderr.write(`No conversation found with session ID: ${argv[argv.indexOf('--resume') + 1]}\n`);
+  process.exit(1);
+}
+
 const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
 const sessionId = flag('--resume') ?? flag('--session-id') ?? randomUUID();
 const fixture = env.FAKE_CLAUDE_FIXTURE ? fs.readFileSync(env.FAKE_CLAUDE_FIXTURE, 'utf8').split(/\r?\n/).filter(Boolean) : [];
@@ -42,7 +47,7 @@ async function handle(line) {
     out(o);
     if (delay) await sleep(delay);
   }
-  if (env.FAKE_CLAUDE_FILE) fs.appendFileSync(env.FAKE_CLAUDE_FILE, `turn ${turns}: ${content.split('\n')[0]}\n`);
+  if (env.FAKE_CLAUDE_FILE && !argv.includes('--mcp-config')) fs.appendFileSync(env.FAKE_CLAUDE_FILE, `turn ${turns}: ${content.split('\n')[0]}\n`);
   if (env.FAKE_CLAUDE_CRASH === '1') {
     process.stderr.write('boom: simulated crash\n');
     process.exit(3);
