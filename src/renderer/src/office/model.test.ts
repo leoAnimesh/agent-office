@@ -12,6 +12,10 @@ describe('displayState', () => {
     expect(displayState(agent({}), [task({ held: true })])).toEqual({ status: 'paused', bubble: 'Paused: Toggle' });
   });
 
+  it('flags an idle agent whose work needs help', () => {
+    expect(displayState(agent({}), [task({ status: 'needs_help', title: 'Settings API' })])).toEqual({ status: 'error', bubble: 'Needs help: Settings API' });
+  });
+
   it('passes live states through', () => {
     expect(displayState(agent({ status: 'working', bubble: 'Editing a.ts' }), [])).toEqual({ status: 'working', bubble: 'Editing a.ts' });
     expect(displayState(agent({}), [])).toEqual({ status: 'idle', bubble: 'Idle' });

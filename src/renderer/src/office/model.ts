@@ -5,6 +5,8 @@ export interface DisplayState { status: AgentStatus; bubble: string }
 /** Live status, plus "waiting"/"paused" derived from the agent's queued work when they are idle. */
 export function displayState(agent: Agent, tasks: Task[]): DisplayState {
   if (agent.status !== 'idle') return { status: agent.status, bubble: agent.bubble };
+  const stuck = tasks.find((t) => t.assigneeId === agent.id && (t.status === 'needs_help' || t.status === 'failed'));
+  if (stuck) return { status: 'error', bubble: `Needs help: ${stuck.title}` };
   const queued = tasks.find((t) => t.assigneeId === agent.id && t.status === 'queued');
   if (!queued) return { status: 'idle', bubble: agent.bubble || 'Idle' };
   if (queued.held) return { status: 'paused', bubble: `Paused: ${queued.title}` };
