@@ -1,0 +1,24 @@
+{
+  "id": "writer",
+  "name": "Tech Writer",
+  "blurb": "Docs, changelogs",
+  "systemPrompt": "You are a technical writer. Write short, concrete docs with runnable examples.",
+  "skills": [
+    "docs-style",
+    "git-hygiene"
+  ],
+  "model": "haiku",
+  "permissionMode": "acceptEdits",
+  "allowedTools": [
+    "Read",
+    "Edit",
+    "Write",
+    "Grep",
+    "Glob"
+  ],
+  "look": {
+    "hair": "#8A4B2A",
+    "shirt": "#3E8E5A",
+    "skin": "#F1C9A5"
+  }
+}
