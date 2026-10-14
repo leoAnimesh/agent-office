@@ -42,7 +42,7 @@ async function handle(line) {
     out(o);
     if (delay) await sleep(delay);
   }
-  if (env.FAKE_CLAUDE_FILE) fs.appendFileSync(env.FAKE_CLAUDE_FILE, `turn ${turns}: ${content.split('\n')[0]}\n`);
+  if (env.FAKE_CLAUDE_FILE && !argv.includes('--mcp-config')) fs.appendFileSync(env.FAKE_CLAUDE_FILE, `turn ${turns}: ${content.split('\n')[0]}\n`);
   if (env.FAKE_CLAUDE_CRASH === '1') {
     process.stderr.write('boom: simulated crash\n');
     process.exit(3);

@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs';
-import type { Agent, Project, Task } from '../../shared/types';
+import type { Agent, ChatEntry, Project, Task } from '../../shared/types';
 import { appendJsonl, readJson, readJsonl, writeJsonAtomic } from './jsonStore';
 import type { DataPaths } from './paths';
 
@@ -48,6 +48,14 @@ export class ProjectStore {
 
   readLog(projectId: string, agentId: string, limit = 500): Promise<unknown[]> {
     return readJsonl(this.paths.logFile(projectId, agentId), limit);
+  }
+
+  appendChat(projectId: string, entry: ChatEntry): Promise<void> {
+    return appendJsonl(this.paths.chatFile(projectId), entry);
+  }
+
+  async readChat(projectId: string, limit = 500): Promise<ChatEntry[]> {
+    return (await readJsonl(this.paths.chatFile(projectId), limit)) as ChatEntry[];
   }
 }
 
