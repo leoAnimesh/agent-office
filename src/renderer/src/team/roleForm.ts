@@ -15,7 +15,7 @@ export function roleIdFromName(name: string, taken: string[]): string {
 
 export function blankRole(): Role {
   return {
-    id: '', name: '', blurb: '', systemPrompt: '', skills: ['git-hygiene'], model: 'sonnet', permissionMode: 'acceptEdits',
+    id: '', name: '', blurb: '', systemPrompt: '', skills: ['git-hygiene'], model: 'auto', permissionMode: 'acceptEdits',
     allowedTools: ['Read', 'Edit', 'Write', 'Grep', 'Glob'], look: { hair: '#8A4B2A', shirt: '#3E8E5A', skin: '#F1C9A5' },
   };
 }

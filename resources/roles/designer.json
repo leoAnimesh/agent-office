@@ -7,7 +7,7 @@
     "a11y-checklist",
     "git-hygiene"
   ],
-  "model": "sonnet",
+  "model": "auto",
   "permissionMode": "acceptEdits",
   "allowedTools": [
     "Read",

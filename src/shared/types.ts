@@ -32,6 +32,11 @@ export interface Agent {
 
 export interface DiffStat { path: string; add: number; del: number }
 
+/** Role model value meaning "let the classifier pick per task". */
+export const AUTO_MODEL = 'auto';
+export type TaskSize = 'small' | 'medium' | 'large';
+export interface ModelPick { model: string; size?: TaskSize; reason: string; source: 'classifier' | 'role' | 'fallback' }
+
 export interface Task {
   id: string;
   projectId: string;
@@ -48,6 +53,9 @@ export interface Task {
   dependsOn: string[];
   resultSummary?: string;
   diffStat?: DiffStat[];
+  /** Model the task runs on; undefined while the classifier is still deciding. */
+  model?: string;
+  modelPick?: ModelPick;
   createdAt: string;
   updatedAt: string;
 }
@@ -117,7 +125,7 @@ export type WorkspaceEvent =
   | { type: 'merge-resolved'; requestId: string }
   | { type: 'error'; message: string };
 
-export interface AppSettings { claudePath: string | null; isolateUserSettings: boolean }
+export interface AppSettings { claudePath: string | null; isolateUserSettings: boolean; autoModelMigrated?: boolean }
 export interface ProjectPatch { maxConcurrent?: number; autoMerge?: boolean; bossCanHire?: boolean }
 export interface OpenOptions { bossName?: string; bossModel?: string; bossCanHire?: boolean }
 export interface CreateProjectInput extends OpenOptions { parentDir: string; name: string; brief?: string }

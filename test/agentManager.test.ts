@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,6 +10,7 @@ import { ProjectStore } from '../src/main/store/projectStore';
 import { RoleStore } from '../src/main/store/roleStore';
 import { SkillStore } from '../src/main/store/skillStore';
 import type { Project, Task } from '../src/shared/types';
+import { STUB_PICK } from './helpers/manager';
 import { makeRepo } from './helpers/repo';
 import { FAKE_CLAUDE } from './helpers/runner';
 
@@ -29,7 +30,7 @@ async function makeManager(maxConcurrent = 4, store?: ProjectStore): Promise<Age
   const m = new AgentManager({
     project, store: store ?? new ProjectStore(paths), roles, skills, worktrees: new WorktreeManager(repo),
     createRunner: (o) => new ClaudeRunner({ ...o, bin: process.execPath, binArgs: [FAKE_CLAUDE], env: { ...process.env, ...fakeEnv } }),
-    claudeBin: 'claude', promptDir: paths.promptDir, isolateUserSettings: true,
+    claudeBin: 'claude', promptDir: paths.promptDir, isolateUserSettings: true, classify: async () => STUB_PICK,
   });
   await m.load();
   return m;
@@ -179,6 +180,7 @@ describe('AgentManager', () => {
     await m.hire('backend');
     const crashed = finished(m, 'T-101');
     await m.createTask({ assignee: 'Pixel', title: 'a', brief: 'a', createdBy: 'user' });
+    await vi.waitFor(() => expect(m.getTask('T-101')!.status).not.toBe('queued')); // runner created (after classification)
     delete fakeEnv.FAKE_CLAUDE_CRASH; // only T-101's runner was created with it
     await m.createTask({ assignee: 'Byte', title: 'b', brief: 'b', createdBy: 'user' });
     await crashed;

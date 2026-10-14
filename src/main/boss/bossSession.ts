@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { ChatEntry, Project, RunnerEvent, Task } from '../../shared/types';
+import { AUTO_MODEL, type ChatEntry, type Project, type RunnerEvent, type Task } from '../../shared/types';
 import type { AgentManager, ManagerEvent } from '../agents/agentManager';
 import { renderPrompt } from '../agents/prompt';
 import { waitForExit, type AgentRunner, type ClaudeRunnerOptions } from '../claude/runner';
@@ -127,7 +127,8 @@ export class BossSession extends EventEmitter {
       bin: this.d.claudeBin,
       cwd: this.d.project.repoPath,
       launch: {
-        model: role.model,
+        // The boss is never classified; 'auto' would be an invalid --model.
+        model: role.model === AUTO_MODEL ? 'opus' : role.model,
         permissionMode: role.permissionMode,
         tools: role.allowedTools,
         allowedTools: ['mcp__agentoffice'],

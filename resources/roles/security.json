@@ -6,7 +6,7 @@
   "skills": [
     "git-hygiene"
   ],
-  "model": "sonnet",
+  "model": "auto",
   "permissionMode": "default",
   "allowedTools": [
     "Read",

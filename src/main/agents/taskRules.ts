@@ -28,6 +28,7 @@ export function runnableTasks(tasks: Task[], busyAgentIds: ReadonlySet<string>, 
     if (slots <= 0) break;
     if (claimed.has(t.assigneeId)) continue;
     if (!t.dependsOn.every((d) => done.has(d))) continue;
+    if (!t.model) { claimed.add(t.assigneeId); continue; }   // still classifying: hold the agent's place in line
     picked.push(t);
     claimed.add(t.assigneeId);
     slots--;
