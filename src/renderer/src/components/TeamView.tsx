@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Role, Skill, WorkspaceSnapshot } from '../../../shared/types';
 import { Avatar } from '../sprites/Avatar';
-import { STATUS_LABEL, lookFor } from '../sprites/sprite';
+import { lookFor } from '../sprites/sprite';
 import { blankRole } from '../team/roleForm';
 import { MenuButton } from './MenuButton';
 import { RoleEditor } from './RoleEditor';
@@ -52,11 +52,9 @@ export function TeamView({ ws, roles, onRolesChanged, onOpenAgent, onError }: Pr
               <div key={a.id} className="team-row">
                 <Avatar look={lookFor(a, roles)} size={32} />
                 {/* One line per row: details shrink with "…" so the menu never wraps below. */}
-                <span className="team-info" title={`${a.name} · ${roleLabel} · ${role?.model ?? ''} · ${STATUS_LABEL[a.status]}`}>
+                <span className="team-info" title={`${a.name} · ${roleLabel}`}>
                   <span className="team-name">{a.name}</span>
                   <span className="small muted">{roleLabel}</span>
-                  <span className="mono small muted">{role?.model}</span>
-                  <span className="small muted">{STATUS_LABEL[a.status]}</span>
                 </span>
                 <span className="team-actions">
                   {confirmFire === a.id && <><button type="button" className="btn small danger" onClick={() => void fire(a.id)}>Confirm fire</button><button type="button" className="btn small" onClick={() => setConfirmFire(null)}>Keep</button></>}
