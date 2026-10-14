@@ -6,10 +6,12 @@ import { Header } from './components/Header';
 import { OfficeView } from './components/OfficeView';
 import { NoClaude } from './components/NoClaude';
 import { Onboarding } from './components/Onboarding';
-import { SettingsView } from './components/SettingsView';
+import { AppSettingsView } from './components/AppSettingsView';
+import { ProjectSettingsView } from './components/ProjectSettingsView';
 import { Sidebar } from './components/Sidebar';
 import { TaskBoard } from './components/TaskBoard';
 import { TeamView } from './components/TeamView';
+import { readCollapsed, writeCollapsed } from './layout/sidebarPref';
 import { lookFor } from './sprites/sprite';
 import { initialState, reducer, type View } from './state';
 
@@ -19,6 +21,8 @@ export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [state, dispatch] = useReducer(reducer, initialState);
   const [newProject, setNewProject] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => readCollapsed(localStore()));
+  const toggleSidebar = () => { writeCollapsed(localStore(), !collapsed); setCollapsed(!collapsed); };
   const onError = useCallback((m: string) => dispatch({ type: 'error', message: clean(m) }), []);
   const viewAgentId = state.view.name === 'agent' ? state.view.agentId : null;
   const onLogs = useCallback((entries: LogEntry[]) => { if (viewAgentId) dispatch({ type: 'logs-loaded', agentId: viewAgentId, entries }); }, [viewAgentId]);
@@ -48,24 +52,28 @@ export function App() {
 
   const view = (() => {
     switch (state.view.name) {
-      case 'office': return <OfficeView ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onHire={() => go({ name: 'team' })} />;
+      case 'office': return <OfficeView ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} />;
       case 'agent': return <AgentDetailView ws={ws} roles={state.roles} agentId={state.view.agentId} logs={state.logs[state.view.agentId] ?? []} onBack={() => go({ name: 'office' })} onLogs={onLogs} onError={onError} />;
       case 'team': return <TeamView ws={ws} roles={state.roles} onRolesChanged={refreshRoles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onError={onError} />;
       case 'tasks': return <TaskBoard ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onNewTask={() => { go({ name: 'office' }); setTimeout(() => document.getElementById('boss-msg')?.focus(), 0); }} onError={onError} />;
-      case 'settings': return <SettingsView ws={ws} onStatus={setStatus} onClosed={() => dispatch({ type: 'closed' })} onError={onError} />;
+      case 'settings': return <AppSettingsView onStatus={setStatus} onError={onError} />;
+      case 'project-settings': return <ProjectSettingsView ws={ws} onClosed={() => dispatch({ type: 'closed' })} onError={onError} />;
     }
   })();
 
   return (
-    <div className="app">
-      <Sidebar status={status} current={ws.project} view={state.view} onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} onNewProject={() => setNewProject(true)} onNavigate={go} onError={onError} />
+    <div className={collapsed ? 'app side-collapsed' : 'app'}>
+      <Sidebar current={ws.project} view={state.view} collapsed={collapsed} onToggle={toggleSidebar} onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} onNewProject={() => setNewProject(true)} onNavigate={go} onError={onError} />
       {newProject && (
         <div className="overlay" role="dialog" aria-modal="true" aria-label="New project">
           <Onboarding status={status} initialMode="create" onCancel={() => setNewProject(false)} onOpened={(snap) => { setNewProject(false); dispatch({ type: 'snapshot', ws: snap }); }} />
         </div>
       )}
       <div className="main">
-        <Header project={ws.project} view={state.view} openTasks={openTasks} onNavigate={go} />
+        {/* App settings are app-wide: no project header or tabs above them. */}
+        {state.view.name === 'settings'
+          ? <header className="header"><h1>App settings</h1></header>
+          : <Header project={ws.project} claude={status.claude} view={state.view} openTasks={openTasks} onNavigate={go} />}
         {state.errors.length > 0 && (
           <div className="errors" role="alert">
             {state.errors.map((m, i) => (
@@ -84,4 +92,9 @@ export function App() {
       </div>
     </div>
   );
+}
+
+/** localStorage can be missing or throw on access (blocked storage); the sidebar works without it. */
+function localStore(): Storage | null {
+  try { return window.localStorage; } catch { return null; }
 }

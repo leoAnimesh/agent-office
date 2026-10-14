@@ -2,15 +2,18 @@ import type { Agent, Task } from '../../../shared/types';
 import { displayState, type DisplayState } from './model';
 
 export type CafeActivity = 'coffee' | 'snack' | 'chat';
+export type PlayActivity = 'pingpong' | 'arcade' | 'gaming' | 'nap';
 
 export type DeskAction = 'stretch' | 'read' | 'coffee' | 'phone';
 export interface DeskSpot { agent: Agent; state: DisplayState; away: boolean; idle?: { action: DeskAction; label: string } }
 export interface CafeSpot { agent: Agent; activity: CafeActivity; label: string }
+export interface PlaySpot { agent: Agent; activity: PlayActivity; label: string }
 
 export interface FloorPlan {
   boss: DeskSpot | undefined;
   desks: DeskSpot[];
   cafeteria: CafeSpot[];
+  play: PlaySpot[];
   washroom: { agent: Agent } | null;
 }
 
@@ -37,8 +40,9 @@ function onBreak(state: DisplayState): boolean {
 
 /**
  * Where everyone is right now. Busy agents sit at their desks; idle employees leave an empty chair
- * and go to the cafeteria (coffee, a snack, or a chat with another idle agent) or, one at a time,
- * the washroom. Deterministic for a given time slot so the office never flickers between renders.
+ * and go to the cafeteria (coffee, a snack, or a chat with another idle agent), the play area
+ * (ping-pong in pairs, the arcade one at a time, console games, or a nap for two at most) or, one at
+ * a time, the washroom. Deterministic for a given time slot so the office never flickers between renders.
  */
 export function planFloor(agents: Agent[], tasks: Task[], slot: number): FloorPlan {
   const bossAgent = agents.find((a) => a.kind === 'boss');
@@ -49,6 +53,7 @@ export function planFloor(agents: Agent[], tasks: Task[], slot: number): FloorPl
 
   let washroom: FloorPlan['washroom'] = null;
   const picks: { agent: Agent; activity: CafeActivity }[] = [];
+  const players: { agent: Agent; activity: PlayActivity }[] = [];
   const free = desks.filter((d) => d.away).map((d) => d.agent).sort((a, b) => hash(`${a.id}:${slot}`) - hash(`${b.id}:${slot}`));
   const stayAtDesk = (agent: Agent) => {
     const spot = desks.find((d) => d.agent.id === agent.id)!;
@@ -56,11 +61,12 @@ export function planFloor(agents: Agent[], tasks: Task[], slot: number): FloorPl
     spot.idle = DESK_ACTIONS[hash(`${agent.id}~${slot}`) % DESK_ACTIONS.length];
   };
   for (const agent of free) {
-    // 40% idle at the desk, 10% washroom (one at a time), the rest in the cafeteria.
-    const roll = hash(`${agent.id}#${slot}`) % 10;
-    if (roll >= 6) stayAtDesk(agent);
-    else if (roll === 0) { if (washroom) stayAtDesk(agent); else washroom = { agent }; }
-    else picks.push({ agent, activity: roll <= 2 ? 'coffee' : roll === 3 ? 'snack' : 'chat' });
+    // 35% idle at the desk, 10% washroom (one at a time), 30% cafeteria, 25% play area.
+    const roll = hash(`${agent.id}#${slot}`) % 20;
+    if (roll <= 6) stayAtDesk(agent);
+    else if (roll <= 8) { if (washroom) stayAtDesk(agent); else washroom = { agent }; }
+    else if (roll <= 14) picks.push({ agent, activity: roll <= 10 ? 'coffee' : roll === 11 ? 'snack' : 'chat' });
+    else players.push({ agent, activity: roll <= 16 ? 'pingpong' : roll === 17 ? 'arcade' : roll === 18 ? 'gaming' : 'nap' });
   }
 
   // Chatting needs a partner: pair them up in order; a leftover goes for coffee instead.
@@ -77,5 +83,25 @@ export function planFloor(agents: Agent[], tasks: Task[], slot: number): FloorPl
     activity,
     label: activity === 'coffee' ? 'Coffee break' : activity === 'snack' ? 'Snack time' : `Chatting with ${partner.get(agent.id)}`,
   }));
-  return { boss, desks, cafeteria, washroom };
+  return { boss, desks, cafeteria, play: planPlay(players), washroom };
+}
+
+/** Ping-pong needs a pair, the arcade takes one, the nap couch two; anyone left over plays a console game. */
+function planPlay(players: { agent: Agent; activity: PlayActivity }[]): PlaySpot[] {
+  const cap = (activity: PlayActivity, max: number) => {
+    const these = players.filter((p) => p.activity === activity);
+    for (const p of these.slice(max)) p.activity = 'gaming';
+  };
+  cap('arcade', 1);
+  cap('nap', 2);
+  const pong = players.filter((p) => p.activity === 'pingpong');
+  if (pong.length % 2 === 1) pong.pop()!.activity = 'gaming';
+  const opponent = new Map<string, string>();
+  for (let i = 0; i + 1 < pong.length; i += 2) {
+    opponent.set(pong[i].agent.id, pong[i + 1].agent.name);
+    opponent.set(pong[i + 1].agent.id, pong[i].agent.name);
+  }
+  const label = (p: { agent: Agent; activity: PlayActivity }) =>
+    p.activity === 'pingpong' ? `Ping-pong with ${opponent.get(p.agent.id)}` : p.activity === 'arcade' ? 'High score run' : p.activity === 'nap' ? 'Power nap' : 'Gaming';
+  return players.map((p) => ({ ...p, label: label(p) }));
 }

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Agent, ChatEntry, Look, MergeRequest } from '../../../shared/types';
 import { describeToolCall } from '../chat/describe';
+import { FileChanges, legacyFinishedText } from '../chat/fileChanges';
 import { Markdown } from '../chat/Markdown';
 import { useReveal } from '../chat/reveal';
 import { NO_UNSEEN, onMessages, onReachedBottom, onSent, type Unseen } from '../chat/unseen';
@@ -13,7 +14,19 @@ function Entry({ e }: { e: ChatEntry }) {
     case 'boss': return <div className="msg boss"><Markdown text={e.text} /></div>;
     case 'report': return <div className="msg report"><Markdown text={e.text} /></div>;
     case 'error': return <div className="msg error pre" role="alert">{e.text}</div>;
-    case 'event': return <div className="msg event small"><span className="dot" style={{ background: 'var(--green)' }} aria-hidden="true" /> <span className="pre">{e.text}</span></div>;
+    case 'event': {
+      // Older saved notices are plain text; show them in the current shape too.
+      const shown = e.files ? { text: e.text, files: e.files } : legacyFinishedText(e.text);
+      return (
+        <div className="msg event small">
+          <span className="dot" style={{ background: 'var(--green)' }} aria-hidden="true" />
+          <div className="event-md">
+            <Markdown text={shown.text} />
+            {shown.files && <FileChanges files={shown.files} />}
+          </div>
+        </div>
+      );
+    }
     case 'tool': return (
       <div className="msg tool">
         <span className="mono small tool-name">{e.tool}</span>

@@ -3,6 +3,7 @@ import type { Role, Skill, WorkspaceSnapshot } from '../../../shared/types';
 import { Avatar } from '../sprites/Avatar';
 import { STATUS_LABEL, lookFor } from '../sprites/sprite';
 import { blankRole } from '../team/roleForm';
+import { MenuButton } from './MenuButton';
 import { RoleEditor } from './RoleEditor';
 
 interface Props { ws: WorkspaceSnapshot; roles: Role[]; onRolesChanged: () => void; onOpenAgent: (id: string) => void; onError: (m: string) => void }
@@ -54,10 +55,11 @@ export function TeamView({ ws, roles, onRolesChanged, onOpenAgent, onError }: Pr
                 <span className="mono small muted">{role?.model}</span>
                 <span className="small muted">{STATUS_LABEL[a.status]}</span>
                 <span className="row" style={{ marginLeft: 'auto' }}>
-                  <button type="button" className="btn small" onClick={() => onOpenAgent(a.id)}>Open</button>
-                  {a.kind === 'employee' && (confirmFire === a.id
-                    ? <><button type="button" className="btn small danger" onClick={() => void fire(a.id)}>Confirm fire</button><button type="button" className="btn small" onClick={() => setConfirmFire(null)}>Keep</button></>
-                    : <button type="button" className="btn small danger" onClick={() => setConfirmFire(a.id)}>Fire</button>)}
+                  {confirmFire === a.id && <><button type="button" className="btn small danger" onClick={() => void fire(a.id)}>Confirm fire</button><button type="button" className="btn small" onClick={() => setConfirmFire(null)}>Keep</button></>}
+                  <MenuButton label={`Options for ${a.name}`} items={[
+                    { label: 'Open details', onSelect: () => onOpenAgent(a.id) },
+                    ...(a.kind === 'employee' ? [{ label: 'Fire…', danger: true, onSelect: () => setConfirmFire(a.id) }] : []),
+                  ]} />
                 </span>
               </div>
             );

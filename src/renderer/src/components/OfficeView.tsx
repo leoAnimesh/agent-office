@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Agent, Role, WorkspaceSnapshot } from '../../../shared/types';
-import { SLOT_MS, planFloor, type CafeSpot } from '../office/floor';
+import { SLOT_MS, planFloor, type CafeSpot, type PlaySpot } from '../office/floor';
 import { progress, statusCounts } from '../office/model';
 import { DeskSprite } from '../sprites/DeskSprite';
 import { PersonSprite } from '../sprites/PersonSprite';
@@ -12,17 +12,17 @@ function useNow(everyMs: number): number {
   return now;
 }
 
-interface Props { ws: WorkspaceSnapshot; roles: Role[]; onOpenAgent: (id: string) => void; onHire: () => void }
+interface Props { ws: WorkspaceSnapshot; roles: Role[]; onOpenAgent: (id: string) => void }
 
-export function OfficeView({ ws, roles, onOpenAgent, onHire }: Props) {
+export function OfficeView({ ws, roles, onOpenAgent }: Props) {
   const now = useNow(15_000);
   const plan = planFloor(ws.agents, ws.tasks, Math.floor(now / SLOT_MS));
   const counts = statusCounts([...(plan.boss ? [plan.boss.state] : []), ...plan.desks.map((d) => d.state)]);
   const prog = progress(ws.tasks);
   const roleName = (id: string) => roles.find((r) => r.id === id)?.name ?? id;
   const clock = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const where = (id: string) => (plan.washroom?.agent.id === id ? 'In the washroom' : 'At the cafeteria');
-  const onBreak = plan.cafeteria.length + (plan.washroom ? 1 : 0);
+  const where = (id: string) => (plan.washroom?.agent.id === id ? 'In the washroom' : plan.play.some((p) => p.agent.id === id) ? 'In the play area' : 'At the cafeteria');
+  const onBreak = plan.cafeteria.length + plan.play.length + (plan.washroom ? 1 : 0);
 
   return (
     <section className="office" aria-label="Office">
@@ -43,23 +43,22 @@ export function OfficeView({ ws, roles, onOpenAgent, onHire }: Props) {
         </div>
 
         <div className="rooms">
-          <div className="room work-area" aria-label="Work area">
-            <span className="room-tag">OPEN OFFICE</span>
-            <div className="desks">
-              {plan.boss && (
-                <div className="boss-spot">
-                  <DeskSprite compact name={plan.boss.agent.name} role="Boss" look={lookFor(plan.boss.agent, roles)} status={plan.boss.state.status} bubble={plan.boss.state.bubble} onClick={() => onOpenAgent(plan.boss!.agent.id)} />
-                </div>
-              )}
-              {plan.desks.map((d) => (
-                <DeskSprite key={d.agent.id} compact away={d.away} name={d.agent.name} role={roleName(d.agent.roleId)} look={lookFor(d.agent, roles)}
-                  status={d.away ? 'idle' : d.state.status} bubble={d.away ? where(d.agent.id) : d.idle?.label ?? d.state.bubble} idle={d.idle?.action} onClick={() => onOpenAgent(d.agent.id)} />
-              ))}
-              <button type="button" className="empty-desk compact" onClick={onHire}>
-                <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M8 2v12M2 8h12" /></svg>
-                Empty desk · hire
-              </button>
+          <div className="main-rooms">
+            <div className="room work-area" aria-label="Work area">
+              <span className="room-tag">OPEN OFFICE</span>
+              <div className="desks">
+                {plan.boss && (
+                  <div className="boss-spot">
+                    <DeskSprite compact name={plan.boss.agent.name} role="Boss" look={lookFor(plan.boss.agent, roles)} status={plan.boss.state.status} bubble={plan.boss.state.bubble} onClick={() => onOpenAgent(plan.boss!.agent.id)} />
+                  </div>
+                )}
+                {plan.desks.map((d) => (
+                  <DeskSprite key={d.agent.id} compact away={d.away} name={d.agent.name} role={roleName(d.agent.roleId)} look={lookFor(d.agent, roles)}
+                    status={d.away ? 'idle' : d.state.status} bubble={d.away ? where(d.agent.id) : d.idle?.label ?? d.state.bubble} idle={d.idle?.action} onClick={() => onOpenAgent(d.agent.id)} />
+                ))}
+              </div>
             </div>
+            <PlayArea people={plan.play} roles={roles} roleName={roleName} onOpenAgent={onOpenAgent} />
           </div>
 
           <div className="side-rooms">
@@ -145,6 +144,84 @@ function Washroom({ occupant, roles, roleName, onOpenAgent }: RoomProps & { occu
             <span className="door-sign vacant">Vacant</span>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+const BUBBLE: Record<PlaySpot['activity'], string> = { pingpong: 'Ping-pong', arcade: 'High score!', gaming: 'Gaming', nap: 'z z Z' };
+
+function Player({ p, flip, roles, roleName, onOpenAgent }: RoomProps & { p: PlaySpot; flip?: boolean }) {
+  return (
+    <button type="button" className={`person-spot play-${p.activity}`} onClick={() => onOpenAgent(p.agent.id)} aria-label={`${p.agent.name}, ${roleName(p.agent.roleId)}: ${p.label}`}>
+      {p.activity === 'nap' ? (
+        // Napping on the couch: the name rides in the bubble so the sprite can lie on the cushion.
+        <span className="person-bubble zzz">{BUBBLE.nap} {clip(p.agent.name, 10)}</span>
+      ) : <span className="person-bubble">{BUBBLE[p.activity]}</span>}
+      <PersonSprite look={lookFor(p.agent, roles)} pose={p.activity} flip={flip} />
+      {p.activity !== 'nap' && <span className="person-name">{clip(p.agent.name, 12)}</span>}
+    </button>
+  );
+}
+
+function PlayArea({ people, roles, roleName, onOpenAgent }: RoomProps & { people: PlaySpot[] }) {
+  const who = (a: PlaySpot['activity']) => people.filter((p) => p.activity === a);
+  const pong = who('pingpong');
+  const props = { roles, roleName, onOpenAgent };
+  return (
+    <div className="room play-area" aria-label="Play area">
+      <span className="room-tag">PLAY AREA</span>
+      {people.length === 0 && <span className="small room-empty play-empty">Nobody's playing</span>}
+      <div className="play-zones">
+        <div className="play-zone pong">
+          <div className="play-people">{pong.filter((_, i) => i % 2 === 0).map((p) => <Player key={p.agent.id} p={p} {...props} />)}</div>
+          <svg className="play-prop" viewBox="0 0 40 20" width="120" height="60" shapeRendering="crispEdges" aria-hidden="true">
+            <rect x="2" y="16" width="2" height="4" fill="#2A2D42" /><rect x="36" y="16" width="2" height="4" fill="#2A2D42" />
+            <rect x="0" y="6" width="40" height="10" fill="#2F9E8F" />
+            <rect x="0" y="6" width="40" height="1" fill="#52D1BE" />
+            <rect x="19" y="2" width="2" height="14" fill="#ECE8DF" />
+            <rect x="0" y="10" width="40" height="1" fill="#ECE8DF" opacity="0.6" />
+            {pong.length > 0 && <rect className="pong-ball" x="8" y="3" width="2" height="2" fill="#FFF4D6" />}
+          </svg>
+          <div className="play-people">{pong.filter((_, i) => i % 2 === 1).map((p) => <Player key={p.agent.id} p={p} flip {...props} />)}</div>
+        </div>
+        <div className="play-zone arcade">
+          <svg className="play-prop" viewBox="0 0 16 30" width="48" height="90" shapeRendering="crispEdges" aria-hidden="true">
+            <rect x="1" y="0" width="14" height="30" fill="#6D4AFF" />
+            <rect x="1" y="0" width="14" height="3" fill="#FF6B5B" />
+            <rect x="3" y="5" width="10" height="8" fill="#1A1A2E" />
+            <rect className={who('arcade').length > 0 ? 'arcade-screen on' : 'arcade-screen'} x="4" y="6" width="8" height="6" fill="#4BE3B0" />
+            <rect x="2" y="15" width="12" height="4" fill="#2A2D42" />
+            <rect x="4" y="16" width="1" height="2" fill="#FF6B5B" /><rect x="9" y="16" width="2" height="2" fill="#F5B942" />
+            <rect x="3" y="21" width="10" height="9" fill="#5B3DD6" />
+          </svg>
+          <div className="play-people">{who('arcade').map((p) => <Player key={p.agent.id} p={p} flip {...props} />)}</div>
+        </div>
+        <div className="play-zone gaming">
+          <svg className="play-prop" viewBox="0 0 30 18" width="90" height="54" shapeRendering="crispEdges" aria-hidden="true">
+            <rect x="4" y="0" width="22" height="13" fill="#1A1A2E" />
+            <rect x="5" y="1" width="20" height="11" fill={who('gaming').length > 0 ? '#7AA2FF' : '#2A2D42'} />
+            <rect x="13" y="13" width="4" height="2" fill="#1A1A2E" />
+            <rect x="8" y="15" width="14" height="3" fill="#8B5A34" />
+          </svg>
+          <div className="play-people">{who('gaming').map((p) => <Player key={p.agent.id} p={p} flip {...props} />)}</div>
+        </div>
+        <div className="play-zone nap">
+          <div className="nap-couch">
+            <div className="play-people">{who('nap').map((p) => <Player key={p.agent.id} p={p} {...props} />)}</div>
+            <svg className="play-prop" viewBox="0 0 44 12" width="132" height="36" shapeRendering="crispEdges" aria-hidden="true">
+              <rect x="0" y="0" width="4" height="10" fill="#4A3D7A" /><rect x="40" y="0" width="4" height="10" fill="#4A3D7A" />
+              <rect x="2" y="3" width="40" height="7" fill="#6D5BB0" />
+              <rect x="2" y="3" width="40" height="1" fill="#8D7BD0" />
+              <rect x="3" y="10" width="2" height="2" fill="#2A2D42" /><rect x="39" y="10" width="2" height="2" fill="#2A2D42" />
+            </svg>
+          </div>
+          <svg className="play-prop lamp" viewBox="0 0 8 20" width="24" height="60" shapeRendering="crispEdges" aria-hidden="true">
+            <rect x="1" y="0" width="6" height="4" fill="#F5B942" />
+            <rect x="3" y="4" width="2" height="14" fill="#8A90B0" />
+            <rect x="1" y="18" width="6" height="2" fill="#2A2D42" />
+          </svg>
+        </div>
       </div>
     </div>
   );
