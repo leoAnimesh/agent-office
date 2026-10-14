@@ -76,7 +76,7 @@
 .role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .role-card { text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--panel-2); border: 2px solid var(--line); border-radius: 8px; min-height: 60px; color: var(--text); }
 .role-card[aria-pressed='true'] { border-color: var(--amber); background: #262939; }
-.team-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
+.team-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; min-width: 0; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
 .editor { flex: 999 1 460px; min-width: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .toggle { min-height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid var(--line-2); background: transparent; color: var(--muted); font: 500 13px var(--font-mono); }
@@ -171,3 +171,7 @@
 .drawer-md code { overflow-wrap: anywhere; }
 .side-bottom { margin-top: auto; }
 .agent-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.team-info { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; overflow: hidden; white-space: nowrap; }
+.team-info > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+.team-name { font-weight: 600; flex: 0 0 auto !important; }
+.team-actions { flex: none; display: flex; align-items: center; gap: 8px; }

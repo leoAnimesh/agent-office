@@ -47,14 +47,18 @@ export function TeamView({ ws, roles, onRolesChanged, onOpenAgent, onError }: Pr
           <h2 style={{ margin: 0, fontSize: 16 }}>On the team <span className="muted" style={{ fontWeight: 400 }}>· {ws.agents.length}</span></h2>
           {ws.agents.map((a) => {
             const role = roles.find((r) => r.id === a.roleId);
+            const roleLabel = a.kind === 'boss' ? 'Boss' : role?.name ?? a.roleId;
             return (
               <div key={a.id} className="team-row">
                 <Avatar look={lookFor(a, roles)} size={32} />
-                <span style={{ fontWeight: 600 }}>{a.name}</span>
-                <span className="small muted">{a.kind === 'boss' ? 'Boss' : role?.name ?? a.roleId}</span>
-                <span className="mono small muted">{role?.model}</span>
-                <span className="small muted">{STATUS_LABEL[a.status]}</span>
-                <span className="row" style={{ marginLeft: 'auto' }}>
+                {/* One line per row: details shrink with "…" so the menu never wraps below. */}
+                <span className="team-info" title={`${a.name} · ${roleLabel} · ${role?.model ?? ''} · ${STATUS_LABEL[a.status]}`}>
+                  <span className="team-name">{a.name}</span>
+                  <span className="small muted">{roleLabel}</span>
+                  <span className="mono small muted">{role?.model}</span>
+                  <span className="small muted">{STATUS_LABEL[a.status]}</span>
+                </span>
+                <span className="team-actions">
                   {confirmFire === a.id && <><button type="button" className="btn small danger" onClick={() => void fire(a.id)}>Confirm fire</button><button type="button" className="btn small" onClick={() => setConfirmFire(null)}>Keep</button></>}
                   <MenuButton label={`Options for ${a.name}`} items={[
                     { label: 'Open details', onSelect: () => onOpenAgent(a.id) },
