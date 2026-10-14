@@ -11,8 +11,6 @@ import '@fontsource/ibm-plex-mono/500.css';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/office.css';
-import './styles.css';
-import './workspace.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -22,20 +22,20 @@ export function Onboarding({ onOpened }: { onOpened: (ws: WorkspaceSnapshot) => 
   };
 
   return (
-    <main className="onboarding">
+    <main className="boot">
       <h1>AgentOffice</h1>
       <p className="muted">Open a git repository. A boss agent will build the team for it.</p>
-      <button type="button" className="primary" disabled={busy} onClick={async () => open(await window.agentOffice.pickFolder())}>
+      <button type="button" className="btn primary" disabled={busy} onClick={async () => open(await window.agentOffice.pickFolder())}>
         {busy ? 'Opening…' : 'Open a project folder…'}
       </button>
       {error && <p className="bad" role="alert">{error}</p>}
       {projects.length > 0 && (
         <section aria-label="Recent projects">
           <h2>Recent projects</h2>
-          <ul className="recent">
+          <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             {projects.map((p) => (
               <li key={p.id}>
-                <button type="button" disabled={busy} onClick={() => open(p.repoPath)}>
+                <button type="button" className="side-item" disabled={busy} onClick={() => open(p.repoPath)}>
                   <strong>{p.name}</strong> <span className="mono muted">{p.repoPath}</span>
                 </button>
               </li>
