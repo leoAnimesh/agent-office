@@ -4,14 +4,16 @@ import { Avatar } from '../sprites/Avatar';
 import { lookFor } from '../sprites/sprite';
 import { COLUMNS, cardMeta, filterTasks } from '../tasks/board';
 import { modelChip } from '../tasks/modelChip';
+import { TaskDrawer } from './TaskDrawer';
 
 interface Props { ws: WorkspaceSnapshot; roles: Role[]; onOpenAgent: (id: string) => void; onNewTask: () => void; onError: (m: string) => void }
 
 export function TaskBoard({ ws, roles, onOpenAgent, onNewTask, onError }: Props) {
   const [who, setWho] = useState<string>('all');
+  const [openId, setOpenId] = useState<string | null>(null);
+  const open = openId ? ws.tasks.find((t) => t.id === openId) : undefined;
   const employees = ws.agents.filter((a) => a.kind === 'employee');
   const tasks = filterTasks(ws.tasks, who);
-  const act = (fn: () => Promise<void>) => () => { fn().catch((e: unknown) => onError(String(e))); };
 
   return (
     <section aria-label="Task board">
@@ -34,26 +36,14 @@ export function TaskBoard({ ws, roles, onOpenAgent, onNewTask, onError }: Props)
               {items.map((t) => {
                 const agent = ws.agents.find((a) => a.id === t.assigneeId);
                 return (
-                  <article key={t.id} className="card">
+                  // The title button is the keyboard/screen-reader way in; a click anywhere on the card does the same.
+                  <article key={t.id} className="card task-card" onClick={() => setOpenId(t.id)}>
                     <div className="card-meta"><span>{t.id}</span><span style={{ marginLeft: 'auto' }}>{cardMeta(t, ws.tasks)}</span></div>
-                    <div className="card-title">{t.title}</div>
+                    <button type="button" className="card-title card-open" aria-haspopup="dialog" onClick={(e) => { e.stopPropagation(); setOpenId(t.id); }}>{t.title}</button>
                     {(() => { const chip = modelChip(t); return chip && <span className="model-chip" title={chip.title}>{chip.label}</span>; })()}
                     <div className="row">
                       {agent && <Avatar look={lookFor(agent, roles)} size={22} />}
-                      {agent ? <button type="button" className="btn small" onClick={() => onOpenAgent(agent.id)}>{agent.name}</button> : <span className="small muted">unassigned</span>}
-                      <span className="mono small muted" style={{ marginLeft: 'auto', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.branch}>{t.branch}</span>
-                    </div>
-                    {t.resultSummary && (
-                      <details>
-                        <summary className="small">Result</summary>
-                        <p className="small pre">{t.resultSummary}</p>
-                        {t.diffStat && t.diffStat.length > 0 && <ul className="mono small files">{t.diffStat.map((f) => <li key={f.path}>{f.path} <span className="add">+{f.add}</span> <span className="del">−{f.del}</span></li>)}</ul>}
-                      </details>
-                    )}
-                    <div className="row">
-                      {t.status === 'working' && <button type="button" className="btn small" onClick={act(() => window.agentOffice.pauseTask(t.id))}>Pause</button>}
-                      {t.status === 'queued' && t.held && <button type="button" className="btn small" onClick={act(() => window.agentOffice.resumeTask(t.id))}>Resume</button>}
-                      {['queued', 'working', 'needs_help', 'review'].includes(t.status) && <button type="button" className="btn small danger" onClick={act(() => window.agentOffice.cancelTask(t.id))}>Cancel</button>}
+                      <span className="small">{agent?.name ?? 'unassigned'}</span>
                     </div>
                   </article>
                 );
@@ -62,6 +52,7 @@ export function TaskBoard({ ws, roles, onOpenAgent, onNewTask, onError }: Props)
           );
         })}
       </div>
+      {open && <TaskDrawer key={open.id} task={open} ws={ws} roles={roles} onClose={() => setOpenId(null)} onOpenAgent={onOpenAgent} onError={onError} />}
     </section>
   );
 }

@@ -116,13 +116,23 @@ test('starts a brand-new project from scratch', async () => {
     expect(await fs.readFile(path.join(parent, 'Recipe App', 'README.md'), 'utf8')).toContain('# Recipe App');
 
     // The same flow is reachable from inside a project, and refuses to reuse a non-empty folder.
-    await win.getByRole('button', { name: '+ New project' }).click();
+    await win.getByRole('button', { name: 'New project', exact: true }).click();
     await win.getByLabel('Project name').fill('Recipe App');
     await win.getByRole('button', { name: 'Choose…' }).click();
     await win.getByRole('button', { name: /Create project/ }).click();
     await expect(win.getByRole('alert')).toContainText('already exists');
     await win.getByRole('button', { name: 'Cancel' }).click();
     await expect(win.getByRole('dialog')).toHaveCount(0);
+
+    // The sidebar collapses to an icon rail that keeps every item usable, and remembers it.
+    await win.getByRole('button', { name: 'Collapse sidebar' }).click();
+    await expect(win.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-expanded', 'false');
+    await win.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(win.locator('.cli-card')).toHaveAttribute('title', /^Claude Code v\S+ · connected$/);
+    await win.reload();
+    await expect(win.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
+    await win.getByRole('button', { name: 'Expand sidebar' }).click();
+    await expect(win.getByRole('button', { name: 'Collapse sidebar' })).toBeVisible();
   } finally {
     await app.close();
     await fs.rm(parent, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
@@ -138,6 +148,62 @@ test('explains what to do when Claude Code is not installed', async () => {
     await expect(win.getByRole('button', { name: 'Check again' })).toBeVisible();
   } finally {
     await app.close();
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});
+
+test('task cards open a details drawer', async () => {
+  const repo = await makeRepo();
+  const env = { AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: repo };
+  let { app, userData } = await launch(env);
+  try {
+    let win = await app.firstWindow();
+    await win.getByRole('button', { name: 'Browse' }).click();
+    await win.getByRole('button', { name: /Open the office/ }).click();
+    await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Team' }).click();
+    await win.getByRole('button', { name: /^Frontend Engineer/ }).click();
+    await win.getByRole('button', { name: 'Hire Frontend Engineer' }).click();
+    await expect(win.getByRole('button', { name: /^Open$/ }).nth(1)).toBeVisible();
+    await app.close();
+
+    // Seed a reviewed task with a markdown result, then reopen the app on the same data.
+    const pdir = path.join(userData, 'projects', (await fs.readdir(path.join(userData, 'projects')))[0]);
+    const pixel = (JSON.parse(await fs.readFile(path.join(pdir, 'agents.json'), 'utf8')) as { id: string; name: string }[]).find((a) => a.name === 'Pixel')!;
+    const now = new Date().toISOString();
+    await fs.writeFile(path.join(pdir, 'tasks.json'), JSON.stringify([{
+      id: 'T-101', projectId: path.basename(pdir), title: 'Remove dead code', brief: 'Delete the **unused** views.', assigneeId: pixel.id, createdBy: 'boss',
+      status: 'review', held: false, attempts: 1, branch: 'ao/pixel/remove-dead-code-t-101', dependsOn: [], createdAt: now, updatedAt: now,
+      resultSummary: 'Done.\n\n- Removed `ComingSoonView`\n- Tests pass', diffStat: [{ path: 'src/a.ts', add: 0, del: 12 }],
+      model: 'haiku', modelPick: { model: 'haiku', size: 'small', reason: 'Deletes a few files', source: 'classifier' },
+    }]));
+    const base = { ...process.env } as Record<string, string>;
+    delete base.ELECTRON_RENDERER_URL;
+    app = await electron.launch({ args: process.platform === 'linux' ? ['--no-sandbox', path.resolve('.')] : [path.resolve('.')], env: { ...base, AO_USER_DATA: userData, ...env } });
+    win = await app.firstWindow();
+    const browse = win.getByRole('button', { name: 'Browse' });
+    await expect(browse.or(win.getByRole('button', { name: /^Max, Boss/ }))).toBeVisible();
+    if (await browse.isVisible()) {
+      await win.getByRole('button', { name: 'Browse' }).click();
+      await win.getByRole('button', { name: /Open the office/ }).click();
+    }
+    await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: /^Tasks/ }).click();
+
+    const card = win.locator('.task-card', { hasText: 'Remove dead code' });
+    await expect(card).not.toContainText('Removed');
+    await card.getByRole('button', { name: 'Remove dead code' }).click();
+    const drawer = win.getByRole('dialog', { name: 'Remove dead code' });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.locator('strong', { hasText: 'unused' })).toBeVisible();
+    await expect(drawer.locator('li', { hasText: 'Removed' }).locator('code')).toHaveText('ComingSoonView');
+    await expect(drawer).toContainText('haiku · small — Deletes a few files');
+    await expect(drawer).toContainText('src/a.ts');
+    await expect(drawer.getByRole('button', { name: 'Cancel task' })).toBeVisible();
+    await win.keyboard.press('Escape');
+    await expect(drawer).toHaveCount(0);
+    await expect(card.getByRole('button', { name: 'Remove dead code' })).toBeFocused();
+  } finally {
+    await app.close();
+    await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });

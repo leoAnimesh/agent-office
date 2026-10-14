@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { AppStatus, Project, WorkspaceSnapshot } from '../../../shared/types';
 import type { View } from '../state';
+import { claudeLabel } from '../layout/sidebarPref';
 
-interface Props { status: AppStatus; current: Project; view: View; onOpened: (ws: WorkspaceSnapshot) => void; onNewProject: () => void; onNavigate: (v: View) => void; onError: (m: string) => void }
+interface Props { status: AppStatus; current: Project; view: View; collapsed: boolean; onToggle: () => void; onOpened: (ws: WorkspaceSnapshot) => void; onNewProject: () => void; onNavigate: (v: View) => void; onError: (m: string) => void }
 
 export function Logo() {
   return (
@@ -20,7 +21,18 @@ export function Logo() {
   );
 }
 
-export function Sidebar({ status, current, view, onOpened, onNewProject, onNavigate, onError }: Props) {
+function Icon({ name }: { name: 'roles' | 'settings' | 'plus' | 'collapse' | 'expand' }) {
+  const paths: Record<typeof name, string> = {
+    roles: 'M5 2h3v3H5zM10 3h2v2h-2zM3 7h7v2H3zM3 9h2v4H3zm5 0h2v4H8zM10 7h3v2h-3zm1 2h2v3h-2z',
+    settings: 'M7 1h2v2H7zM7 13h2v2H7zM1 7h2v2H1zM13 7h2v2h-2zM3 3h2v2H3zM11 3h2v2h-2zM3 11h2v2H3zM11 11h2v2h-2zM5 5h6v6H5zm2 2v2h2V7z',
+    plus: 'M7 2h2v12H7zM2 7h12v2H2z',
+    collapse: 'M9 3h2v2H9zM7 5h2v2H7zM5 7h2v2H5zM7 9h2v2H7zM9 11h2v2H9z',
+    expand: 'M5 3h2v2H5zM7 5h2v2H7zM9 7h2v2H9zM7 9h2v2H7zM5 11h2v2H5z',
+  };
+  return <svg width="16" height="16" viewBox="0 0 16 16" shapeRendering="crispEdges" aria-hidden="true" fill="currentColor" fillRule="evenodd"><path d={paths[name]} /></svg>;
+}
+
+export function Sidebar({ status, current, view, collapsed, onToggle, onOpened, onNewProject, onNavigate, onError }: Props) {
   const [projects, setProjects] = useState<Project[]>([]);
   useEffect(() => { window.agentOffice.listProjects().then(setProjects, () => setProjects([])); }, [current.id]);
 
@@ -28,31 +40,46 @@ export function Sidebar({ status, current, view, onOpened, onNewProject, onNavig
     if (!repoPath) return;
     try { onOpened(await window.agentOffice.openProject(repoPath)); } catch (e) { onError(String(e)); }
   };
+  const claude = status.claude ? claudeLabel(status.claude) : null;
+  // Collapsed, every item keeps its accessible name; the visible label becomes a tooltip.
+  const tip = (label: string) => (collapsed ? { 'aria-label': label, title: label } : {});
 
   return (
-    <nav className="sidebar" aria-label="Projects and library">
-      <div className="brand"><Logo /> AgentOffice</div>
+    <nav className={collapsed ? 'sidebar collapsed' : 'sidebar'} aria-label="Projects and library">
+      <div className="brand">
+        <Logo />
+        {!collapsed && <span className="brand-name">AgentOffice</span>}
+        <button type="button" className="side-toggle" aria-expanded={!collapsed} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={onToggle}>
+          <Icon name={collapsed ? 'expand' : 'collapse'} />
+        </button>
+      </div>
       <div className="side-section">
-        <div className="side-title">PROJECTS</div>
+        {!collapsed && <div className="side-title">PROJECTS</div>}
         {projects.map((p) => (
-          <button key={p.id} type="button" className={p.id === current.id ? 'side-item current' : 'side-item'} aria-current={p.id === current.id ? 'true' : undefined} onClick={() => (p.id === current.id ? onNavigate({ name: 'office' }) : open(p.repoPath))}>
+          <button key={p.id} type="button" className={p.id === current.id ? 'side-item current' : 'side-item'} aria-current={p.id === current.id ? 'true' : undefined} {...tip(p.name)} onClick={() => (p.id === current.id ? onNavigate({ name: 'office' }) : open(p.repoPath))}>
             <span className="dot" style={{ background: p.id === current.id ? 'var(--amber)' : 'var(--blue)' }} aria-hidden="true" />
-            <span className="side-label">{p.name}</span>
+            {!collapsed && <span className="side-label">{p.name}</span>}
           </button>
         ))}
-        <button type="button" className="side-item muted" onClick={onNewProject}>+ New project</button>
+        <button type="button" className="side-item muted" {...tip('New project')} onClick={onNewProject}>
+          <Icon name="plus" />{!collapsed && <span className="side-label">New project</span>}
+        </button>
       </div>
       <div className="side-section">
-        <div className="side-title">LIBRARY</div>
-        <button type="button" className={view.name === 'team' ? 'side-item current' : 'side-item'} onClick={() => onNavigate({ name: 'team' })}>Roles &amp; skills</button>
-        <button type="button" className={view.name === 'settings' ? 'side-item current' : 'side-item'} onClick={() => onNavigate({ name: 'settings' })}>Settings</button>
+        {!collapsed && <div className="side-title">LIBRARY</div>}
+        <button type="button" className={view.name === 'team' ? 'side-item current' : 'side-item'} {...tip('Roles & skills')} onClick={() => onNavigate({ name: 'team' })}>
+          <Icon name="roles" />{!collapsed && <span className="side-label">Roles &amp; skills</span>}
+        </button>
+        <button type="button" className={view.name === 'settings' ? 'side-item current' : 'side-item'} {...tip('Settings')} onClick={() => onNavigate({ name: 'settings' })}>
+          <Icon name="settings" />{!collapsed && <span className="side-label">Settings</span>}
+        </button>
       </div>
-      <div className="cli-card">
-        <div className="small" style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-          <span className="dot" style={{ background: 'var(--green)' }} aria-hidden="true" /> Claude Code connected
+      {claude && (
+        <div className="cli-card" title={claude.title}>
+          <span className="dot" style={{ background: 'var(--green)' }} aria-hidden="true" />
+          <span className={collapsed ? 'sr-only' : 'side-label'}>{collapsed ? claude.title : claude.text}</span>
         </div>
-        <div className="mono small muted pre">{status.claude?.version ? `v${status.claude.version}\n` : ''}{status.claude?.path}</div>
-      </div>
+      )}
     </nav>
   );
 }
