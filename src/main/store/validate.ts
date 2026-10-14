@@ -31,6 +31,7 @@ export const projectPatchSchema = z.object({
 export const settingsSchema = z.object({
   claudePath: z.string().trim().min(1).max(1000).nullable().optional(),
   isolateUserSettings: z.boolean().optional(),
+  autoModelMigrated: z.boolean().optional(),
 }).strict();
 
 export function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown, what: string): T {

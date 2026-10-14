@@ -17,7 +17,7 @@ describe('role form helpers', () => {
 
   it('starts new roles with safe defaults', () => {
     const r = blankRole();
-    expect(r).toMatchObject({ id: '', model: 'sonnet', permissionMode: 'acceptEdits', allowedTools: ['Read', 'Edit', 'Write', 'Grep', 'Glob'] });
+    expect(r).toMatchObject({ id: '', model: 'auto', permissionMode: 'acceptEdits', allowedTools: ['Read', 'Edit', 'Write', 'Grep', 'Glob'] });
     expect(r.look.shirt).toMatch(/^#[0-9A-F]{6}$/i);
   });
 

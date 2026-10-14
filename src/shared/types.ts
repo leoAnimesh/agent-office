@@ -125,7 +125,7 @@ export type WorkspaceEvent =
   | { type: 'merge-resolved'; requestId: string }
   | { type: 'error'; message: string };
 
-export interface AppSettings { claudePath: string | null; isolateUserSettings: boolean }
+export interface AppSettings { claudePath: string | null; isolateUserSettings: boolean; autoModelMigrated?: boolean }
 export interface ProjectPatch { maxConcurrent?: number; autoMerge?: boolean; bossCanHire?: boolean }
 export interface OpenOptions { bossName?: string; bossModel?: string; bossCanHire?: boolean }
 export interface CreateProjectInput extends OpenOptions { parentDir: string; name: string; brief?: string }

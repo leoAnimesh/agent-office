@@ -6,7 +6,7 @@
   "skills": [
     "git-hygiene"
   ],
-  "model": "haiku",
+  "model": "auto",
   "permissionMode": "acceptEdits",
   "allowedTools": [
     "Read",

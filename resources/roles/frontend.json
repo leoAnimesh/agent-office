@@ -9,7 +9,7 @@
     "testing-basics",
     "git-hygiene"
   ],
-  "model": "sonnet",
+  "model": "auto",
   "permissionMode": "acceptEdits",
   "allowedTools": [
     "Read",
