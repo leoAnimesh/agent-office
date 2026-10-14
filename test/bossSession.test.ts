@@ -168,18 +168,9 @@ describe('describeFinished', () => {
 describe('finishedChatText', () => {
   const t = { id: 'T-7', status: 'review', resultSummary: '- **Checks:** `build` passed\n- Merged', diffStat: [{ path: 'a.ts', add: 3, del: 1 }] } as Task;
 
-  it('is markdown for the user: heading, the summary as written, files as a list, no boss instructions', () => {
-    expect(finishedChatText(t, 'Pixel')).toBe('**T-7 by Pixel finished successfully.**\n\n- **Checks:** `build` passed\n- Merged\n\n**Files changed (1)**\n- `a.ts` +3 −1');
-    expect(finishedChatText({ ...t, status: 'needs_help', diffStat: [], resultSummary: '' }, 'Pixel')).toBe('**T-7 by Pixel finished with problems.**\n\nNo files changed.');
-  });
-
-  it('shortens long file lists', () => {
-    const many = Array.from({ length: 11 }, (_, i) => ({ path: `f${i}.ts`, add: 1, del: 0 }));
-    const text = finishedChatText({ ...t, diffStat: many }, 'Pixel');
-    expect(text).toContain('**Files changed (11)**');
-    expect(text).toContain('- `f7.ts` +1 −0');
-    expect(text).not.toContain('f8.ts');
-    expect(text).toContain('- …and 3 more');
+  it('is markdown for the user: heading and the summary as written; files and boss instructions are left out', () => {
+    expect(finishedChatText(t, 'Pixel')).toBe('**T-7 by Pixel finished successfully.**\n\n- **Checks:** `build` passed\n- Merged');
+    expect(finishedChatText({ ...t, status: 'needs_help', resultSummary: '' }, 'Pixel')).toBe('**T-7 by Pixel finished with problems.**');
   });
 });
 
@@ -192,6 +183,7 @@ describe('task-finished chat entry', () => {
     if (entry.kind !== 'event') throw new Error('expected an event entry');
     expect(entry.text).toMatch(/^\*\*T-101 by Pixel finished successfully\.\*\*/);
     expect(entry.text).not.toContain('get_task');
+    expect(entry.files).toEqual([{ path: 'notes.txt', add: 1, del: 0 }]);
     await until((e) => e.kind === 'boss' && e.text.includes('[AgentOffice] T-101 by Pixel finished successfully. Summary:'));
     expect(chat.filter((e) => e.kind === 'event')).toHaveLength(1);
     await boss.stop();

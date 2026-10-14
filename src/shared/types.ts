@@ -92,7 +92,7 @@ export type ChatEntry =
   | { kind: 'user'; at: string; text: string }
   | { kind: 'boss'; at: string; text: string }
   | { kind: 'tool'; at: string; tool: string; input: Record<string, unknown> }
-  | { kind: 'event'; at: string; text: string; taskId?: string }
+  | { kind: 'event'; at: string; text: string; taskId?: string; files?: DiffStat[] }
   | { kind: 'report'; at: string; text: string }
   | { kind: 'error'; at: string; text: string };
 

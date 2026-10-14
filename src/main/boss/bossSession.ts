@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { AUTO_MODEL, type ChatEntry, type Project, type RunnerEvent, type Task } from '../../shared/types';
+import { AUTO_MODEL, type ChatEntry, type DiffStat, type Project, type RunnerEvent, type Task } from '../../shared/types';
 import type { AgentManager, ManagerEvent } from '../agents/agentManager';
 import { renderPrompt } from '../agents/prompt';
 import { waitForExit, type AgentRunner, type ClaudeRunnerOptions } from '../claude/runner';
@@ -32,22 +32,12 @@ export function describeFinished(task: Task, agentName: string): string {
   return `${task.id} by ${agentName} finished ${how}. Summary: ${(task.resultSummary ?? '').trim()} Files: ${files}. Read it with get_task, then request_merge or message_agent.`;
 }
 
-const CHAT_FILES = 8;
-
-/** The same news for the user: markdown, the summary as written, files as a short list, no tool instructions. */
+/** The same news for the user: markdown with the summary as written, no tool instructions. The chat shows the files from the entry's `files`. */
 export function finishedChatText(task: Task, agentName: string): string {
   const how = task.status === 'review' ? 'successfully' : 'with problems';
-  const parts = [`**${task.id} by ${agentName} finished ${how}.**`];
   const summary = (task.resultSummary ?? '').trim();
-  if (summary) parts.push(summary);
-  const files = task.diffStat ?? [];
-  if (files.length === 0) parts.push('No files changed.');
-  else {
-    const shown = files.slice(0, CHAT_FILES).map((f) => `- \`${f.path}\` +${f.add} −${f.del}`);
-    if (files.length > CHAT_FILES) shown.push(`- …and ${files.length - CHAT_FILES} more`);
-    parts.push(`**Files changed (${files.length})**\n${shown.join('\n')}`);
-  }
-  return parts.join('\n\n');
+  const head = `**${task.id} by ${agentName} finished ${how}.**`;
+  return summary ? `${head}\n\n${summary}` : head;
 }
 export class BossSession extends EventEmitter {
   private runner: AgentRunner | null = null;
@@ -73,7 +63,7 @@ export class BossSession extends EventEmitter {
 
   start(): void {
     const onEvent = (e: ManagerEvent) => {
-      if (e.type === 'task-finished') this.notify(describeFinished(e.task, e.agent.name), e.task.id, finishedChatText(e.task, e.agent.name)).catch(() => undefined);
+      if (e.type === 'task-finished') this.notify(describeFinished(e.task, e.agent.name), e.task.id, finishedChatText(e.task, e.agent.name), e.task.diffStat ?? []).catch(() => undefined);
       if (e.type === 'agent-replied') this.notify(e.ok ? `${e.agent.name} replied: ${e.text}` : `${e.agent.name} could not answer: ${e.text}`).catch(() => undefined);
     };
     this.d.manager.on('event', onEvent);
@@ -89,9 +79,9 @@ export class BossSession extends EventEmitter {
     await this.deliver(text);
   }
 
-  /** `chatText` is what the user sees when it should differ from what the boss is told. */
-  async notify(text: string, taskId?: string, chatText?: string): Promise<void> {
-    await this.add({ kind: 'event', at: this.now(), text: chatText ?? text, ...(taskId ? { taskId } : {}) });
+  /** `chatText` is what the user sees when it should differ from what the boss is told; `files` is shown as a file list. */
+  async notify(text: string, taskId?: string, chatText?: string, files?: DiffStat[]): Promise<void> {
+    await this.add({ kind: 'event', at: this.now(), text: chatText ?? text, ...(taskId ? { taskId } : {}), ...(files ? { files } : {}) });
     await this.deliver(`[AgentOffice] ${text}`);
   }
 
