@@ -33,7 +33,7 @@ Today every employee task runs on its role's fixed `model` (set by hand in RoleE
   - **large**: cross-cutting work, new subsystem, multi-module refactor, tricky debugging, security-sensitive change.
   and asks for exactly `{"size": "...", "reason": "..."}` with a one-line reason.
 - `createClassifier(deps): TaskClassifier` where `TaskClassifier = (input) => Promise<ModelPick>`:
-  - Spawns one runner via the injected `createRunner` with `model: 'opus'`, `tools: []` (no tools), `isolateUserSettings` as configured, no session id / resume, `cwd` = repo root.
+  - Spawns one runner via the injected `createRunner` with `model: 'opus'`, `tools: []` (no tools), `isolateUserSettings` as configured, no session id / resume, `cwd` = the app's `promptDir` (no repo access needed; keeps the fake CLI from writing into the repo in tests).
   - Sends the prompt, waits for the `result` event, ends input, waits for exit.
   - 60 s timeout → stops the runner.
   - Success → `{ model: SIZE_MODEL[size], size, reason, source: 'classifier' }`.

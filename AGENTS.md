@@ -55,6 +55,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 2. `BossSession` writes it to the boss's `claude` stdin.
 3. The boss calls MCP tools on `McpHost` (`mcp__agentoffice__assign_task`, …), which run `bossTools`, which call `AgentManager`.
 4. `AgentManager.createTask` queues the task, and `pump()` starts it:
+   - if the role's model is `auto`, `classifier.ts` first runs a one-shot Opus call (outside `run()`) that sizes the task and sets `task.model` (small→haiku, medium→sonnet, large→opus, sonnet on any failure); `runnableTasks` holds the task until then;
    - `WorktreeManager.prepare` creates or checks out `.agentoffice/wt/<agent>` on branch `ao/<agent>/<slug>-<task id>`;
    - a `ClaudeRunner` spawns `claude -p --input-format stream-json --output-format stream-json …` in that worktree.
 5. `StreamParser` turns the stream into `RunnerEvent`s, which update the agent's status and bubble, go to the log, and reach the UI as `agent-event`.
@@ -87,6 +88,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - **Boss isolation:** the boss gets `--tools Read Grep Glob` (no editing) plus `--allowedTools mcp__agentoffice`. Every agent session runs with `--setting-sources project,local`, so the user's global hooks and plugins stay out (configurable in Settings).
 - **Names:** worktree and branch names come from `slugify(name)`. `hire()` rejects names whose slug collides with an existing employee's, because two agents must never share a worktree.
 - **Firing** is refused while the agent has open work. Otherwise the app commits leftovers, removes the worktree, and keeps the branches.
+- **Models:** `auto` is a role value, never a CLI flag. Employees launch with `launchModel(role.model, task.model)`; the boss maps `auto` to opus. Classification never runs inside `run()`.
 
 ## Cross-platform rules
 
