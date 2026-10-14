@@ -86,7 +86,8 @@
 }
 
 .chat { position: relative; }
-.jump { position: absolute; left: 50%; transform: translateX(-50%); bottom: 150px; background: var(--panel-2); box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+.messages-wrap { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
+.jump { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; background: var(--panel-2); box-shadow: 0 4px 12px rgba(0,0,0,.4); }
 .msg.thinking { color: var(--muted); display: flex; align-items: center; gap: 8px; padding: 4px 2px; }
 .dots { display: inline-flex; gap: 3px; }
 .dots span { width: 6px; height: 6px; background: var(--amber); animation: ao-blink 1.2s steps(2) infinite; }
@@ -115,3 +116,6 @@
 .mode-option[aria-checked='true'] { border-color: var(--amber); background: #262939; }
 .overlay { position: fixed; inset: 0; z-index: 50; overflow-y: auto; background: rgba(10, 11, 18, .7); }
 .overlay .onboarding-wrap { background: transparent; }
+
+.new-marker { display: flex; align-items: center; gap: 10px; color: var(--red-soft); font-size: 12px; font-weight: 600; scroll-margin-top: 12px; }
+.new-marker::before, .new-marker::after { content: ''; flex: 1; height: 1px; background: var(--red-soft); opacity: .6; }

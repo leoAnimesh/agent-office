@@ -48,6 +48,44 @@ test('first launch → open a repo → chat with the boss → hire → see the d
   }
 });
 
+test('marks new messages that arrive while you are scrolled up', async () => {
+  const repo = await makeRepo();
+  const { app, userData } = await launch({ AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: repo });
+  try {
+    const win = await app.firstWindow();
+    await win.setViewportSize({ width: 1400, height: 760 });
+    await win.getByRole('button', { name: 'Browse' }).click();
+    await win.getByRole('button', { name: /Open the office/ }).click();
+    await expect(win.getByRole('button', { name: /^Max, Boss/ })).toBeVisible();
+    const log = win.getByRole('log', { name: 'Conversation with the boss' });
+    for (let i = 1; i <= 6; i++) {
+      await win.evaluate((t) => window.agentOffice.sendToBoss(t), `filler message number ${i} with enough words to take some space in the chat`);
+      await expect(log.locator('.msg.boss', { hasText: `number ${i} ` })).toBeVisible();
+    }
+    await log.evaluate((el) => { el.scrollTop = 0; el.dispatchEvent(new Event('scroll')); });
+
+    // Arrives without the composer, so nothing forces a scroll: you are still reading older messages.
+    await win.evaluate(() => window.agentOffice.sendToBoss('ping while you are away'));
+    const jump = win.getByRole('button', { name: /new messages?/ });
+    await expect(jump).toHaveText('↓ 2 new messages');
+    const marker = win.getByRole('separator', { name: 'New messages' });
+    await expect(marker).toBeAttached();
+    await expect(marker).not.toBeInViewport();
+
+    await jump.click();
+    await expect(marker).toBeInViewport();
+    await expect(jump).toHaveCount(0);
+
+    await win.getByLabel('Message the boss').fill('thanks');
+    await win.getByLabel('Message the boss').press('Enter');
+    await expect(marker).toHaveCount(0);
+  } finally {
+    await app.close();
+    await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});
+
 test('starts a brand-new project from scratch', async () => {
   const parent = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-e2e-new-'));
   const { app, userData } = await launch({ AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: parent });

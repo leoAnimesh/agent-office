@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { Agent, ChatEntry, Look, MergeRequest } from '../../../shared/types';
 import { describeToolCall } from '../chat/describe';
 import { Markdown } from '../chat/Markdown';
+import { NO_UNSEEN, onMessages, onReachedBottom, onSent, type Unseen } from '../chat/unseen';
 import { Avatar } from '../sprites/Avatar';
 import { STATUS_COLORS, STATUS_LABEL } from '../sprites/sprite';
 
@@ -26,26 +27,43 @@ interface Props { chat: ChatEntry[]; merges: MergeRequest[]; boss: Agent | undef
 export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy, onError }: Props) {
   const [draft, setDraft] = useState('');
   const box = useRef<HTMLDivElement>(null);
-  // Follow new output only while the reader is at the bottom; otherwise offer a jump button.
+  // Follow new output only while the reader is at the bottom. Otherwise mark where the unseen
+  // messages start and offer a button that jumps to that marker.
   const [atBottom, setAtBottom] = useState(true);
-  const [unseen, setUnseen] = useState(false);
-  const toBottom = () => { const el = box.current; if (el) el.scrollTop = el.scrollHeight; setAtBottom(true); setUnseen(false); };
+  const [unseen, setUnseen] = useState<Unseen>(NO_UNSEEN);
+  const prevCount = useRef(chat.length);
+  const marker = useRef<HTMLDivElement>(null);
+  const scrollToEnd = () => { const el = box.current; if (el) el.scrollTop = el.scrollHeight; };
+  const toBottom = () => { scrollToEnd(); setAtBottom(true); setUnseen(onReachedBottom); };
+  const jump = () => {
+    if (unseen.count > 0 && marker.current) {
+      marker.current.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      setUnseen((u) => ({ ...u, count: 0 }));
+    } else toBottom();
+  };
   const onScroll = () => {
     const el = box.current;
     if (!el) return;
     const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     setAtBottom(near);
-    if (near) setUnseen(false);
+    if (near) setUnseen(onReachedBottom);
   };
   useEffect(() => {
-    if (atBottom) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; } else setUnseen(true);
+    setUnseen((u) => onMessages(u, { prevCount: prevCount.current, count: chat.length, atBottom }));
+    prevCount.current = chat.length;
+    if (atBottom) scrollToEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.length, merges.length, stream, busy]);
+  }, [chat.length]);
+  useEffect(() => {
+    if (atBottom) scrollToEnd();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [merges.length, stream, busy]);
 
   const send = async () => {
     const text = draft.trim();
     if (!text) return;
     setDraft('');
+    setUnseen(onSent);
     toBottom();
     try { await window.agentOffice.sendToBoss(text); } catch (e) { onError(String(e)); setDraft(text); }
   };
@@ -64,9 +82,17 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy
         </div>
         <span className="status-chip" style={{ background: STATUS_COLORS[status].dot }}>{STATUS_LABEL[status]}</span>
       </div>
+      <div className="messages-wrap">
       <div className="messages" ref={box} onScroll={onScroll} role="log" aria-label="Conversation with the boss">
         {chat.length === 0 && <p className="muted">Tell the boss what to build. It will hire people and hand out tasks.</p>}
-        {chat.map((e, i) => <Entry key={i} e={e} />)}
+        {chat.map((e, i) => (
+          <Fragment key={i}>
+            {unseen.markerIndex === i && (
+              <div ref={marker} className="new-marker" role="separator" aria-label="New messages"><span>New messages</span></div>
+            )}
+            <Entry e={e} />
+          </Fragment>
+        ))}
         {stream && (
           <div className="msg boss streaming" aria-busy="true">
             <Markdown text={stream} />
@@ -91,7 +117,12 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy
           </div>
         ))}
       </div>
-      {unseen && <button type="button" className="btn small jump" onClick={toBottom}>↓ New messages</button>}
+      {(unseen.count > 0 || (!atBottom && (stream || busy))) && (
+        <button type="button" className="btn small jump" onClick={jump}>
+          ↓ {unseen.count > 0 ? `${unseen.count} new message${unseen.count === 1 ? '' : 's'}` : `${name} is replying`}
+        </button>
+      )}
+      </div>
       <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
         <label htmlFor="boss-msg" className="small muted">Message the boss</label>
         <textarea id="boss-msg" className="input" rows={3} value={draft} placeholder="Describe what the team should build…"
