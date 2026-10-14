@@ -57,6 +57,17 @@ export function parseNumstat(out: string): DiffStat[] {
     });
 }
 
+export type MergeResult =
+  | { status: 'merged'; commit: string }
+  | { status: 'conflict'; files: string[] }
+  | { status: 'blocked'; reason: string };
+
+/** Use the user's git identity; fall back to an AgentOffice one so commits never fail. */
+export async function identityArgs(cwd: string): Promise<string[]> {
+  const has = await git(cwd, ['config', 'user.email']).then(Boolean, () => false);
+  return has ? [] : ['-c', 'user.name=AgentOffice', '-c', 'user.email=agentoffice@localhost'];
+}
+
 export class WorktreeManager {
   constructor(readonly repoRoot: string) {}
 
@@ -103,14 +114,32 @@ export class WorktreeManager {
   async commitAll(worktree: string, message: string): Promise<boolean> {
     if (!(await git(worktree, ['status', '--porcelain']))) return false;
     await git(worktree, ['add', '-A']);
-    const hasIdentity = await git(worktree, ['config', 'user.email']).then(Boolean, () => false);
-    const identity = hasIdentity ? [] : ['-c', 'user.name=AgentOffice', '-c', 'user.email=agentoffice@localhost'];
-    await git(worktree, [...identity, 'commit', '-q', '-m', message]);
+    await git(worktree, [...(await identityArgs(worktree)), 'commit', '-q', '-m', message]);
     return true;
   }
 
   async diffStat(base: string, branch: string): Promise<DiffStat[]> {
     return parseNumstat(await git(this.repoRoot, ['diff', '--numstat', `${base}...${branch}`]));
+  }
+
+  async merge(base: string, branch: string, message: string): Promise<MergeResult> {
+    await this.ensureExcluded();
+    const head = await git(this.repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    if (head !== base) {
+      return { status: 'blocked', reason: `The project folder is on branch ${head}. Switch it back to ${base} to merge.` };
+    }
+    if (await git(this.repoRoot, ['status', '--porcelain'])) {
+      return { status: 'blocked', reason: 'The project folder has uncommitted changes. Commit or stash them, then ask again.' };
+    }
+    try {
+      await git(this.repoRoot, [...(await identityArgs(this.repoRoot)), 'merge', '--no-ff', '-m', message, branch]);
+      return { status: 'merged', commit: await git(this.repoRoot, ['rev-parse', 'HEAD']) };
+    } catch (err) {
+      const files = (await git(this.repoRoot, ['diff', '--name-only', '--diff-filter=U']).catch(() => '')).split(/\r?\n/).filter(Boolean);
+      await git(this.repoRoot, ['merge', '--abort']).catch(() => undefined);
+      if (files.length > 0) return { status: 'conflict', files };
+      throw err;
+    }
   }
 
   async remove(agentName: string): Promise<void> {
