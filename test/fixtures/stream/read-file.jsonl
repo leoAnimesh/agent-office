@@ -1,0 +1,9 @@
+{"type":"system","subtype":"hook_started","hook_id":"h1","hook_name":"SessionStart:startup","hook_event":"SessionStart","session_id":"sess-fixture-1","uuid":"u0"}
+{"type":"system","subtype":"init","session_id":"sess-fixture-1","model":"claude-haiku-5-5","cwd":"/repo","tools":["Read"],"permissionMode":"acceptEdits","uuid":"u1"}
+{"type":"system","subtype":"thinking_tokens","estimated_tokens":40,"estimated_tokens_delta":40,"session_id":"sess-fixture-1","uuid":"u2"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"","signature":"sig"}]},"session_id":"sess-fixture-1","uuid":"u3"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"/repo/src/a.txt"}}]},"session_id":"sess-fixture-1","uuid":"u4"}
+{"type":"rate_limit_event","rate_limit_info":{},"session_id":"sess-fixture-1","uuid":"u5"}
+{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_1","type":"tool_result","content":"1\thello\n2\t"}]},"session_id":"sess-fixture-1","uuid":"u6"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"DONE"}]},"session_id":"sess-fixture-1","uuid":"u7"}
+{"type":"result","subtype":"success","is_error":false,"result":"DONE","session_id":"sess-fixture-1","num_turns":2,"total_cost_usd":0.0057,"duration_ms":5587,"uuid":"u8"}
