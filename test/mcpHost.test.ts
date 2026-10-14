@@ -64,6 +64,6 @@ describe('McpHost', () => {
     const cfg = JSON.parse(await fs.readFile(file, 'utf8'));
     expect(cfg).toEqual({ mcpServers: { agentoffice: { type: 'http', url: host.url, headers: { Authorization: `Bearer ${host.token}` } } } });
     if (process.platform !== 'win32') expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
-    await fs.rm(dir, { recursive: true, force: true });
+    await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   });
 });

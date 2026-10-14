@@ -7,7 +7,7 @@ import { makeRepo } from './helpers/repo';
 let repo: string;
 let wm: WorktreeManager;
 beforeEach(async () => { repo = await makeRepo(); wm = new WorktreeManager(repo); });
-afterEach(async () => { await fs.rm(repo, { recursive: true, force: true }); });
+afterEach(async () => { await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); });
 
 async function workOn(branch: string, file: string, content: string): Promise<void> {
   const wt = await wm.prepare('Pixel', branch, 'main');

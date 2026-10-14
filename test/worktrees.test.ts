@@ -7,7 +7,7 @@ import { makeRepo } from './helpers/repo';
 
 let repo: string;
 beforeEach(async () => { repo = await makeRepo(); });
-afterEach(async () => { await fs.rm(repo, { recursive: true, force: true }); });
+afterEach(async () => { await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); });
 
 describe('inspectRepo', () => {
   it('returns the root and current branch, even from a subfolder', async () => {
@@ -20,14 +20,14 @@ describe('inspectRepo', () => {
   it('rejects a folder that is not a git repo', async () => {
     const plain = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-plain-'));
     await expect(inspectRepo(plain)).rejects.toThrow(/is not a git repository/);
-    await fs.rm(plain, { recursive: true, force: true });
+    await fs.rm(plain, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   });
 
   it('rejects a repo with no commits', async () => {
     const empty = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-empty-'));
     await git(empty, ['init', '-q']);
     await expect(inspectRepo(empty)).rejects.toThrow(/no commits yet/);
-    await fs.rm(empty, { recursive: true, force: true });
+    await fs.rm(empty, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   });
 });
 
@@ -75,7 +75,7 @@ describe('WorktreeManager', () => {
   it('recreates a worktree whose folder was deleted by hand', async () => {
     const wm = new WorktreeManager(repo);
     const wt = await wm.prepare('Quinn', 'ao/quinn/a', 'main');
-    await fs.rm(wt, { recursive: true, force: true });
+    await fs.rm(wt, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     const again = await wm.prepare('Quinn', 'ao/quinn/a', 'main');
     expect(existsSync(path.join(again, 'README.md'))).toBe(true);
   });

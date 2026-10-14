@@ -54,8 +54,8 @@ export async function harness(): Promise<Harness> {
     },
     async cleanup() {
       for (const m of managers) await m.shutdown();
-      await fs.rm(repo, { recursive: true, force: true });
-      await fs.rm(data, { recursive: true, force: true });
+      await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      await fs.rm(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     },
   };
 }

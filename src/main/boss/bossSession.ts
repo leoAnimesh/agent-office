@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { ChatEntry, Project, RunnerEvent, Task } from '../../shared/types';
 import type { AgentManager, ManagerEvent } from '../agents/agentManager';
 import { renderPrompt } from '../agents/prompt';
-import type { AgentRunner, ClaudeRunnerOptions } from '../claude/runner';
+import { waitForExit, type AgentRunner, type ClaudeRunnerOptions } from '../claude/runner';
 import type { ProjectStore } from '../store/projectStore';
 import type { RoleStore } from '../store/roleStore';
 import type { SkillStore } from '../store/skillStore';
@@ -76,8 +76,14 @@ export class BossSession extends EventEmitter {
     this.stopping = true;
     this.detach?.();
     this.detach = null;
-    this.runner?.stop();
     await this.delivery;
+    const runner = this.runner;
+    if (runner) {
+      const exited = waitForExit(runner);
+      runner.stop();
+      await exited;
+    }
+    await this.events;
   }
 
   private deliver(text: string): Promise<void> {

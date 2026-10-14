@@ -26,8 +26,8 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await svc.close();
-  await fs.rm(repo, { recursive: true, force: true });
-  await fs.rm(data, { recursive: true, force: true });
+  await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  await fs.rm(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
 
 const until = (pred: (e: WorkspaceEvent) => boolean, ms = 20000) => new Promise<WorkspaceEvent>((resolve, reject) => {

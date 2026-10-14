@@ -7,7 +7,7 @@ import { FAKE_CLAUDE, FIXTURE, collect, fakeRunner, waitForEvent } from './helpe
 
 let dir: string;
 beforeEach(async () => { dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-run-')); });
-afterEach(async () => { await fs.rm(dir, { recursive: true, force: true }); });
+afterEach(async () => { await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); });
 
 describe('ClaudeRunner', () => {
   it('streams parsed events for a turn and exits cleanly when input ends', async () => {

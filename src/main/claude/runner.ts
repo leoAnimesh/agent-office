@@ -17,6 +17,17 @@ export interface AgentRunner {
   off(event: 'event', listener: (ev: RunnerEvent) => void): this;
 }
 
+/** Resolve once the runner reports `exit` (or right away if it is not running), giving up after `ms`. */
+export function waitForExit(runner: AgentRunner, ms = 8000): Promise<void> {
+  if (!runner.running) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => { clearTimeout(timer); runner.off('event', listener); resolve(); };
+    const listener = (ev: RunnerEvent) => { if (ev.type === 'exit') done(); };
+    const timer = setTimeout(done, ms);
+    runner.on('event', listener);
+  });
+}
+
 export interface ClaudeRunnerOptions {
   bin: string;
   /** Extra args placed before the claude flags (used to run a .mjs through node in tests). */

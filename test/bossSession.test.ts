@@ -80,6 +80,23 @@ describe('BossSession', () => {
     await boss.stop();
   });
 
+  it('stop() returns only after the boss process has exited', async () => {
+    const env = await h.make();
+    await env.manager.createBoss('Max');
+    let runner: ClaudeRunner | null = null;
+    h.fakeEnv.FAKE_CLAUDE_HANG = '1';
+    const boss = new BossSession({
+      project: env.project, manager: env.manager, roles: env.roles, skills: env.skills, store: env.store,
+      createRunner: (o) => (runner = new ClaudeRunner({ ...o, bin: process.execPath, binArgs: [FAKE_CLAUDE], env: { ...process.env, ...h.fakeEnv } })),
+      claudeBin: 'claude', promptDir: h.paths.promptDir, mcpConfigPath: path.join(h.data, 'mcp.json'), isolateUserSettings: true,
+    });
+    boss.start();
+    await boss.send('hang please');
+    await boss.stop();
+    expect(runner).not.toBeNull();
+    expect(runner!.running).toBe(false);
+  });
+
   it('keeps reports in the chat', async () => {
     const { boss, chat } = await setup();
     await boss.report('Two of three tasks done');

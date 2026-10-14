@@ -35,8 +35,8 @@ describe.skipIf(!process.env.AO_REAL_CLAUDE)('real Claude Code end-to-end', () =
       expect((await fs.readFile(path.join(repo, 'hello.txt'), 'utf8')).trim()).toBe('hi');
     } finally {
       await svc.close();
-      await fs.rm(repo, { recursive: true, force: true });
-      await fs.rm(data, { recursive: true, force: true });
+      await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      await fs.rm(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     }
   }, 10 * 60_000);
 });

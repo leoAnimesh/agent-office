@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { Agent, Project, Role, RunnerEvent, Task, TaskStatus } from '../../shared/types';
-import type { AgentRunner, ClaudeRunnerOptions } from '../claude/runner';
+import { waitForExit, type AgentRunner, type ClaudeRunnerOptions } from '../claude/runner';
 import { reduceStatus } from '../claude/status';
 import { WorktreeManager, git, slugify, type MergeResult } from '../git/worktrees';
 import type { ProjectStore } from '../store/projectStore';
@@ -80,7 +80,11 @@ export class AgentManager extends EventEmitter {
   idle(): Promise<void> { return this.chain; }
 
   async shutdown(): Promise<void> {
-    for (const { runner } of this.live.values()) runner.stop();
+    // Wait for the processes to really exit: Windows keeps their working folders locked until then.
+    const runners = [...this.live.values()].map((l) => l.runner);
+    const exits = runners.map((r) => waitForExit(r));
+    for (const r of runners) r.stop();
+    await Promise.all(exits);
     await this.chain;
   }
 

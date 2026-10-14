@@ -56,6 +56,19 @@ describe('AgentManager (boss support)', () => {
     expect(await manager.merge('T-101')).toMatchObject({ status: 'not_ready' });
   });
 
+  it('shutdown waits until running sessions have exited', async () => {
+    const { manager } = await h.make();
+    await manager.hire('frontend');
+    h.fakeEnv.FAKE_CLAUDE_HANG = '1';
+    const seen: string[] = [];
+    manager.on('event', (e) => { if (e.type === 'agent-event') seen.push(e.event.type); });
+    const started = waitFor(manager, (e) => e.type === 'agent-event' && e.event.type === 'init');
+    await manager.createTask({ assignee: 'Pixel', title: 'a', brief: 'a', createdBy: 'boss' });
+    await started;
+    await manager.shutdown();
+    expect(seen).toContain('exit');
+  });
+
   it('tracks the boss session id and live status', async () => {
     const { manager } = await h.make();
     const boss = await manager.createBoss('Max');
