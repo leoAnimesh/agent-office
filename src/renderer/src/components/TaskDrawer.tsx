@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Role, Task, WorkspaceSnapshot } from '../../../shared/types';
 import { FileChanges } from '../chat/fileChanges';
 import { Markdown } from '../chat/Markdown';
@@ -6,7 +6,7 @@ import { Avatar } from '../sprites/Avatar';
 import { lookFor } from '../sprites/sprite';
 import { cardMeta } from '../tasks/board';
 import { chipDetail, modelChip } from '../tasks/modelChip';
-import { fileTotals, taskActions } from '../tasks/taskDetail';
+import { canReassign, fileTotals, queueNeighbours, taskActions } from '../tasks/taskDetail';
 
 interface Props { task: Task; ws: WorkspaceSnapshot; roles: Role[]; onClose: () => void; onOpenAgent: (id: string) => void; onError: (m: string) => void }
 
@@ -26,6 +26,9 @@ export function TaskDrawer({ task, ws, roles, onClose, onOpenAgent, onError }: P
   const chip = modelChip(task);
   const totals = fileTotals(task.diffStat);
   const act = (fn: () => Promise<void>) => () => { fn().catch((e: unknown) => onError(String(e))); };
+  const nb = queueNeighbours(task, ws.tasks);
+  const others = ws.agents.filter((a) => a.kind === 'employee' && a.id !== task.assigneeId);
+  const [assignTo, setAssignTo] = useState(others[0]?.name ?? '');
   const copyBranch = () => { navigator.clipboard.writeText(task.branch).catch((e: unknown) => onError(`Could not copy: ${String(e)}`)); };
 
   return (
@@ -75,11 +78,33 @@ export function TaskDrawer({ task, ws, roles, onClose, onOpenAgent, onError }: P
           <div><dt>Updated</dt><dd>{when(task.updatedAt)}</dd></div>
         </dl>
 
+        {task.status === 'queued' && (
+          // The keyboard way to do what dragging does on the board.
+          <section className="drawer-section" aria-label="Queue">
+            <h3>Queue</h3>
+            <div className="row">
+              <button type="button" className="btn small" disabled={!nb.canUp} onClick={act(() => window.agentOffice.moveTask(task.id, nb.up))}>Move up</button>
+              <button type="button" className="btn small" disabled={!nb.canDown} onClick={act(() => window.agentOffice.moveTask(task.id, nb.down))}>Move down</button>
+            </div>
+            {canReassign(task) && others.length > 0 && (
+              <div className="row">
+                <label htmlFor="drawer-assign" className="small">Assign to</label>
+                <select id="drawer-assign" className="input" value={assignTo} onChange={(e) => setAssignTo(e.target.value)}>
+                  {others.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}
+                </select>
+                <button type="button" className="btn small" onClick={act(() => window.agentOffice.reassignTask(task.id, assignTo))}>Assign</button>
+              </div>
+            )}
+          </section>
+        )}
+
         {taskActions(task).length > 0 && (
           <div className="row drawer-actions">
-            {taskActions(task).map((a) => a === 'cancel'
-              ? <button key={a} type="button" className="btn small danger" onClick={act(() => window.agentOffice.cancelTask(task.id))}>Cancel task</button>
-              : <button key={a} type="button" className="btn small" onClick={act(() => (a === 'pause' ? window.agentOffice.pauseTask(task.id) : window.agentOffice.resumeTask(task.id)))}>{a === 'pause' ? 'Pause' : 'Resume'}</button>)}
+            {taskActions(task).map((a) => {
+              if (a === 'merge') return <button key={a} type="button" className="btn small primary" onClick={act(() => window.agentOffice.mergeNow(task.id))}>Merge now</button>;
+              if (a === 'cancel') return <button key={a} type="button" className="btn small danger" onClick={act(() => window.agentOffice.cancelTask(task.id))}>Cancel task</button>;
+              return <button key={a} type="button" className="btn small" onClick={act(() => (a === 'pause' ? window.agentOffice.pauseTask(task.id) : window.agentOffice.resumeTask(task.id)))}>{a === 'pause' ? 'Pause' : 'Resume'}</button>;
+            })}
           </div>
         )}
       </div>
