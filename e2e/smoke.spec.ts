@@ -39,6 +39,25 @@ test('first launch → open a repo → chat with the boss → hire → see the d
     await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Team' }).click();
     await win.getByRole('button', { name: /^Frontend Engineer/ }).click();
     await win.getByRole('button', { name: 'Hire Frontend Engineer' }).click();
+
+    // Each team member's actions sit behind a ⋯ menu.
+    const options = win.getByRole('button', { name: 'Options for Pixel' });
+    await options.click();
+    const menu = win.getByRole('menu', { name: 'Options for Pixel' });
+    await expect(menu.getByRole('menuitem')).toHaveText(['Open details', 'Fire…']);
+    await expect(menu.getByRole('menuitem', { name: 'Open details' })).toBeFocused();
+    await win.keyboard.press('ArrowDown');
+    await expect(menu.getByRole('menuitem', { name: 'Fire…' })).toBeFocused();
+    await win.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await expect(options).toBeFocused();
+    await options.click();
+    await menu.getByRole('menuitem', { name: 'Fire…' }).click();
+    await win.getByRole('button', { name: 'Keep' }).click();
+    await win.getByRole('button', { name: 'Options for Max' }).click();
+    await expect(win.getByRole('menu', { name: 'Options for Max' }).getByRole('menuitem')).toHaveText(['Open details']);
+    await win.keyboard.press('Escape');
+
     await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Office' }).click();
     await expect(win.getByRole('button', { name: /^Pixel, Frontend Engineer/ })).toBeVisible();
   } finally {
@@ -163,7 +182,7 @@ test('task cards open a details drawer', async () => {
     await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Team' }).click();
     await win.getByRole('button', { name: /^Frontend Engineer/ }).click();
     await win.getByRole('button', { name: 'Hire Frontend Engineer' }).click();
-    await expect(win.getByRole('button', { name: /^Open$/ }).nth(1)).toBeVisible();
+    await expect(win.getByRole('button', { name: 'Options for Pixel' })).toBeVisible();
     await app.close();
 
     // Seed a reviewed task with a markdown result, then reopen the app on the same data.
