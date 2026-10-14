@@ -59,7 +59,11 @@ function statusFor(settings: AppSettings): AppStatus {
 }
 
 function registerIpc(svc: ProjectService, settings: SettingsStore, status: { current: AppStatus }): void {
-  ipcMain.handle(IPC.appStatus, () => status.current);
+  ipcMain.handle(IPC.appStatus, async () => {
+    status.current = statusFor(await settings.get());
+    if (status.current.claude) svc.configure({ claudeBin: status.current.claude.path });
+    return status.current;
+  });
   ipcMain.handle(IPC.pickFolder, async () => {
     if (process.env.AO_E2E_PICK_FOLDER) return process.env.AO_E2E_PICK_FOLDER;
     const r = win ? await dialog.showOpenDialog(win, { properties: ['openDirectory'] }) : await dialog.showOpenDialog({ properties: ['openDirectory'] });

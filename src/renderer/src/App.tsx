@@ -4,7 +4,9 @@ import { AgentDetailView } from './components/AgentDetailView';
 import { BossChat } from './components/BossChat';
 import { Header } from './components/Header';
 import { OfficeView } from './components/OfficeView';
+import { NoClaude } from './components/NoClaude';
 import { Onboarding } from './components/Onboarding';
+import { SettingsView } from './components/SettingsView';
 import { Sidebar } from './components/Sidebar';
 import { TaskBoard } from './components/TaskBoard';
 import { TeamView } from './components/TeamView';
@@ -29,16 +31,9 @@ export function App() {
   }, [refreshRoles]);
 
   if (!status) return <main className="boot"><p>Looking for Claude Code…</p></main>;
-  if (!status.claude) {
-    return (
-      <main className="boot">
-        <h1 className="pixel">AgentOffice</h1>
-        <p className="bad">Claude Code was not found on this computer. Install it, sign in with <code>claude</code> once in a terminal, then restart AgentOffice.</p>
-      </main>
-    );
-  }
+  if (!status.claude) return <NoClaude onFound={setStatus} />;
   const ws = state.ws;
-  if (!ws) return <Onboarding onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} />;
+  if (!ws) return <Onboarding status={status} onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} />;
 
   const go = (view: View) => dispatch({ type: 'navigate', view });
   const boss = ws.agents.find((a) => a.kind === 'boss');
@@ -52,7 +47,7 @@ export function App() {
       case 'agent': return <AgentDetailView ws={ws} roles={state.roles} agentId={state.view.agentId} logs={state.logs[state.view.agentId] ?? []} onBack={() => go({ name: 'office' })} onLogs={onLogs} onError={onError} />;
       case 'team': return <TeamView ws={ws} roles={state.roles} onRolesChanged={refreshRoles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onError={onError} />;
       case 'tasks': return <TaskBoard ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onNewTask={() => { go({ name: 'office' }); setTimeout(() => document.getElementById('boss-msg')?.focus(), 0); }} onError={onError} />;
-      default: return <p className="muted">This view arrives in a later step.</p>;
+      case 'settings': return <SettingsView ws={ws} onStatus={setStatus} onClosed={() => dispatch({ type: 'closed' })} onError={onError} />;
     }
   })();
 
