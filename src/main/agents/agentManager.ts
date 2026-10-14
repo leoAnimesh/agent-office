@@ -344,13 +344,17 @@ export class AgentManager extends EventEmitter {
   }
 
   private async finishTask(agent: Agent, task: Task, ok: boolean, text: string): Promise<void> {
-    this.setStatus(task, ok ? 'review' : 'needs_help', { resultSummary: text.trim() });
+    // Runs inside the serialized chain, so nothing else can finish this task meanwhile. Collect the
+    // changes first so the task never shows up as finished without its diff.
+    let summary = text.trim();
+    let diffStat = task.diffStat;
     try {
       if (agent.worktreePath) await this.d.worktrees.commitAll(agent.worktreePath, `${task.id}: ${task.title}\n\nCommitted by AgentOffice for ${agent.name}.`);
-      task.diffStat = await this.d.worktrees.diffStat(this.d.project.baseBranch, task.branch);
+      diffStat = await this.d.worktrees.diffStat(this.d.project.baseBranch, task.branch);
     } catch (e) {
-      task.resultSummary = `${task.resultSummary}\n(Could not read the changes: ${msg(e)})`;
+      summary = `${summary}\n(Could not read the changes: ${msg(e)})`;
     }
+    this.setStatus(task, ok ? 'review' : 'needs_help', { resultSummary: summary, diffStat });
     await this.saveTasks();
     this.emitEvent({ type: 'task-finished', task: { ...task }, agent: { ...agent } });
   }
