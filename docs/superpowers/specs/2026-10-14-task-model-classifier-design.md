@@ -49,7 +49,7 @@ model?: string;          // undefined while classifying
 modelPick?: ModelPick;
 ```
 
-Both fields are optional, so existing `tasks.json` files load unchanged. Old tasks with no `model` that are not `queued` never run again, so they need nothing; old `queued` ones are classified on load (§4.3).
+Both fields are optional, so existing `tasks.json` files load unchanged. Any `queued` task with no model — new, reloaded, or an old task that feedback reopened and that was then paused or re-queued — is classified by `pump()` (§4.3); a reopened old task runs on `launchModel(role.model)` until then.
 
 Role `model` accepts the literal `"auto"` (already a valid string under the current schema; the constant `AUTO_MODEL = 'auto'` lives in `shared/types.ts`).
 
