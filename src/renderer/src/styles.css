@@ -1,0 +1,4 @@
+:root { color-scheme: dark; }
+body { margin: 0; background: #14151f; color: #ece8df; font-family: system-ui, sans-serif; }
+.boot { padding: 48px; }
+.boot h1 { margin: 0 0 8px; }

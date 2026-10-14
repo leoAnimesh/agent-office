@@ -1,0 +1,34 @@
+{
+  "name": "agent-office",
+  "version": "0.1.0",
+  "description": "A pixel-art office where a boss Claude Code agent hires and delegates to a team of specialist agents.",
+  "main": "./out/main/index.js",
+  "author": "leoAnimesh <mondalarup808@gmail.com>",
+  "license": "MIT",
+  "repository": "github:leoAnimesh/agent-office",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "cross-spawn": "^7.0.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.7.2",
+    "electron-vite": "^5.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.7",
+    "vitest": "^5.0.4"
+  }
+}
