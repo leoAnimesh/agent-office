@@ -57,12 +57,16 @@ describe('makeIcon centring', () => {
   it('centres the art itself, not the grid', () => {
     const { at } = pixels(makeIcon());
     const isTile = (x: number, y: number) => at(x, y).slice(0, 3).join() === rgb(logo.tile).join() && at(x, y)[3] === 255;
-    const row = 780, col = 512; // the street row, and a column through the building
-    let left = 100; while (isTile(left, row)) left++;
-    let right = 923; while (isTile(right, row)) right--;
-    let top = 100; while (isTile(col, top)) top++;
-    let bottom = 923; while (isTile(col, bottom)) bottom--;
-    expect(Math.abs((left - 100) - (923 - right))).toBeLessThanOrEqual(1);
-    expect(Math.abs((top - 100) - (923 - bottom))).toBeLessThanOrEqual(30); // vertical: beacon top vs street bottom
+    const isArt = (x: number, y: number) => at(x, y)[3] === 255 && !isTile(x, y);
+    // Scan the inside of the tile (clear of its rounded corners) for the art's real edges.
+    let left = 1024, right = 0, top = 1024, bottom = 0;
+    for (let y = 200; y < 824; y += 2) for (let x = 120; x < 904; x += 2) {
+      if (!isArt(x, y)) continue;
+      left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = Math.max(bottom, y);
+    }
+    for (let y = 120; y < 200; y += 2) for (let x = 200; x < 824; x += 2) if (isArt(x, y)) { top = Math.min(top, y); }
+    for (let y = 824; y < 904; y += 2) for (let x = 200; x < 824; x += 2) if (isArt(x, y)) { bottom = Math.max(bottom, y); }
+    expect(Math.abs(left - (1022 - right))).toBeLessThanOrEqual(4);
+    expect(Math.abs(top - (1022 - bottom))).toBeLessThanOrEqual(4);
   });
 });
