@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { AppStatus, Project, WorkspaceSnapshot } from '../../../shared/types';
+import type { Project, WorkspaceSnapshot } from '../../../shared/types';
 import type { View } from '../state';
-import { claudeLabel } from '../layout/sidebarPref';
 import logo from '../../../shared/logo.json';
 
-interface Props { status: AppStatus; current: Project; view: View; collapsed: boolean; onToggle: () => void; onOpened: (ws: WorkspaceSnapshot) => void; onNewProject: () => void; onNavigate: (v: View) => void; onError: (m: string) => void }
+interface Props { current: Project; view: View; collapsed: boolean; onToggle: () => void; onOpened: (ws: WorkspaceSnapshot) => void; onNewProject: () => void; onNavigate: (v: View) => void; onError: (m: string) => void }
 
 /** The app logo, drawn from the same pixel grid as the app icon (src/shared/logo.json). */
 export function Logo({ size = 32 }: { size?: number }) {
@@ -21,9 +20,8 @@ export function Logo({ size = 32 }: { size?: number }) {
   );
 }
 
-function Icon({ name }: { name: 'roles' | 'settings' | 'plus' | 'collapse' | 'expand' }) {
+function Icon({ name }: { name: 'settings' | 'plus' | 'collapse' | 'expand' }) {
   const paths: Record<typeof name, string> = {
-    roles: 'M5 2h3v3H5zM10 3h2v2h-2zM3 7h7v2H3zM3 9h2v4H3zm5 0h2v4H8zM10 7h3v2h-3zm1 2h2v3h-2z',
     settings: 'M7 1h2v2H7zM7 13h2v2H7zM1 7h2v2H1zM13 7h2v2h-2zM3 3h2v2H3zM11 3h2v2h-2zM3 11h2v2H3zM11 11h2v2h-2zM5 5h6v6H5zm2 2v2h2V7z',
     plus: 'M7 2h2v12H7zM2 7h12v2H2z',
     collapse: 'M9 3h2v2H9zM7 5h2v2H7zM5 7h2v2H5zM7 9h2v2H7zM9 11h2v2H9z',
@@ -32,7 +30,7 @@ function Icon({ name }: { name: 'roles' | 'settings' | 'plus' | 'collapse' | 'ex
   return <svg width="16" height="16" viewBox="0 0 16 16" shapeRendering="crispEdges" aria-hidden="true" fill="currentColor" fillRule="evenodd"><path d={paths[name]} /></svg>;
 }
 
-export function Sidebar({ status, current, view, collapsed, onToggle, onOpened, onNewProject, onNavigate, onError }: Props) {
+export function Sidebar({ current, view, collapsed, onToggle, onOpened, onNewProject, onNavigate, onError }: Props) {
   const [projects, setProjects] = useState<Project[]>([]);
   useEffect(() => { window.agentOffice.listProjects().then(setProjects, () => setProjects([])); }, [current.id]);
 
@@ -40,7 +38,6 @@ export function Sidebar({ status, current, view, collapsed, onToggle, onOpened, 
     if (!repoPath) return;
     try { onOpened(await window.agentOffice.openProject(repoPath)); } catch (e) { onError(String(e)); }
   };
-  const claude = status.claude ? claudeLabel(status.claude) : null;
   // Collapsed, every item keeps its accessible name; the visible label becomes a tooltip.
   const tip = (label: string) => (collapsed ? { 'aria-label': label, title: label } : {});
 
@@ -65,21 +62,11 @@ export function Sidebar({ status, current, view, collapsed, onToggle, onOpened, 
           <Icon name="plus" />{!collapsed && <span className="side-label">New project</span>}
         </button>
       </div>
-      <div className="side-section">
-        {!collapsed && <div className="side-title">LIBRARY</div>}
-        <button type="button" className={view.name === 'team' ? 'side-item current' : 'side-item'} {...tip('Roles & skills')} onClick={() => onNavigate({ name: 'team' })}>
-          <Icon name="roles" />{!collapsed && <span className="side-label">Roles &amp; skills</span>}
-        </button>
-        <button type="button" className={view.name === 'settings' ? 'side-item current' : 'side-item'} {...tip('Settings')} onClick={() => onNavigate({ name: 'settings' })}>
-          <Icon name="settings" />{!collapsed && <span className="side-label">Settings</span>}
+      <div className="side-section side-bottom">
+        <button type="button" className={view.name === 'settings' ? 'side-item current' : 'side-item'} aria-current={view.name === 'settings' ? 'page' : undefined} {...tip('App settings')} onClick={() => onNavigate({ name: 'settings' })}>
+          <Icon name="settings" />{!collapsed && <span className="side-label">App settings</span>}
         </button>
       </div>
-      {claude && (
-        <div className="cli-card" title={claude.title}>
-          <span className="dot" style={{ background: 'var(--green)' }} aria-hidden="true" />
-          <span className={collapsed ? 'sr-only' : 'side-label'}>{collapsed ? claude.title : claude.text}</span>
-        </div>
-      )}
     </nav>
   );
 }

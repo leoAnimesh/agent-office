@@ -20,8 +20,6 @@
 .side-item:hover { background: #20222f; }
 .side-item.current { background: #262939; font-weight: 600; }
 .side-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cli-card { margin-top: auto; border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; min-width: 0; }
-.sidebar.collapsed .cli-card { padding: 10px; justify-content: center; }
 .main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 28px 0; }
 .header h1 { margin: 0; font-family: var(--font-pixel); font-size: 26px; overflow-wrap: anywhere; }
@@ -171,3 +169,5 @@
 .drawer-body > * { min-width: 0; }
 .drawer-md pre { max-width: 100%; overflow-x: auto; }
 .drawer-md code { overflow-wrap: anywhere; }
+.side-bottom { margin-top: auto; }
+.agent-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }

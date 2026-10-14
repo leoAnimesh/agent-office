@@ -1,13 +1,16 @@
-import type { Project } from '../../../shared/types';
+import type { AppStatus, Project } from '../../../shared/types';
+import { claudeLabel } from '../layout/sidebarPref';
 import type { View } from '../state';
 
-const TABS: { name: 'office' | 'tasks' | 'team'; label: string }[] = [
+const TABS: { name: 'office' | 'tasks' | 'team' | 'project-settings'; label: string }[] = [
   { name: 'office', label: 'Office' },
   { name: 'tasks', label: 'Tasks' },
   { name: 'team', label: 'Team' },
+  { name: 'project-settings', label: 'Settings' },
 ];
 
-export function Header({ project, view, openTasks, onNavigate }: { project: Project; view: View; openTasks: number; onNavigate: (v: View) => void }) {
+export function Header({ project, claude, view, openTasks, onNavigate }: { project: Project; claude: AppStatus['claude']; view: View; openTasks: number; onNavigate: (v: View) => void }) {
+  const agent = claude ? claudeLabel(claude) : null;
   return (
     <>
       <header className="header">
@@ -15,6 +18,10 @@ export function Header({ project, view, openTasks, onNavigate }: { project: Proj
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1>{project.name}</h1>
             <span className="chip">{project.baseBranch}</span>
+            {agent && (
+              // The coding agent this project runs on. Only Claude Code exists today; a picker comes with a second agent.
+              <span className="agent-badge" title={agent.title}><span className="dot" style={{ background: 'var(--green)' }} aria-hidden="true" />{agent.text}<span className="sr-only"> · connected</span></span>
+            )}
           </div>
           <div className="mono small muted">{project.repoPath}</div>
         </div>

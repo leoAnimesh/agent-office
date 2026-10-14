@@ -6,7 +6,8 @@ import { Header } from './components/Header';
 import { OfficeView } from './components/OfficeView';
 import { NoClaude } from './components/NoClaude';
 import { Onboarding } from './components/Onboarding';
-import { SettingsView } from './components/SettingsView';
+import { AppSettingsView } from './components/AppSettingsView';
+import { ProjectSettingsView } from './components/ProjectSettingsView';
 import { Sidebar } from './components/Sidebar';
 import { TaskBoard } from './components/TaskBoard';
 import { TeamView } from './components/TeamView';
@@ -55,20 +56,24 @@ export function App() {
       case 'agent': return <AgentDetailView ws={ws} roles={state.roles} agentId={state.view.agentId} logs={state.logs[state.view.agentId] ?? []} onBack={() => go({ name: 'office' })} onLogs={onLogs} onError={onError} />;
       case 'team': return <TeamView ws={ws} roles={state.roles} onRolesChanged={refreshRoles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onError={onError} />;
       case 'tasks': return <TaskBoard ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onNewTask={() => { go({ name: 'office' }); setTimeout(() => document.getElementById('boss-msg')?.focus(), 0); }} onError={onError} />;
-      case 'settings': return <SettingsView ws={ws} onStatus={setStatus} onClosed={() => dispatch({ type: 'closed' })} onError={onError} />;
+      case 'settings': return <AppSettingsView onStatus={setStatus} onError={onError} />;
+      case 'project-settings': return <ProjectSettingsView ws={ws} onClosed={() => dispatch({ type: 'closed' })} onError={onError} />;
     }
   })();
 
   return (
     <div className={collapsed ? 'app side-collapsed' : 'app'}>
-      <Sidebar status={status} current={ws.project} view={state.view} collapsed={collapsed} onToggle={toggleSidebar} onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} onNewProject={() => setNewProject(true)} onNavigate={go} onError={onError} />
+      <Sidebar current={ws.project} view={state.view} collapsed={collapsed} onToggle={toggleSidebar} onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} onNewProject={() => setNewProject(true)} onNavigate={go} onError={onError} />
       {newProject && (
         <div className="overlay" role="dialog" aria-modal="true" aria-label="New project">
           <Onboarding status={status} initialMode="create" onCancel={() => setNewProject(false)} onOpened={(snap) => { setNewProject(false); dispatch({ type: 'snapshot', ws: snap }); }} />
         </div>
       )}
       <div className="main">
-        <Header project={ws.project} view={state.view} openTasks={openTasks} onNavigate={go} />
+        {/* App settings are app-wide: no project header or tabs above them. */}
+        {state.view.name === 'settings'
+          ? <header className="header"><h1>App settings</h1></header>
+          : <Header project={ws.project} claude={status.claude} view={state.view} openTasks={openTasks} onNavigate={go} />}
         {state.errors.length > 0 && (
           <div className="errors" role="alert">
             {state.errors.map((m, i) => (

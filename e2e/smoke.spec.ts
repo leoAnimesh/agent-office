@@ -146,8 +146,15 @@ test('starts a brand-new project from scratch', async () => {
     // The sidebar collapses to an icon rail that keeps every item usable, and remembers it.
     await win.getByRole('button', { name: 'Collapse sidebar' }).click();
     await expect(win.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-expanded', 'false');
-    await win.getByRole('button', { name: 'Settings', exact: true }).click();
-    await expect(win.locator('.cli-card')).toHaveAttribute('title', /^Claude Code v\S+ · connected$/);
+    await win.getByRole('button', { name: 'App settings' }).click();
+    await expect(win.getByRole('heading', { name: 'App settings' })).toBeVisible();
+    await expect(win.getByRole('navigation', { name: 'Project views' })).toHaveCount(0);
+    await win.getByRole('button', { name: 'Recipe App' }).click();
+    await expect(win.locator('.agent-badge')).toHaveAttribute('title', /^Claude Code v\S+ · connected$/);
+    await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Settings' }).click();
+    await expect(win.getByRole('heading', { name: 'Close project' })).toBeVisible();
+    await expect(win.getByLabel(/Agents working at the same time/)).toBeVisible();
+    await expect(win.getByRole('heading', { name: 'App settings' })).toHaveCount(0);
     await win.reload();
     await expect(win.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
     await win.getByRole('button', { name: 'Expand sidebar' }).click();
