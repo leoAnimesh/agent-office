@@ -33,7 +33,7 @@
 .error-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; color: #ffd0ca; }
 .content { flex: 1; min-height: 0; display: flex; }
 .view { flex: 1; min-width: 0; overflow: auto; padding: 16px 28px 28px; }
-.chat-panel { width: 380px; flex: none; border-left: 1px solid var(--line); background: var(--panel); display: flex; min-height: 0; }
+.chat-panel { width: clamp(400px, 34vw, 560px); flex: none; border-left: 1px solid var(--line); background: var(--panel); display: flex; min-height: 0; }
 .status-strip { display: flex; flex-wrap: wrap; gap: 18px; padding: 0 0 12px; }
 .status-strip .item { display: flex; align-items: center; gap: 6px; }
 .status-strip .progress { margin-left: auto; }
@@ -90,7 +90,7 @@
 .step { display: flex; gap: 14px; }
 .step-badge { flex: 0 0 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-family: var(--font-pixel); font-size: 16px; background: #262939; color: var(--muted); }
 .step-badge.done { background: var(--green); color: #12240d; } .step-badge.active { background: var(--amber); color: var(--amber-ink); }
-@media (max-width: 1200px) { .chat-panel { width: 320px; } }
+@media (max-width: 1200px) { .chat-panel { width: 360px; } }
 @media (max-width: 1060px) {
   .content { flex-direction: column; }
   .chat-panel { width: auto; height: 45vh; border-left: 0; border-top: 1px solid var(--line); }
