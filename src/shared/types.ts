@@ -56,6 +56,8 @@ export interface Task {
   /** Model the task runs on; undefined while the classifier is still deciding. */
   model?: string;
   modelPick?: ModelPick;
+  /** Position in the queue set by the user; unset tasks come after, oldest first. */
+  order?: number;
   createdAt: string;
   updatedAt: string;
 }

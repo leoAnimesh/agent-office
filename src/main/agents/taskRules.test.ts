@@ -64,3 +64,25 @@ describe('runnableTasks', () => {
     expect(runnableTasks(tasks, new Set(), 4).map((x) => x.id)).toEqual(['X']);
   });
 });
+
+describe('runnableTasks order', () => {
+  it('starts ordered tasks first, lowest order first, then the rest oldest first', () => {
+    const tasks = [
+      t({ id: 'old', assigneeId: 'a1' }),
+      t({ id: 'second', assigneeId: 'a2', order: 2 }),
+      t({ id: 'first', assigneeId: 'a3', order: 1 }),
+      t({ id: 'newer', assigneeId: 'a4' }),
+    ];
+    expect(runnableTasks(tasks, new Set(), 4).map((x) => x.id)).toEqual(['first', 'second', 'old', 'newer']);
+    expect(runnableTasks(tasks, new Set(), 1).map((x) => x.id)).toEqual(['first']);
+  });
+
+  it('still skips held tasks and unmet dependencies, whatever their order', () => {
+    const tasks = [
+      t({ id: 'held', assigneeId: 'a1', order: 1, held: true }),
+      t({ id: 'blocked', assigneeId: 'a2', order: 2, dependsOn: ['nope'] }),
+      t({ id: 'free', assigneeId: 'a3', order: 3 }),
+    ];
+    expect(runnableTasks(tasks, new Set(), 4).map((x) => x.id)).toEqual(['free']);
+  });
+});

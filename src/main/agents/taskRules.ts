@@ -23,7 +23,7 @@ export function runnableTasks(tasks: Task[], busyAgentIds: ReadonlySet<string>, 
   let slots = maxConcurrent - tasks.filter((t) => t.status === 'working').length;
   const claimed = new Set(busyAgentIds);
   const picked: Task[] = [];
-  const queued = tasks.filter((t) => t.status === 'queued' && !t.held).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const queued = tasks.filter((t) => t.status === 'queued' && !t.held).sort(byQueueOrder);
   for (const t of queued) {
     if (slots <= 0) break;
     if (claimed.has(t.assigneeId)) continue;
@@ -34,4 +34,9 @@ export function runnableTasks(tasks: Task[], busyAgentIds: ReadonlySet<string>, 
     slots--;
   }
   return picked;
+}
+
+/** The user's queue order first (lower first), then tasks with no order, oldest first. */
+export function byQueueOrder(a: Task, b: Task): number {
+  return (a.order ?? Infinity) - (b.order ?? Infinity) || a.createdAt.localeCompare(b.createdAt);
 }

@@ -12,7 +12,7 @@ import type { RoleStore } from '../store/roleStore';
 import type { SkillStore } from '../store/skillStore';
 import { launchModel, type TaskClassifier } from './classifier';
 import { renderPrompt, taskMessage } from './prompt';
-import { assertTransition, runnableTasks } from './taskRules';
+import { assertTransition, byQueueOrder, runnableTasks } from './taskRules';
 
 export interface AgentManagerDeps {
   project: Project;
@@ -158,6 +158,9 @@ export class AgentManager extends EventEmitter {
         status: 'queued', held: false, attempts: 0, branch: `ao/${slugify(agent.name)}/${slugify(input.title, 'task')}-${id.toLowerCase()}`,
         dependsOn: input.dependsOn ?? [], createdAt: now, updatedAt: now,
       };
+      // Once the user has ordered the queue, new work goes to the end of it.
+      const ordered = this.taskList.filter((x) => x.status === 'queued' && x.order !== undefined);
+      if (ordered.length > 0) t.order = Math.max(...ordered.map((x) => x.order!)) + 1;
       const role = await this.d.roles.get(agent.roleId);
       if (role && role.model !== AUTO_MODEL) {
         t.model = role.model;
@@ -203,6 +206,27 @@ export class AgentManager extends EventEmitter {
       await this.saveAgents();
       this.live.get(agent.id)?.runner.stop();
     });
+  }
+
+  /** Puts a queued task right before `beforeId` in the queue (or last when null) and renumbers the queue. */
+  async moveTask(taskId: string, beforeId: string | null): Promise<void> {
+    await this.run(async () => {
+      const t = this.mustTask(taskId);
+      if (t.status !== 'queued') throw new UserError(`Task ${taskId} is not queued`);
+      if (beforeId === taskId) throw new UserError(`Task ${taskId} can't move before itself`);
+      const queue = this.taskList.filter((x) => x.status === 'queued' && x.id !== taskId).sort(byQueueOrder);
+      let at = queue.length;
+      if (beforeId !== null) {
+        at = queue.findIndex((x) => x.id === beforeId);
+        if (at < 0) throw new UserError(`Task ${beforeId} is not in the queue`);
+      }
+      queue.splice(at, 0, t);
+      queue.forEach((x, i) => { x.order = i + 1; });
+      t.updatedAt = this.now();
+      await this.saveTasks();
+      this.emitEvent({ type: 'tasks-changed' });
+    });
+    await this.pump();
   }
 
   async resumeTask(taskId: string): Promise<void> {
