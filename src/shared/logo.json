@@ -1,0 +1,33 @@
+{
+  "tile": "#1C1E2B",
+  "palette": {
+    "a": "#F5B942",
+    "s": "#8A90B0",
+    "R": "#7A82AD",
+    "L": "#5E6694",
+    "W": "#4A5175",
+    "A": "#F5B942",
+    "T": "#52D1BE",
+    "D": "#2A2D42",
+    "O": "#C9935C",
+    "G": "#2F9E8F"
+  },
+  "grid": [
+    "........a.......",
+    "........s.......",
+    "...RRRRRRRRRRR..",
+    "....LWWWWWWWW...",
+    "....LAWTWAWDW...",
+    "....LWWWWWWWW...",
+    "....LTWAWDWAW...",
+    "....LWWWWWWWW...",
+    "....LAWDWTWAW...",
+    "....LWWWWWWWW...",
+    "....LDWAWAWTW...",
+    "....LWWWWWWWW...",
+    "....LWWOOOWWW...",
+    "....LWWOOOWWW...",
+    "..GGGGGGGGGGGGG.",
+    "................"
+  ]
+}

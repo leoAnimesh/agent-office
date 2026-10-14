@@ -2,21 +2,21 @@ import { useEffect, useState } from 'react';
 import type { AppStatus, Project, WorkspaceSnapshot } from '../../../shared/types';
 import type { View } from '../state';
 import { claudeLabel } from '../layout/sidebarPref';
+import logo from '../../../shared/logo.json';
 
 interface Props { status: AppStatus; current: Project; view: View; collapsed: boolean; onToggle: () => void; onOpened: (ws: WorkspaceSnapshot) => void; onNewProject: () => void; onNavigate: (v: View) => void; onError: (m: string) => void }
 
-export function Logo() {
+/** The app logo, drawn from the same pixel grid as the app icon (src/shared/logo.json). */
+export function Logo({ size = 32 }: { size?: number }) {
+  const palette = logo.palette as Record<string, string>;
+  // Centre the art by its own bounds, like the app icon (an odd-width building can't centre on 16 cells).
+  const cells = logo.grid.flatMap((row, y) => [...row].map((c, x) => ({ c, x, y }))).filter((p) => p.c !== '.');
+  const span = (k: 'x' | 'y') => Math.min(...cells.map((p) => p[k])) + Math.max(...cells.map((p) => p[k])) + 1;
+  const dx = (16 - span('x')) / 2, dy = (16 - span('y')) / 2;
   return (
-    <svg width="30" height="30" viewBox="0 0 10 10" shapeRendering="crispEdges" aria-hidden="true">
-      <rect x="0" y="0" width="10" height="10" fill="#F5B942" />
-      <rect x="1" y="1" width="5" height="4" fill="#14151F" />
-      <rect x="2" y="2" width="3" height="1" fill="#52D1BE" />
-      <rect x="3" y="5" width="1" height="1" fill="#14151F" />
-      <rect x="1" y="6" width="8" height="1" fill="#8B5A34" />
-      <rect x="1" y="7" width="1" height="2" fill="#8B5A34" />
-      <rect x="8" y="7" width="1" height="2" fill="#8B5A34" />
-      <rect x="7" y="2" width="2" height="2" fill="#14151F" />
-      <rect x="7" y="4" width="2" height="2" fill="#2F9E8F" />
+    <svg width={size} height={size} viewBox="0 0 16 16" shapeRendering="crispEdges" aria-hidden="true">
+      <rect width="16" height="16" rx="3" fill={logo.tile} shapeRendering="geometricPrecision" />
+      <g transform={`translate(${dx} ${dy})`}>{cells.map(({ c, x, y }) => <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" fill={palette[c]} />)}</g>
     </svg>
   );
 }
