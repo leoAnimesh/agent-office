@@ -18,6 +18,7 @@ const clean = (m: string) => m.replace(/^Error: (Error invoking remote method '[
 export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [state, dispatch] = useReducer(reducer, initialState);
+  const [newProject, setNewProject] = useState(false);
   const onError = useCallback((m: string) => dispatch({ type: 'error', message: clean(m) }), []);
   const viewAgentId = state.view.name === 'agent' ? state.view.agentId : null;
   const onLogs = useCallback((entries: LogEntry[]) => { if (viewAgentId) dispatch({ type: 'logs-loaded', agentId: viewAgentId, entries }); }, [viewAgentId]);
@@ -57,7 +58,12 @@ export function App() {
 
   return (
     <div className="app">
-      <Sidebar status={status} current={ws.project} view={state.view} onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} onNavigate={go} onError={onError} />
+      <Sidebar status={status} current={ws.project} view={state.view} onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} onNewProject={() => setNewProject(true)} onNavigate={go} onError={onError} />
+      {newProject && (
+        <div className="overlay" role="dialog" aria-modal="true" aria-label="New project">
+          <Onboarding status={status} initialMode="create" onCancel={() => setNewProject(false)} onOpened={(snap) => { setNewProject(false); dispatch({ type: 'snapshot', ws: snap }); }} />
+        </div>
+      )}
       <div className="main">
         <Header project={ws.project} view={state.view} openTasks={openTasks} onNavigate={go} />
         {state.errors.length > 0 && (

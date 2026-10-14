@@ -14,6 +14,7 @@ import { RoleStore } from '../store/roleStore';
 import { SkillStore } from '../store/skillStore';
 import { parseOrThrow, projectPatchSchema, roleSchema, skillSchema } from '../store/validate';
 import { ApprovalBroker } from './approvalBroker';
+import { createRepo, type NewProjectInput } from './newProject';
 
 export interface ProjectServiceDeps {
   paths: DataPaths;
@@ -84,6 +85,15 @@ export class ProjectService extends EventEmitter {
   configure(o: { claudeBin?: string; isolateUserSettings?: boolean }): void {
     if (o.claudeBin) this.claudeBin = o.claudeBin;
     if (o.isolateUserSettings !== undefined) this.isolate = o.isolateUserSettings;
+  }
+
+  /** Start a project from scratch: new git repo, open it, and give the boss the brief as the first message. */
+  async create(input: NewProjectInput & OpenOptions): Promise<WorkspaceSnapshot> {
+    const dir = await createRepo(input);
+    await this.open(dir, input);
+    const brief = input.brief?.trim();
+    if (brief) await this.sendToBoss(brief);
+    return this.snapshot();
   }
 
   async open(repoPath: string, opts: OpenOptions = {}): Promise<WorkspaceSnapshot> {

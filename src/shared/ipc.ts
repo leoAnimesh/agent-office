@@ -1,4 +1,4 @@
-import type { Agent, AppSettings, AppStatus, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot } from './types';
+import type { Agent, AppSettings, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot } from './types';
 
 export const IPC = {
   appStatus: 'app:status',
@@ -6,6 +6,8 @@ export const IPC = {
   pickFolder: 'project:pick-folder',
   listProjects: 'project:list',
   openProject: 'project:open',
+  createProject: 'project:create',
+  defaultProjectsDir: 'project:default-dir',
   closeProject: 'project:close',
   updateProject: 'project:update',
   snapshot: 'project:snapshot',
@@ -34,6 +36,8 @@ export interface AgentOfficeApi {
   pickFolder(): Promise<string | null>;
   listProjects(): Promise<Project[]>;
   openProject(repoPath: string, opts?: OpenOptions): Promise<WorkspaceSnapshot>;
+  createProject(input: CreateProjectInput): Promise<WorkspaceSnapshot>;
+  defaultProjectsDir(): Promise<string>;
   closeProject(): Promise<void>;
   updateProject(patch: ProjectPatch): Promise<Project>;
   snapshot(): Promise<WorkspaceSnapshot | null>;

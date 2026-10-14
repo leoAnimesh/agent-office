@@ -109,3 +109,9 @@
 .md a { color: var(--amber); text-decoration: underline; }
 .md hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .msg.user .md code { background: rgba(0,0,0,.12); }
+
+.mode-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mode-option { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 12px 14px; border-radius: 8px; border: 2px solid var(--line); background: var(--panel-2); color: var(--text); min-height: 64px; }
+.mode-option[aria-checked='true'] { border-color: var(--amber); background: #262939; }
+.overlay { position: fixed; inset: 0; z-index: 50; overflow-y: auto; background: rgba(10, 11, 18, .7); }
+.overlay .onboarding-wrap { background: transparent; }

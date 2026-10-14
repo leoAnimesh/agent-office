@@ -88,6 +88,18 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
       bossCanHire: typeof o.bossCanHire === 'boolean' ? o.bossCanHire : undefined,
     });
   });
+  handle(IPC.createProject, (input: unknown) => {
+    const o = (typeof input === 'object' && input !== null ? input : {}) as Record<string, unknown>;
+    return svc.create({
+      parentDir: str(o.parentDir, 'location'),
+      name: str(o.name, 'project name').slice(0, 200),
+      brief: typeof o.brief === 'string' ? o.brief.slice(0, 20_000) : undefined,
+      bossName: typeof o.bossName === 'string' ? o.bossName.slice(0, 40) : undefined,
+      bossModel: typeof o.bossModel === 'string' ? o.bossModel.slice(0, 80) : undefined,
+      bossCanHire: typeof o.bossCanHire === 'boolean' ? o.bossCanHire : undefined,
+    });
+  });
+  handle(IPC.defaultProjectsDir, () => app.getPath('documents'));
   handle(IPC.closeProject, () => svc.close());
   handle(IPC.updateProject, (patch: unknown) => svc.updateProject(patch));
   handle(IPC.snapshot, () => (svc.current() ? svc.snapshot() : null));
