@@ -28,6 +28,9 @@ const api: AgentOfficeApi = {
   pauseTask: (id) => ipcRenderer.invoke(IPC.pauseTask, id),
   resumeTask: (id) => ipcRenderer.invoke(IPC.resumeTask, id),
   cancelTask: (id) => ipcRenderer.invoke(IPC.cancelTask, id),
+  moveTask: (id, beforeId) => ipcRenderer.invoke(IPC.moveTask, id, beforeId),
+  reassignTask: (id, agent) => ipcRenderer.invoke(IPC.reassignTask, id, agent),
+  mergeNow: (id) => ipcRenderer.invoke(IPC.mergeNow, id),
   answerMerge: (requestId, ok) => ipcRenderer.invoke(IPC.answerMerge, requestId, ok),
   onEvent: (cb) => {
     const listener = (_e: IpcRendererEvent, event: WorkspaceEvent) => cb(event);

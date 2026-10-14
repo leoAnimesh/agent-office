@@ -226,6 +226,27 @@ export class ProjectService extends EventEmitter {
   pauseTask(id: string): Promise<void> { return this.mustWs().manager.pauseTask(id); }
   resumeTask(id: string): Promise<void> { return this.mustWs().manager.resumeTask(id); }
   cancelTask(id: string): Promise<void> { return this.mustWs().manager.cancelTask(id); }
+  moveTask(id: string, beforeId: string | null): Promise<void> { return this.mustWs().manager.moveTask(id, beforeId); }
+
+  async reassignTask(id: string, agent: string): Promise<void> {
+    const ws = this.mustWs();
+    const t = await ws.manager.reassignTask(id, agent);
+    void ws.boss.notify(`The user handed ${id} to ${ws.manager.findAgent(t.assigneeId)?.name ?? agent}.`, id).catch(() => undefined);
+  }
+
+  /** The user merges from the board: they are the approver, so no approval card (a pending one is answered instead). */
+  async mergeNow(id: string): Promise<void> {
+    const ws = this.mustWs();
+    const pending = ws.broker.pending().find((r) => r.taskId === id);
+    if (pending) { ws.broker.answer(pending.requestId, true); return; }
+    const outcome = await ws.manager.merge(id);
+    const told = describeMerge(id, outcome);
+    if (outcome.status !== 'merged') {
+      void ws.boss.notify(`The user tried to merge ${id}. ${told}`, id).catch(() => undefined);
+      throw new Error(told);
+    }
+    void ws.boss.notify(`The user merged ${id}. ${told}`, id).catch(() => undefined);
+  }
 
   async answerMerge(requestId: string, ok: boolean): Promise<void> {
     if (!this.mustWs().broker.answer(requestId, ok)) throw new Error('That merge request is no longer pending');

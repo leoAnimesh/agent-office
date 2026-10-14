@@ -121,6 +121,9 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   handle(IPC.pauseTask, (id: unknown) => svc.pauseTask(str(id, 'task id')));
   handle(IPC.resumeTask, (id: unknown) => svc.resumeTask(str(id, 'task id')));
   handle(IPC.cancelTask, (id: unknown) => svc.cancelTask(str(id, 'task id')));
+  handle(IPC.moveTask, (id: unknown, beforeId: unknown) => svc.moveTask(str(id, 'task id'), beforeId === null ? null : str(beforeId, 'task id')));
+  handle(IPC.reassignTask, (id: unknown, agent: unknown) => svc.reassignTask(str(id, 'task id'), str(agent, 'agent')));
+  handle(IPC.mergeNow, (id: unknown) => svc.mergeNow(str(id, 'task id')));
   handle(IPC.answerMerge, (requestId: unknown, ok: unknown) => svc.answerMerge(str(requestId, 'request id'), ok === true));
   handle(IPC.getSettings, () => settings.get());
   handle(IPC.saveSettings, async (patch: unknown) => {
