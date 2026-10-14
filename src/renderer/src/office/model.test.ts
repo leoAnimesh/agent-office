@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { displayState, progress, splitTeam, statusCounts, whiteboard } from './model';
+import { displayState, progress, splitTeam, statusCounts } from './model';
 import type { Agent, Task } from '../../../shared/types';
 
 const agent = (over: Partial<Agent>): Agent => ({ id: 'a1', projectId: 'p', name: 'Pixel', roleId: 'frontend', kind: 'employee', status: 'idle', bubble: 'Idle', ...over });
@@ -19,26 +19,6 @@ describe('displayState', () => {
   it('passes live states through', () => {
     expect(displayState(agent({ status: 'working', bubble: 'Editing a.ts' }), [])).toEqual({ status: 'working', bubble: 'Editing a.ts' });
     expect(displayState(agent({}), [])).toEqual({ status: 'idle', bubble: 'Idle' });
-  });
-});
-
-describe('whiteboard', () => {
-  it('lists active work first with marks and owners, hiding cancelled tasks', () => {
-    const agents = [agent({})];
-    const lines = whiteboard([
-      task({ id: 'T-1', title: 'Done thing', status: 'done' }),
-      task({ id: 'T-2', title: 'Doing thing', status: 'working' }),
-      task({ id: 'T-3', title: 'Broken thing', status: 'needs_help' }),
-      task({ id: 'T-4', title: 'Gone', status: 'cancelled' }),
-      task({ id: 'T-5', title: 'Check me', status: 'review' }),
-    ], agents);
-    expect(lines.map((l) => l.mark)).toEqual(['[>]', '[!]', '[?]', '[x]']);
-    expect(lines[0]).toEqual({ mark: '[>]', text: 'Doing thing (Pixel)', tone: 'active' });
-  });
-
-  it('respects the limit', () => {
-    const many = Array.from({ length: 10 }, (_, i) => task({ id: `T-${i}`, title: `t${i}` }));
-    expect(whiteboard(many, [agent({})], 4)).toHaveLength(4);
   });
 });
 
