@@ -1,5 +1,8 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
+import { IPC } from '../shared/ipc';
+import { getAppStatus } from './appStatus';
+import { fixGuiPath } from './claude/shellPath';
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -21,6 +24,8 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  fixGuiPath();
+  ipcMain.handle(IPC.appStatus, () => getAppStatus());
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
