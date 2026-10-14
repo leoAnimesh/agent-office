@@ -60,10 +60,13 @@ test('marks new messages that arrive while you are scrolled up', async () => {
     const log = win.getByRole('log', { name: 'Conversation with the boss' });
     for (let i = 1; i <= 6; i++) {
       await win.evaluate((t) => window.agentOffice.sendToBoss(t), `filler message number ${i} with enough words to take some space in the chat`);
-      await expect(log.locator('.msg.boss', { hasText: `number ${i} ` })).toBeVisible();
+      // A finished reply: not the live, still-typing bubble.
+      await expect(log.locator('.msg.boss:not(.streaming)', { hasText: `number ${i} ` })).toBeVisible();
     }
-    // Let the last reply settle (result, busy indicator) before scrolling away from the bottom.
+    // Let the last reply fully settle (no typing, no thinking row) before scrolling away from the bottom.
+    await expect(log.locator('.streaming')).toHaveCount(0);
     await expect(win.getByRole('status')).toHaveCount(0);
+    await expect(win.getByRole('button', { name: /Max, Boss: (Done|Idle)/ })).toBeVisible();
     await log.evaluate((el) => { el.scrollTop = 0; el.dispatchEvent(new Event('scroll')); });
     await expect.poll(() => log.evaluate((el) => el.scrollTop)).toBe(0);
 
