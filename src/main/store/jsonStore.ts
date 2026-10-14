@@ -23,10 +23,24 @@ export async function writeJsonAtomic(file: string, data: unknown): Promise<void
   const tmp = `${file}.${process.pid}.${Date.now()}.${counter++}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8');
   try {
-    await fs.rename(tmp, file);
+    await renameWithRetry(tmp, file);
   } catch (err) {
     await fs.rm(tmp, { force: true });
     throw err;
+  }
+}
+
+/** Windows refuses to replace a file another handle is touching (EPERM/EBUSY); retry briefly. */
+async function renameWithRetry(from: string, to: string, attempts = 8): Promise<void> {
+  for (let i = 1; ; i++) {
+    try {
+      await fs.rename(from, to);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (i >= attempts || (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES')) throw err;
+      await new Promise((r) => setTimeout(r, 20 * i));
+    }
   }
 }
 
