@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
-import type { AppStatus } from '../../shared/types';
+import type { AppStatus, LogEntry } from '../../shared/types';
+import { AgentDetailView } from './components/AgentDetailView';
 import { BossChat } from './components/BossChat';
 import { Header } from './components/Header';
 import { OfficeView } from './components/OfficeView';
@@ -15,6 +16,8 @@ export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [state, dispatch] = useReducer(reducer, initialState);
   const onError = useCallback((m: string) => dispatch({ type: 'error', message: clean(m) }), []);
+  const viewAgentId = state.view.name === 'agent' ? state.view.agentId : null;
+  const onLogs = useCallback((entries: LogEntry[]) => { if (viewAgentId) dispatch({ type: 'logs-loaded', agentId: viewAgentId, entries }); }, [viewAgentId]);
   const refreshRoles = useCallback(() => { window.agentOffice.listRoles().then((roles) => dispatch({ type: 'roles', roles }), () => undefined); }, []);
 
   useEffect(() => {
@@ -45,6 +48,7 @@ export function App() {
   const view = (() => {
     switch (state.view.name) {
       case 'office': return <OfficeView ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onHire={() => go({ name: 'team' })} />;
+      case 'agent': return <AgentDetailView ws={ws} roles={state.roles} agentId={state.view.agentId} logs={state.logs[state.view.agentId] ?? []} onBack={() => go({ name: 'office' })} onLogs={onLogs} onError={onError} />;
       case 'tasks': return <TaskBoard tasks={ws.tasks} agents={ws.agents} onError={onError} />;
       default: return <p className="muted">This view arrives in a later step.</p>;
     }
