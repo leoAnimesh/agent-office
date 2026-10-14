@@ -2,10 +2,10 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { Agent, Project, RunnerEvent, Task, TaskStatus } from '../../shared/types';
+import type { Agent, Project, Role, RunnerEvent, Task, TaskStatus } from '../../shared/types';
 import type { AgentRunner, ClaudeRunnerOptions } from '../claude/runner';
 import { reduceStatus } from '../claude/status';
-import { WorktreeManager, slugify } from '../git/worktrees';
+import { WorktreeManager, git, slugify, type MergeResult } from '../git/worktrees';
 import type { ProjectStore } from '../store/projectStore';
 import { nextTaskId } from '../store/projectStore';
 import type { RoleStore } from '../store/roleStore';
@@ -31,11 +31,14 @@ export type ManagerEvent =
   | { type: 'agents-changed' }
   | { type: 'tasks-changed' }
   | { type: 'task-finished'; task: Task; agent: Agent }
+  | { type: 'agent-replied'; agent: Agent; text: string; ok: boolean }
   | { type: 'error'; message: string };
+
+export type MergeOutcome = MergeResult | { status: 'not_ready'; reason: string };
 
 export interface NewTask { assignee: string; title: string; brief: string; dependsOn?: string[]; createdBy: 'boss' | 'user' }
 
-interface Live { runner: AgentRunner; taskId: string }
+interface Live { runner: AgentRunner; taskId: string | null }
 
 const NAME_POOL = ['Pixel', 'Byte', 'Quinn', 'Ivy', 'Nova', 'Rex', 'Juno', 'Sage', 'Kit', 'Ziggy', 'Milo', 'Tess'];
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -192,6 +195,67 @@ export class AgentManager extends EventEmitter {
     await this.pump();
   }
 
+  getTask(id: string): Task | undefined {
+    const t = this.taskList.find((x) => x.id === id);
+    return t ? { ...t } : undefined;
+  }
+
+  messageAgent(ref: string, text: string): Promise<'sent' | 'started'> {
+    return this.run(async () => {
+      const agent = this.findAgent(ref);
+      if (!agent || agent.kind !== 'employee') throw new Error(`No employee named ${ref}`);
+      const live = this.live.get(agent.id);
+      if (live?.runner.running) {
+        live.runner.send(text);
+        return 'sent';
+      }
+      if (!agent.sessionId || !agent.worktreePath) throw new Error(`${agent.name} has not worked on anything yet. Assign a task instead.`);
+      const role = await this.d.roles.get(agent.roleId);
+      if (!role) throw new Error(`Role ${agent.roleId} is missing`);
+      const branch = await git(agent.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
+      const promptFile = await this.writePrompt(agent, role, branch);
+      const runner = this.spawn(agent, role, agent.worktreePath, promptFile, null);
+      agent.status = 'thinking';
+      agent.bubble = 'Reading a message…';
+      runner.start();
+      if (runner.running) runner.send(text);
+      return 'started';
+    });
+  }
+
+  async merge(taskId: string): Promise<MergeOutcome> {
+    const outcome = await this.run(async (): Promise<MergeOutcome> => {
+      const t = this.mustTask(taskId);
+      if (t.status !== 'review') return { status: 'not_ready', reason: `Task ${taskId} is ${t.status}, not waiting for review.` };
+      const r = await this.d.worktrees.merge(this.d.project.baseBranch, t.branch, `Merge ${t.id}: ${t.title}`);
+      if (r.status === 'merged') {
+        this.setStatus(t, 'done');
+        await this.saveTasks();
+      }
+      return r;
+    });
+    if (outcome.status === 'merged') await this.pump();
+    return outcome;
+  }
+
+  setSessionId(agentId: string, sessionId: string): Promise<void> {
+    return this.run(async () => {
+      const a = this.mustAgent(agentId);
+      if (a.sessionId === sessionId) return;
+      a.sessionId = sessionId;
+      await this.saveAgents();
+    });
+  }
+
+  /** Live status for agents whose runner lives outside the manager (the boss). */
+  setLive(agentId: string, ev: RunnerEvent): Promise<void> {
+    return this.run(async () => {
+      const a = this.mustAgent(agentId);
+      Object.assign(a, reduceStatus(a, ev));
+      this.emitEvent({ type: 'agents-changed' });
+    });
+  }
+
   // ---------- internals ----------
 
   private async startTask(task: Task): Promise<void> {
@@ -203,17 +267,30 @@ export class AgentManager extends EventEmitter {
     agent.status = 'thinking';
     agent.bubble = 'Starting…';
 
+    const promptFile = await this.writePrompt(agent, role, task.branch);
+    const runner = this.spawn(agent, role, wt, promptFile, task.id);
+    const message = taskMessage(task);
+    this.setStatus(task, 'working', { attempts: task.attempts + 1 });
+    await this.saveTasks();
+    runner.start();
+    if (runner.running) runner.send(message);
+  }
+
+  private async writePrompt(agent: Agent, role: Role, branch: string): Promise<string> {
     const boss = this.agentList.find((a) => a.kind === 'boss');
     const skills = await this.d.skills.getMany(role.skills);
     const promptFile = path.join(this.d.promptDir, `${agent.id}.md`);
     await fs.mkdir(this.d.promptDir, { recursive: true });
     await fs.writeFile(promptFile, renderPrompt(role, skills, {
-      agentName: agent.name, bossName: boss?.name ?? 'the boss', branch: task.branch, projectName: this.d.project.name, kind: 'employee',
+      agentName: agent.name, bossName: boss?.name ?? 'the boss', branch, projectName: this.d.project.name, kind: 'employee',
     }));
+    return promptFile;
+  }
 
+  private spawn(agent: Agent, role: Role, cwd: string, promptFile: string, taskId: string | null): AgentRunner {
     const runner = this.d.createRunner({
       bin: this.d.claudeBin,
-      cwd: wt,
+      cwd,
       launch: {
         model: role.model,
         permissionMode: role.permissionMode,
@@ -224,20 +301,15 @@ export class AgentManager extends EventEmitter {
         isolateUserSettings: this.d.isolateUserSettings,
       },
     });
-    this.live.set(agent.id, { runner, taskId: task.id });
+    this.live.set(agent.id, { runner, taskId });
     // Errors are already reported as { type: 'error' } by run(); swallow here to avoid unhandled rejections.
-    runner.on('event', (ev) => { this.run(() => this.onRunnerEvent(agent.id, task.id, runner, ev)).catch(() => undefined); });
-
-    const message = taskMessage(task);
-    this.setStatus(task, 'working', { attempts: task.attempts + 1 });
-    await this.saveTasks();
-    runner.start();
-    if (runner.running) runner.send(message);
+    runner.on('event', (ev) => { this.run(() => this.onRunnerEvent(agent.id, taskId, runner, ev)).catch(() => undefined); });
+    return runner;
   }
 
-  private async onRunnerEvent(agentId: string, taskId: string, runner: AgentRunner, ev: RunnerEvent): Promise<void> {
+  private async onRunnerEvent(agentId: string, taskId: string | null, runner: AgentRunner, ev: RunnerEvent): Promise<void> {
     const agent = this.mustAgent(agentId);
-    const task = this.taskList.find((t) => t.id === taskId);
+    const task = taskId ? this.taskList.find((t) => t.id === taskId) : undefined;
     // Logging is best-effort: a full disk must never stall the task state machine.
     await this.d.store.appendLog(this.d.project.id, agentId, { at: this.now(), taskId, event: ev }).catch(() => undefined);
 
@@ -253,6 +325,7 @@ export class AgentManager extends EventEmitter {
     if (ev.type === 'result') {
       runner.endInput();
       if (task?.status === 'working') await this.finishTask(agent, task, ev.ok, ev.text);
+      else if (taskId === null) this.emitEvent({ type: 'agent-replied', agent: { ...agent }, text: ev.text, ok: ev.ok });
     }
 
     if (ev.type === 'exit') {
