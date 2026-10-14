@@ -18,11 +18,11 @@ export function legacyFinishedText(text: string): { text: string; files?: DiffSt
 }
 
 /** A task's changed files: totals you can expand into one row per file (name, folder, +/− counts). */
-export function FileChanges({ files }: { files: DiffStat[] }) {
+export function FileChanges({ files, open }: { files: DiffStat[]; open?: boolean }) {
   if (files.length === 0) return null;
   const t = fileTotals(files);
   return (
-    <details className="file-changes" open={files.length <= 5}>
+    <details className="file-changes" open={open ?? files.length <= 5}>
       <summary>
         {t.files} {t.files === 1 ? 'file' : 'files'} changed <span className="add">+{t.add}</span> <span className="del">−{t.del}</span>
       </summary>

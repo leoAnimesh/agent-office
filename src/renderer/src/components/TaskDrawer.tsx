@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Role, Task, WorkspaceSnapshot } from '../../../shared/types';
+import { FileChanges } from '../chat/fileChanges';
 import { Markdown } from '../chat/Markdown';
 import { Avatar } from '../sprites/Avatar';
 import { lookFor } from '../sprites/sprite';
@@ -64,8 +65,8 @@ export function TaskDrawer({ task, ws, roles, onClose, onOpenAgent, onError }: P
 
         {totals.files > 0 && (
           <section className="drawer-section" aria-label="Files changed">
-            <h3>Files changed <span className="mono small muted">{totals.files} · <span className="add">+{totals.add}</span> <span className="del">−{totals.del}</span></span></h3>
-            <ul className="mono small files">{task.diffStat!.map((f) => <li key={f.path}>{f.path} <span className="add">+{f.add}</span> <span className="del">−{f.del}</span></li>)}</ul>
+            <h3>Files changed</h3>
+            <FileChanges files={task.diffStat!} open />
           </section>
         )}
 

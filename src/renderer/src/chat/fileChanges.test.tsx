@@ -44,3 +44,11 @@ describe('FileChanges', () => {
     expect(renderToStaticMarkup(<FileChanges files={[]} />)).toBe('');
   });
 });
+
+describe('FileChanges open state', () => {
+  const many = Array.from({ length: 9 }, (_, i) => ({ path: `src/f${i}.ts`, add: 1, del: 0 }));
+  it('starts collapsed for long lists unless asked to start open', () => {
+    expect(renderToStaticMarkup(<FileChanges files={many} />)).not.toContain('open=""');
+    expect(renderToStaticMarkup(<FileChanges files={many} open />)).toContain('open=""');
+  });
+});
