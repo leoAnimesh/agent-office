@@ -31,6 +31,16 @@ async function setup() {
 }
 
 describe('BossSession', () => {
+  it('never launches the boss with --model auto', async () => {
+    const { boss, until, roles } = await setup();
+    await roles.save({ ...(await roles.get('boss'))!, model: 'auto' });
+    await boss.send('hello');
+    await until((e) => e.kind === 'boss');
+    const [launch] = await h.launches();
+    expect(launch.argv[launch.argv.indexOf('--model') + 1]).toBe('opus');
+    await boss.stop();
+  });
+
   it('runs the boss in the repo with MCP, read-only tools and the boss prompt', async () => {
     const { boss, until } = await setup();
     await boss.send('Plan dark mode');

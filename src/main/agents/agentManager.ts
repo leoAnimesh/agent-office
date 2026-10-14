@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { Agent, Project, Role, RunnerEvent, Task, TaskStatus } from '../../shared/types';
+import { AUTO_MODEL, type Agent, type Project, type Role, type RunnerEvent, type Task, type TaskStatus } from '../../shared/types';
 import { waitForExit, type AgentRunner, type ClaudeRunnerOptions } from '../claude/runner';
 import { reduceStatus } from '../claude/status';
 import { WorktreeManager, git, slugify, type MergeResult } from '../git/worktrees';
@@ -10,6 +10,7 @@ import type { ProjectStore } from '../store/projectStore';
 import { nextTaskId } from '../store/projectStore';
 import type { RoleStore } from '../store/roleStore';
 import type { SkillStore } from '../store/skillStore';
+import { launchModel, type TaskClassifier } from './classifier';
 import { renderPrompt, taskMessage } from './prompt';
 import { assertTransition, runnableTasks } from './taskRules';
 
@@ -23,6 +24,7 @@ export interface AgentManagerDeps {
   claudeBin: string;
   promptDir: string;
   isolateUserSettings: boolean;
+  classify: TaskClassifier;
   now?: () => Date;
 }
 
@@ -89,6 +91,7 @@ export class AgentManager extends EventEmitter {
       if (t.status === 'working') { t.status = 'queued'; t.updatedAt = this.now(); requeued.push(t.id); }
     }
     if (requeued.length > 0) await this.saveTasks();
+    for (const t of this.taskList) if (t.status === 'queued' && !t.model) void this.classifyTask(t.id);
     return requeued;
   }
 
@@ -149,10 +152,16 @@ export class AgentManager extends EventEmitter {
         status: 'queued', held: false, attempts: 0, branch: `ao/${slugify(agent.name)}/${slugify(input.title, 'task')}-${id.toLowerCase()}`,
         dependsOn: input.dependsOn ?? [], createdAt: now, updatedAt: now,
       };
+      const role = await this.d.roles.get(agent.roleId);
+      if (role && role.model !== AUTO_MODEL) {
+        t.model = role.model;
+        t.modelPick = { model: role.model, reason: 'Pinned by role', source: 'role' };
+      }
       this.taskList.push(t);
       await this.saveTasks();
       return { ...t };
     });
+    if (!task.model) void this.classifyTask(task.id);
     await this.pump();
     return task;
   }
@@ -269,7 +278,7 @@ export class AgentManager extends EventEmitter {
         const wt = await this.d.worktrees.prepare(agent.name, open.branch, this.d.project.baseBranch);
         agent.worktreePath = wt;
         const fresh = !agent.sessionId;
-        const runner = this.spawn(agent, role, wt, await this.writePrompt(agent, role, open.branch), open.id);
+        const runner = this.spawn(agent, role, wt, await this.writePrompt(agent, role, open.branch), open.id, launchModel(role.model, open.model));
         this.setStatus(open, 'queued');
         this.setStatus(open, 'working', { attempts: open.attempts + 1 });
         await this.saveTasks();
@@ -282,7 +291,7 @@ export class AgentManager extends EventEmitter {
 
       if (!agent.sessionId || !agent.worktreePath) throw new UserError(`${agent.name} has not worked on anything yet. Assign a task instead.`);
       const branch = await git(agent.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
-      const runner = this.spawn(agent, role, agent.worktreePath, await this.writePrompt(agent, role, branch), null);
+      const runner = this.spawn(agent, role, agent.worktreePath, await this.writePrompt(agent, role, branch), null, launchModel(role.model));
       agent.status = 'thinking';
       agent.bubble = 'Reading a message…';
       runner.start();
@@ -338,7 +347,7 @@ export class AgentManager extends EventEmitter {
     agent.bubble = 'Starting…';
 
     const promptFile = await this.writePrompt(agent, role, task.branch);
-    const runner = this.spawn(agent, role, wt, promptFile, task.id);
+    const runner = this.spawn(agent, role, wt, promptFile, task.id, launchModel(role.model, task.model));
     const message = taskMessage(task);
     this.setStatus(task, 'working', { attempts: task.attempts + 1 });
     await this.saveTasks();
@@ -350,6 +359,26 @@ export class AgentManager extends EventEmitter {
     const boss = this.agentList.find((a) => a.kind === 'boss')?.name ?? 'the boss';
     const brief = freshSession ? `\n\nThe original brief:\n\n${task.brief.trim()}` : '';
     return `Feedback on task ${task.id} ("${task.title}") from ${boss}: ${text.trim()}\n\nMake the changes on your current branch, commit them, and reply with a short summary (at most 5 lines).${brief}`;
+  }
+
+  /** Runs outside run(): a slow classifier must never hold the state chain. Never rejects. */
+  private async classifyTask(taskId: string): Promise<void> {
+    const t = this.taskList.find((x) => x.id === taskId);
+    if (!t) return;
+    const agent = this.agentList.find((a) => a.id === t.assigneeId);
+    const role = agent ? await this.d.roles.get(agent.roleId).catch(() => undefined) : undefined;
+    const pick = await this.d.classify({ title: t.title, brief: t.brief, roleName: role?.name ?? 'Engineer' });
+    await this.run(async () => {
+      if (this.closed) return;   // the next load() classifies again
+      const now = this.taskList.find((x) => x.id === taskId);
+      if (!now || now.status !== 'queued' || now.model) return;
+      now.model = pick.model;
+      now.modelPick = pick;
+      now.updatedAt = this.now();
+      await this.saveTasks();
+      this.emitEvent({ type: 'tasks-changed' });
+    }).catch(() => undefined);
+    this.pump().catch(() => undefined);
   }
 
   private assertOpen(): void {
@@ -367,12 +396,12 @@ export class AgentManager extends EventEmitter {
     return promptFile;
   }
 
-  private spawn(agent: Agent, role: Role, cwd: string, promptFile: string, taskId: string | null): AgentRunner {
+  private spawn(agent: Agent, role: Role, cwd: string, promptFile: string, taskId: string | null, model: string): AgentRunner {
     const runner = this.d.createRunner({
       bin: this.d.claudeBin,
       cwd,
       launch: {
-        model: role.model,
+        model,
         permissionMode: role.permissionMode,
         allowedTools: role.allowedTools,
         appendSystemPromptFile: promptFile,

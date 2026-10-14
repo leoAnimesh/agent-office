@@ -8,9 +8,12 @@ import { dataPaths, type DataPaths } from '../../src/main/store/paths';
 import { ProjectStore } from '../../src/main/store/projectStore';
 import { RoleStore } from '../../src/main/store/roleStore';
 import { SkillStore } from '../../src/main/store/skillStore';
-import type { Project } from '../../src/shared/types';
+import type { ModelPick, Project } from '../../src/shared/types';
+import type { TaskClassifier } from '../../src/main/agents/classifier';
 import { makeRepo } from './repo';
 import { FAKE_CLAUDE } from './runner';
+
+export const STUB_PICK: ModelPick = { model: 'sonnet', size: 'medium', reason: 'stub', source: 'classifier' };
 
 export interface Harness {
   repo: string;
@@ -18,7 +21,7 @@ export interface Harness {
   argvOut: string;
   fakeEnv: Record<string, string>;
   paths: DataPaths;
-  make(opts?: { maxConcurrent?: number; autoMerge?: boolean }): Promise<{ manager: AgentManager; project: Project; roles: RoleStore; skills: SkillStore; store: ProjectStore }>;
+  make(opts?: { maxConcurrent?: number; autoMerge?: boolean; classify?: TaskClassifier }): Promise<{ manager: AgentManager; project: Project; roles: RoleStore; skills: SkillStore; store: ProjectStore }>;
   launches(): Promise<{ argv: string[]; cwd: string }[]>;
   cleanup(): Promise<void>;
 }
@@ -43,6 +46,7 @@ export async function harness(): Promise<Harness> {
         project, store, roles, skills, worktrees: new WorktreeManager(repo),
         createRunner: (o) => new ClaudeRunner({ ...o, bin: process.execPath, binArgs: [FAKE_CLAUDE], env: { ...process.env, ...fakeEnv } }),
         claudeBin: 'claude', promptDir: paths.promptDir, isolateUserSettings: true,
+        classify: opts.classify ?? (async () => STUB_PICK),
       });
       await manager.load();
       managers.push(manager);

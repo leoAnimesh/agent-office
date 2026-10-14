@@ -10,6 +10,7 @@ import { ProjectStore } from '../src/main/store/projectStore';
 import { RoleStore } from '../src/main/store/roleStore';
 import { SkillStore } from '../src/main/store/skillStore';
 import type { Project, Task } from '../src/shared/types';
+import { STUB_PICK } from './helpers/manager';
 import { makeRepo } from './helpers/repo';
 import { FAKE_CLAUDE } from './helpers/runner';
 
@@ -29,7 +30,7 @@ async function makeManager(maxConcurrent = 4, store?: ProjectStore): Promise<Age
   const m = new AgentManager({
     project, store: store ?? new ProjectStore(paths), roles, skills, worktrees: new WorktreeManager(repo),
     createRunner: (o) => new ClaudeRunner({ ...o, bin: process.execPath, binArgs: [FAKE_CLAUDE], env: { ...process.env, ...fakeEnv } }),
-    claudeBin: 'claude', promptDir: paths.promptDir, isolateUserSettings: true,
+    claudeBin: 'claude', promptDir: paths.promptDir, isolateUserSettings: true, classify: async () => STUB_PICK,
   });
   await m.load();
   return m;

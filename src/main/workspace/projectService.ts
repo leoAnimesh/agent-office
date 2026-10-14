@@ -1,9 +1,11 @@
 import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { Agent, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
 import { AgentManager, type ManagerEvent, type MergeOutcome, type MessageResult } from '../agents/agentManager';
 import { bossTools, type ToolDef } from '../agents/bossTools';
+import { createClassifier } from '../agents/classifier';
 import { BossSession } from '../boss/bossSession';
 import { ClaudeRunner, type ClaudeRunnerOptions } from '../claude/runner';
 import { WorktreeManager, inspectRepo, slugify } from '../git/worktrees';
@@ -109,9 +111,11 @@ export class ProjectService extends EventEmitter {
 
     const createRunner = (o: ClaudeRunnerOptions) => new ClaudeRunner({ ...o, binArgs: this.d.claudeBinArgs, env: this.d.claudeEnv ? { ...process.env, ...this.d.claudeEnv } : undefined });
     const isolate = this.isolate;
+    await fs.mkdir(this.d.paths.promptDir, { recursive: true });
     const manager = new AgentManager({
       project, store: this.store, roles: this.roles, skills: this.skills, worktrees: new WorktreeManager(info.root),
       createRunner, claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, isolateUserSettings: isolate,
+      classify: createClassifier({ createRunner, claudeBin: this.claudeBin, cwd: this.d.paths.promptDir, isolateUserSettings: isolate }),
     });
     const requeued = await manager.load();
     if (opts.bossModel && !existing) {
