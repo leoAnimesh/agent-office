@@ -1,0 +1,32 @@
+.floor { border: 3px solid #0e0f16; box-shadow: 0 0 0 3px var(--line); background: repeating-conic-gradient(#3a2e29 0 25%, #42352f 0 50%) 0 0 / 48px 48px; display: flex; flex-direction: column; }
+.wall { height: 64px; background: #2a2d40; border-bottom: 6px solid #1e2030; display: flex; align-items: center; gap: 28px; padding: 0 28px; }
+.wall .window { width: 84px; height: 36px; background: #5c7fb8; border: 4px solid #1e2030; box-shadow: inset 0 -10px 0 #4a6a9e; }
+.wall .clock { margin-left: auto; font-family: var(--font-pixel); font-size: 18px; color: var(--amber); background: var(--bg); border: 3px solid #1e2030; padding: 4px 10px; }
+.wall .plant { width: 26px; height: 40px; background: #3e8e5a; border-bottom: 10px solid #8b5a34; }
+.corner-office { margin: 24px 24px 0; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px; padding: 16px 20px 12px; background: rgba(122,162,255,.10); border: 3px solid #5b6386; }
+.corner-office .tag { align-self: flex-start; font-family: var(--font-pixel); font-size: 12px; color: var(--bg); background: var(--amber); padding: 2px 8px; }
+.whiteboard { flex: 1 1 240px; min-width: 0; background: #f2efe6; color: #22232e; border: 4px solid #9aa0b8; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; box-shadow: 4px 4px 0 rgba(0,0,0,.35); }
+.whiteboard h3 { margin: 0 0 4px; font-family: var(--font-pixel); font-size: 16px; font-weight: 500; }
+.whiteboard .line { display: flex; gap: 8px; font-size: 13px; overflow-wrap: anywhere; }
+.whiteboard .mark { font-family: var(--font-mono); font-size: 12px; flex: none; }
+.whiteboard .tone-done { color: #2f7a3e; } .whiteboard .tone-active { color: #1f7a70; } .whiteboard .tone-review { color: #8a5a00; } .whiteboard .tone-problem { color: #b23a48; } .whiteboard .tone-todo { color: #5a5e70; }
+.desks { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 20px; padding: 20px 24px 28px; justify-items: center; }
+.desk { width: 220px; height: 252px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; background: none; border: 2px solid transparent; padding: 0; color: var(--text); }
+button.desk:hover, .desk.selected { border-color: rgba(245,185,66,.6); background: rgba(20,21,31,.25); }
+.desk-bubble { max-width: 200px; background: #f2efe6; color: #1b1c26; border: 3px solid var(--bg); padding: 3px 10px; font-family: var(--font-pixel); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 3px 3px 0 rgba(0,0,0,.35); position: relative; }
+.desk-bubble::after { content: ''; position: absolute; left: 50%; bottom: -10px; transform: translateX(-50%); border: 6px solid transparent; border-top: 7px solid var(--bg); }
+.desk-plate { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 2px solid var(--line); padding: 3px 10px 3px 8px; max-width: 216px; }
+.desk-name { font-family: var(--font-pixel); font-size: 15px; white-space: nowrap; }
+.desk-role { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.empty-desk { width: 220px; height: 252px; border: 3px dashed #6b5a50; background: rgba(20,21,31,.35); color: #e7d3c2; font-family: var(--font-pixel); font-size: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+@keyframes ao-tap { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+@keyframes ao-blink { 50% { opacity: .45; } }
+@keyframes ao-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
+.is-working .ao-armL { animation: ao-tap .3s steps(1) infinite; }
+.is-working .ao-armR { animation: ao-tap .3s steps(1) infinite .15s; }
+.is-working .ao-code { animation: ao-blink 1s steps(2) infinite; }
+.is-thinking .ao-head { animation: ao-bob 1.4s steps(1) infinite; }
+.is-waiting .ao-body { animation: ao-bob 2.6s steps(1) infinite; }
+.is-error .ao-screen { animation: ao-blink .7s steps(1) infinite; }
+.cursor-blink { animation: ao-blink 1s steps(1) infinite; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; } }
