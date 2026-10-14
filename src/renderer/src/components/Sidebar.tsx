@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { AppStatus, Project, WorkspaceSnapshot } from '../../../shared/types';
 import type { View } from '../state';
 
-interface Props { status: AppStatus; current: Project; view: View; onOpened: (ws: WorkspaceSnapshot) => void; onNavigate: (v: View) => void; onError: (m: string) => void }
+interface Props { status: AppStatus; current: Project; view: View; onOpened: (ws: WorkspaceSnapshot) => void; onNewProject: () => void; onNavigate: (v: View) => void; onError: (m: string) => void }
 
 export function Logo() {
   return (
@@ -20,7 +20,7 @@ export function Logo() {
   );
 }
 
-export function Sidebar({ status, current, view, onOpened, onNavigate, onError }: Props) {
+export function Sidebar({ status, current, view, onOpened, onNewProject, onNavigate, onError }: Props) {
   const [projects, setProjects] = useState<Project[]>([]);
   useEffect(() => { window.agentOffice.listProjects().then(setProjects, () => setProjects([])); }, [current.id]);
 
@@ -40,7 +40,7 @@ export function Sidebar({ status, current, view, onOpened, onNavigate, onError }
             <span className="side-label">{p.name}</span>
           </button>
         ))}
-        <button type="button" className="side-item muted" onClick={async () => open(await window.agentOffice.pickFolder())}>+ New project</button>
+        <button type="button" className="side-item muted" onClick={onNewProject}>+ New project</button>
       </div>
       <div className="side-section">
         <div className="side-title">LIBRARY</div>

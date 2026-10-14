@@ -52,6 +52,16 @@ describe('ProjectService (UI features)', () => {
     expect((await svc.listRoles()).find((r) => r.id === 'boss')!.model).toBe('sonnet');
   });
 
+  it('creates a brand-new project, opens it and hands the brief to the boss', async () => {
+    const parent = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-newp-'));
+    const snap = await svc.create({ parentDir: parent, name: 'Recipe App', brief: 'Build a recipe list app.', bossName: 'Ada' });
+    expect(snap.project).toMatchObject({ name: 'Recipe App', repoPath: path.join(await fs.realpath(parent), 'Recipe App'), baseBranch: 'main' });
+    expect(snap.agents.find((a) => a.kind === 'boss')!.name).toBe('Ada');
+    expect(snap.chat[0]).toMatchObject({ kind: 'user', text: 'Build a recipe list app.' });
+    await svc.close();
+    await fs.rm(parent, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  });
+
   it('updates project settings with validation and emits the change', async () => {
     await svc.open(repo);
     expect(await svc.updateProject({ maxConcurrent: 2, autoMerge: true })).toMatchObject({ maxConcurrent: 2, autoMerge: true });

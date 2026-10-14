@@ -39,7 +39,8 @@ src/main/        Electron main (Node). Plain TS modules with injected deps, unit
   mcp/             McpHost: Streamable-HTTP MCP server on 127.0.0.1 with a bearer token
   git/             worktrees.ts: git(), slugify, WorktreeManager (prepare/commitAll/diffStat/merge/remove)
   store/           JSON stores (atomic writes), roles, skills, settings, zod validation
-  workspace/       ProjectService (one open project: wires everything, emits WorkspaceEvents), ApprovalBroker
+  workspace/       ProjectService (one open project: wires everything, emits WorkspaceEvents), ApprovalBroker,
+                   newProject (create a repo from scratch: name validation, git init, first commit)
 src/preload/     contextBridge → window.agentOffice (AgentOfficeApi)
 src/renderer/    React app: state.ts (reducer + view routing), components/, sprites/, office/, agent/,
                  tasks/, team/, chat/ (pure helpers next to their views), styles/ (tokens, app, office)

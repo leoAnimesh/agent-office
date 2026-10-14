@@ -120,4 +120,5 @@ export type WorkspaceEvent =
 export interface AppSettings { claudePath: string | null; isolateUserSettings: boolean }
 export interface ProjectPatch { maxConcurrent?: number; autoMerge?: boolean; bossCanHire?: boolean }
 export interface OpenOptions { bossName?: string; bossModel?: string; bossCanHire?: boolean }
+export interface CreateProjectInput extends OpenOptions { parentDir: string; name: string; brief?: string }
 export interface LogEntry { at: string; event: RunnerEvent }
