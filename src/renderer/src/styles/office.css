@@ -11,7 +11,6 @@ button.desk:hover, .desk.selected { border-color: rgba(245,185,66,.6); backgroun
 .desk-plate { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 2px solid var(--line); padding: 3px 10px 3px 8px; max-width: 216px; min-width: 0; overflow: hidden; }
 .desk-name { font-family: var(--font-pixel); font-size: 15px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .desk-role { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; max-width: 96px; }
-.empty-desk { width: 220px; height: 252px; border: 3px dashed #6b5a50; background: rgba(20,21,31,.35); color: #e7d3c2; font-family: var(--font-pixel); font-size: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
 @keyframes ao-tap { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
 @keyframes ao-blink { 50% { opacity: .45; } }
 @keyframes ao-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
@@ -67,7 +66,6 @@ button.wash-door:hover { border-color: var(--amber); }
 .desk.compact .desk-name { font-size: 12px; }
 .desk.compact .desk-role { max-width: 52px; font-size: 10px; }
 .desk.away .desk-bubble { background: #d8d2c4; color: #4a4f66; }
-.empty-desk.compact { width: 136px; height: 150px; font-size: 12px; gap: 6px; }
 @media (max-width: 1100px) { .rooms { grid-template-columns: 1fr; } .side-rooms { grid-template-columns: 1fr 1fr; grid-template-rows: auto; } }
 
 .idle-stretch .ao-stretch { animation: ao-bob 1.2s steps(1) infinite; }

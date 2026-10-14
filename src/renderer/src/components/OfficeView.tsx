@@ -12,9 +12,9 @@ function useNow(everyMs: number): number {
   return now;
 }
 
-interface Props { ws: WorkspaceSnapshot; roles: Role[]; onOpenAgent: (id: string) => void; onHire: () => void }
+interface Props { ws: WorkspaceSnapshot; roles: Role[]; onOpenAgent: (id: string) => void }
 
-export function OfficeView({ ws, roles, onOpenAgent, onHire }: Props) {
+export function OfficeView({ ws, roles, onOpenAgent }: Props) {
   const now = useNow(15_000);
   const plan = planFloor(ws.agents, ws.tasks, Math.floor(now / SLOT_MS));
   const counts = statusCounts([...(plan.boss ? [plan.boss.state] : []), ...plan.desks.map((d) => d.state)]);
@@ -55,10 +55,6 @@ export function OfficeView({ ws, roles, onOpenAgent, onHire }: Props) {
                 <DeskSprite key={d.agent.id} compact away={d.away} name={d.agent.name} role={roleName(d.agent.roleId)} look={lookFor(d.agent, roles)}
                   status={d.away ? 'idle' : d.state.status} bubble={d.away ? where(d.agent.id) : d.idle?.label ?? d.state.bubble} idle={d.idle?.action} onClick={() => onOpenAgent(d.agent.id)} />
               ))}
-              <button type="button" className="empty-desk compact" onClick={onHire}>
-                <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M8 2v12M2 8h12" /></svg>
-                Empty desk · hire
-              </button>
             </div>
           </div>
 
