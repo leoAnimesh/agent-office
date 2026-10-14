@@ -128,7 +128,7 @@ export class WorktreeManager {
     if (head !== base) {
       return { status: 'blocked', reason: `The project folder is on branch ${head}. Switch it back to ${base} to merge.` };
     }
-    if (await git(this.repoRoot, ['status', '--porcelain'])) {
+    if (await git(this.repoRoot, ['status', '--porcelain', '--untracked-files=no'])) {
       return { status: 'blocked', reason: 'The project folder has uncommitted changes. Commit or stash them, then ask again.' };
     }
     try {

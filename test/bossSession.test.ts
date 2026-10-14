@@ -97,6 +97,20 @@ describe('BossSession', () => {
     expect(runner!.running).toBe(false);
   });
 
+  it('starts a fresh boss session when the old one cannot be resumed', async () => {
+    const { boss, manager, until, chat } = await setup();
+    await manager.setSessionId(manager.findAgent('Max')!.id, 'gone-session');
+    h.fakeEnv.FAKE_CLAUDE_RESUME_FAIL = '1';
+    await boss.send('hello again');
+    await until((e) => e.kind === 'boss');
+    expect(chat.find((e) => e.kind === 'boss')).toMatchObject({ text: 'echo: hello again' });
+    expect(chat.some((e) => e.kind === 'error' && /fresh boss session/.test(e.text))).toBe(true);
+    const ls = await h.launches();
+    expect(ls).toHaveLength(2);
+    expect(ls[1].argv).toContain('--session-id');
+    await boss.stop();
+  });
+
   it('keeps reports in the chat', async () => {
     const { boss, chat } = await setup();
     await boss.report('Two of three tasks done');

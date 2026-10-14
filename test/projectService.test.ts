@@ -85,13 +85,60 @@ describe('ProjectService', () => {
     await svc.answerMerge(first.request.requestId, false);
     await until((e) => e.type === 'chat' && e.entry.kind === 'event' && /declined to merge T-101/.test(e.entry.text));
 
-    await fs.writeFile(path.join(repo, 'dirty.txt'), 'x');
+    await fs.writeFile(path.join(repo, 'README.md'), 'local edit\n');
     events = [];
     await tool('request_merge', { task_id: 'T-101' });
     const second = (await until((e) => e.type === 'merge-request')) as Extract<WorkspaceEvent, { type: 'merge-request' }>;
     await svc.answerMerge(second.request.requestId, true);
     await until((e) => e.type === 'chat' && e.entry.kind === 'event' && /Merge of T-101: blocked/.test(e.entry.text));
     expect((await svc.snapshot()).tasks.find((t) => t.id === 'T-101')!.status).toBe('review');
+  });
+
+  it('restarts interrupted work when a project is reopened and tells the boss', async () => {
+    await svc.open(repo);
+    const pixel = await svc.hire('frontend');
+    await svc.close();
+    const paths = dataPaths(data);
+    const id = projectIdFor(repo);
+    await fs.writeFile(paths.tasksFile(id), JSON.stringify([{ id: 'T-101', projectId: id, title: 'stale', brief: 'do it', assigneeId: pixel.id, createdBy: 'user', status: 'working', held: false, attempts: 1, branch: 'ao/pixel/stale-t-101', dependsOn: [], createdAt: '2026-10-14T10:00:00Z', updatedAt: '2026-10-14T10:00:00Z' }]));
+    events = [];
+    await svc.open(repo);
+    await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.id === 'T-101' && t.status === 'review'));
+    await until((e) => e.type === 'chat' && e.entry.kind === 'event' && /restarted/.test(e.entry.text));
+  });
+
+  it('keeps pending merge approvals across a restart', async () => {
+    await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    await tool('assign_task', { agent: 'Pixel', title: 'Notes', brief: 'write notes' });
+    await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.id === 'T-101' && t.status === 'review'));
+    await tool('request_merge', { task_id: 'T-101' });
+    await until((e) => e.type === 'merge-request');
+    await svc.close();
+    events = [];
+    const snap = await svc.open(repo);
+    expect(snap.merges).toEqual([expect.objectContaining({ taskId: 'T-101' })]);
+    await svc.answerMerge(snap.merges[0].requestId, true);
+    await until((e) => e.type === 'chat' && e.entry.kind === 'event' && /Merge of T-101: merged/.test(e.entry.text));
+  });
+
+  it('does not ask about tasks that are not ready', async () => {
+    fakeEnv.FAKE_CLAUDE_HANG = '1';
+    await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    await tool('assign_task', { agent: 'Pixel', title: 'Notes', brief: 'write notes' });
+    expect(await tool('request_merge', { task_id: 'T-101' })).toMatchObject({ status: 'not_ready' });
+    expect((await svc.snapshot()).merges).toEqual([]);
+  });
+
+  it('never asks twice about the same task', async () => {
+    await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    await tool('assign_task', { agent: 'Pixel', title: 'Notes', brief: 'write notes' });
+    await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.id === 'T-101' && t.status === 'review'));
+    expect(await tool('request_merge', { task_id: 'T-101' })).toMatchObject({ status: 'awaiting_user_approval' });
+    expect(await tool('request_merge', { task_id: 'T-101' })).toMatchObject({ status: 'awaiting_user_approval' });
+    expect((await svc.snapshot()).merges).toHaveLength(1);
   });
 
   it('merges straight away when auto-merge is on', async () => {

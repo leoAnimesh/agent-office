@@ -6,8 +6,7 @@ interface Pending { request: MergeRequest; resolve: (ok: boolean) => void }
 export class ApprovalBroker {
   private readonly items = new Map<string, Pending>();
 
-  request(r: Omit<MergeRequest, 'requestId'>): { requestId: string; decision: Promise<boolean> } {
-    const requestId = randomUUID();
+  request(r: Omit<MergeRequest, 'requestId'>, requestId: string = randomUUID()): { requestId: string; decision: Promise<boolean> } {
     const decision = new Promise<boolean>((resolve) => {
       this.items.set(requestId, { request: { ...r, requestId }, resolve });
     });

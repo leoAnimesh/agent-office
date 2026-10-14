@@ -36,10 +36,17 @@ describe('WorktreeManager.merge', () => {
 
   it('refuses when the checkout has uncommitted changes', async () => {
     await workOn('ao/pixel/a', 'hello.txt', 'hi\n');
-    await fs.writeFile(path.join(repo, 'scratch.txt'), 'mine');
+    await fs.writeFile(path.join(repo, 'README.md'), 'local edit\n');
     const r = await wm.merge('main', 'ao/pixel/a', 'Merge');
     expect(r).toMatchObject({ status: 'blocked', reason: expect.stringMatching(/uncommitted changes/) });
     expect(existsSync(path.join(repo, 'hello.txt'))).toBe(false);
+  });
+
+  it('ignores untracked files the merge does not touch', async () => {
+    await workOn('ao/pixel/a', 'hello.txt', 'hi\n');
+    await fs.writeFile(path.join(repo, 'scratch.txt'), 'mine');
+    expect((await wm.merge('main', 'ao/pixel/a', 'Merge')).status).toBe('merged');
+    expect(await fs.readFile(path.join(repo, 'scratch.txt'), 'utf8')).toBe('mine');
   });
 
   it('refuses when the checkout is on another branch', async () => {

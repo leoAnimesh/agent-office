@@ -86,7 +86,7 @@ export class ProjectService extends EventEmitter {
       project, store: this.store, roles: this.roles, skills: this.skills, worktrees: new WorktreeManager(info.root),
       createRunner, claudeBin: this.d.claudeBin, promptDir: this.d.paths.promptDir, isolateUserSettings: isolate,
     });
-    await manager.load();
+    const requeued = await manager.load();
     const bossAgent = await manager.createBoss(bossName);
     project.bossId = bossAgent.id;
     await this.store.saveProject(project);
@@ -112,6 +112,21 @@ export class ProjectService extends EventEmitter {
     boss.on('chat', (entry) => this.emitWs(ws, { type: 'chat', entry }));
     boss.start();
     this.ws = ws;
+
+    // Re-show merge approvals that were pending when the app last stopped.
+    for (const r of await this.store.getPendingMerges(id)) {
+      if (ws.manager.getTask(r.taskId)?.status !== 'review') continue;
+      const { decision } = ws.broker.request(r, r.requestId);
+      this.onDecision(ws, r.taskId, r.requestId, decision);
+    }
+    await this.savePending(ws);
+
+    // Resume work that was interrupted, and tell the boss about it.
+    await manager.pump();
+    if (requeued.length > 0) {
+      const list = requeued.join(', ');
+      void boss.notify(`The app restarted while ${list} ${requeued.length === 1 ? 'was' : 'were'} running. ${requeued.length === 1 ? 'It has' : 'They have'} been restarted.`);
+    }
     return this.snapshot();
   }
 
@@ -141,20 +156,34 @@ export class ProjectService extends EventEmitter {
   }
 
   private async requestMerge(ws: Workspace, task: Task): Promise<unknown> {
+    const awaiting = { status: 'awaiting_user_approval', note: 'The user has been asked. You will get an [AgentOffice] message with the outcome.' };
+    if (task.status !== 'review') return { status: 'not_ready', reason: `Task ${task.id} is ${task.status}, not waiting for review.` };
     if (ws.project.autoMerge) return ws.manager.merge(task.id);
+    if (ws.broker.pending().some((r) => r.taskId === task.id)) return awaiting;
     const agentName = ws.manager.findAgent(task.assigneeId)?.name ?? 'unknown';
     const { requestId, decision } = ws.broker.request({
       taskId: task.id, title: task.title, agentName, diffStat: task.diffStat ?? [], summary: task.resultSummary ?? '',
     });
+    this.onDecision(ws, task.id, requestId, decision);
+    await this.savePending(ws);
     this.emitWs(ws, { type: 'merge-request', request: ws.broker.pending().find((r) => r.requestId === requestId)! });
+    return awaiting;
+  }
+
+  private onDecision(ws: Workspace, taskId: string, requestId: string, decision: Promise<boolean>): void {
     void decision.then(async (ok) => {
+      // A closed workspace keeps its saved requests so they come back on the next open.
       if (this.ws !== ws) return;
+      await this.savePending(ws);
       this.emitWs(ws, { type: 'merge-resolved', requestId });
-      if (!ok) return ws.boss.notify(`The user declined to merge ${task.id}.`, task.id);
-      const outcome = await ws.manager.merge(task.id).catch((e: unknown) => ({ status: 'blocked' as const, reason: e instanceof Error ? e.message : String(e) }));
-      return ws.boss.notify(describeMerge(task.id, outcome), task.id);
+      if (!ok) return ws.boss.notify(`The user declined to merge ${taskId}.`, taskId);
+      const outcome = await ws.manager.merge(taskId).catch((e: unknown) => ({ status: 'blocked' as const, reason: e instanceof Error ? e.message : String(e) }));
+      return ws.boss.notify(describeMerge(taskId, outcome), taskId);
     }).catch(() => undefined);
-    return { status: 'awaiting_user_approval', note: 'The user has been asked. You will get an [AgentOffice] message with the outcome.' };
+  }
+
+  private savePending(ws: Workspace): Promise<void> {
+    return this.store.savePendingMerges(ws.project.id, ws.broker.pending()).catch(() => undefined);
   }
 
   private forward(ws: Workspace, e: ManagerEvent): void {

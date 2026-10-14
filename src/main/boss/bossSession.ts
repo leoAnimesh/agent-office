@@ -35,6 +35,11 @@ export function describeFinished(task: Task, agentName: string): string {
 export class BossSession extends EventEmitter {
   private runner: AgentRunner | null = null;
   private textThisTurn = false;
+  /** Whether the current runner was launched with --resume and has reported `init` yet. */
+  private resumed = false;
+  private sawInit = false;
+  /** Last message delivered, replayed once if a stale session has to be replaced. */
+  private lastText: string | null = null;
   private stopping = false;
   private detach: (() => void) | null = null;
   /** Delivery is serialized so two quick messages never start two boss processes. */
@@ -90,6 +95,7 @@ export class BossSession extends EventEmitter {
     const next = this.delivery.then(async () => {
       if (this.stopping) return;
       const runner = await this.ensureRunner();
+      this.lastText = text;
       if (runner.running) runner.send(text);
     });
     this.delivery = next.catch(() => undefined);
@@ -129,6 +135,8 @@ export class BossSession extends EventEmitter {
       this.events = this.events.then(() => this.onEvent(boss.id, runner, ev)).catch(() => undefined);
     });
     this.runner = runner;
+    this.resumed = Boolean(boss.sessionId);
+    this.sawInit = false;
     this.textThisTurn = false;
     runner.start();
     return runner;
@@ -138,6 +146,7 @@ export class BossSession extends EventEmitter {
     await this.d.manager.setLive(bossId, ev).catch(() => undefined);
     switch (ev.type) {
       case 'init':
+        this.sawInit = true;
         this.textThisTurn = false;
         if (ev.sessionId) await this.d.manager.setSessionId(bossId, ev.sessionId).catch(() => undefined);
         break;
@@ -155,7 +164,12 @@ export class BossSession extends EventEmitter {
         break;
       case 'exit':
         if (this.runner === runner) this.runner = null;
-        if (!this.stopping && ev.code !== 0) {
+        if (!this.stopping && ev.code !== 0 && this.resumed && !this.sawInit) {
+          // The saved conversation is gone (expired or deleted). Start over instead of failing forever.
+          await this.d.manager.setSessionId(bossId, null).catch(() => undefined);
+          await this.add({ kind: 'error', at: this.now(), text: 'The earlier boss conversation could not be restored, so a fresh boss session was started. It may need a reminder of what you were working on.' });
+          if (this.lastText) void this.deliver(this.lastText);
+        } else if (!this.stopping && ev.code !== 0) {
           const tail = runner.lastStderr;
           await this.add({ kind: 'error', at: this.now(), text: `The boss session stopped (${ev.code ?? ev.signal}). It will restart with your next message.${tail ? `\n${tail}` : ''}` });
         }

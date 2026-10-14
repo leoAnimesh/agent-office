@@ -87,9 +87,10 @@ export function bossTools(d: BossToolDeps): ToolDef[] {
       manager.tasks().filter((t) => !status || t.status === status).map((t) => view(t)),
     ),
 
-    tool('message_agent', 'Send a follow-up message to an employee (feedback, a question, a change request).', { agent: z.string(), text: z.string().min(1) }, async ({ agent, text }) => ({
-      delivered: await manager.messageAgent(agent, text),
-    })),
+    tool('message_agent', 'Send a follow-up message to an employee (feedback, a question, a change request).', { agent: z.string(), text: z.string().min(1) }, async ({ agent, text }) => {
+      const r = await manager.messageAgent(agent, text);
+      return { delivered: r.delivered, task_id: r.taskId };
+    }),
 
     tool('request_merge', "Ask to merge a reviewed task's branch into the main branch. The user may need to approve; you will get a message with the outcome.", { task_id: z.string() }, async ({ task_id }) =>
       d.requestMerge(mustTask(task_id)),
