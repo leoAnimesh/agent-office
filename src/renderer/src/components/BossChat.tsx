@@ -13,7 +13,7 @@ function Entry({ e }: { e: ChatEntry }) {
     case 'boss': return <div className="msg boss"><Markdown text={e.text} /></div>;
     case 'report': return <div className="msg report"><Markdown text={e.text} /></div>;
     case 'error': return <div className="msg error pre" role="alert">{e.text}</div>;
-    case 'event': return <div className="msg event small"><span className="dot" style={{ background: 'var(--green)' }} aria-hidden="true" /> <span className="pre">{e.text}</span></div>;
+    case 'event': return <div className="msg event small"><span className="dot" style={{ background: 'var(--green)' }} aria-hidden="true" /><div className="event-md"><Markdown text={e.text} /></div></div>;
     case 'tool': return (
       <div className="msg tool">
         <span className="mono small tool-name">{e.tool}</span>

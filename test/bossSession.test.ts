@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { BossSession, describeFinished } from '../src/main/boss/bossSession';
+import { BossSession, describeFinished, finishedChatText } from '../src/main/boss/bossSession';
 import { ClaudeRunner } from '../src/main/claude/runner';
 import type { ChatEntry, Task } from '../src/shared/types';
 import { harness, type Harness } from './helpers/manager';
@@ -162,5 +162,37 @@ describe('describeFinished', () => {
     const t = { id: 'T-7', status: 'review', resultSummary: 'Added it', diffStat: [{ path: 'a.ts', add: 3, del: 1 }] } as Task;
     expect(describeFinished(t, 'Pixel')).toBe('T-7 by Pixel finished successfully. Summary: Added it Files: a.ts (+3 −1). Read it with get_task, then request_merge or message_agent.');
     expect(describeFinished({ ...t, status: 'needs_help', diffStat: [] }, 'Pixel')).toMatch(/^T-7 by Pixel finished with problems\. Summary: Added it Files: none\./);
+  });
+});
+
+describe('finishedChatText', () => {
+  const t = { id: 'T-7', status: 'review', resultSummary: '- **Checks:** `build` passed\n- Merged', diffStat: [{ path: 'a.ts', add: 3, del: 1 }] } as Task;
+
+  it('is markdown for the user: heading, the summary as written, files as a list, no boss instructions', () => {
+    expect(finishedChatText(t, 'Pixel')).toBe('**T-7 by Pixel finished successfully.**\n\n- **Checks:** `build` passed\n- Merged\n\n**Files changed (1)**\n- `a.ts` +3 −1');
+    expect(finishedChatText({ ...t, status: 'needs_help', diffStat: [], resultSummary: '' }, 'Pixel')).toBe('**T-7 by Pixel finished with problems.**\n\nNo files changed.');
+  });
+
+  it('shortens long file lists', () => {
+    const many = Array.from({ length: 11 }, (_, i) => ({ path: `f${i}.ts`, add: 1, del: 0 }));
+    const text = finishedChatText({ ...t, diffStat: many }, 'Pixel');
+    expect(text).toContain('**Files changed (11)**');
+    expect(text).toContain('- `f7.ts` +1 −0');
+    expect(text).not.toContain('f8.ts');
+    expect(text).toContain('- …and 3 more');
+  });
+});
+
+describe('task-finished chat entry', () => {
+  it('shows the markdown chat text while the boss still gets its instructions', async () => {
+    const { manager, boss, chat, until } = await setup();
+    await manager.hire('frontend');
+    const t = await manager.createTask({ assignee: 'Pixel', title: 'a', brief: 'a', createdBy: 'boss' });
+    const entry = await until((e) => e.kind === 'event' && e.taskId === t.id);
+    expect(entry.text).toMatch(/^\*\*T-101 by Pixel finished successfully\.\*\*/);
+    expect(entry.text).not.toContain('get_task');
+    await until((e) => e.kind === 'boss' && e.text.includes('[AgentOffice] T-101 by Pixel finished successfully. Summary:'));
+    expect(chat.filter((e) => e.kind === 'event')).toHaveLength(1);
+    await boss.stop();
   });
 });

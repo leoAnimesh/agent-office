@@ -32,6 +32,23 @@ export function describeFinished(task: Task, agentName: string): string {
   return `${task.id} by ${agentName} finished ${how}. Summary: ${(task.resultSummary ?? '').trim()} Files: ${files}. Read it with get_task, then request_merge or message_agent.`;
 }
 
+const CHAT_FILES = 8;
+
+/** The same news for the user: markdown, the summary as written, files as a short list, no tool instructions. */
+export function finishedChatText(task: Task, agentName: string): string {
+  const how = task.status === 'review' ? 'successfully' : 'with problems';
+  const parts = [`**${task.id} by ${agentName} finished ${how}.**`];
+  const summary = (task.resultSummary ?? '').trim();
+  if (summary) parts.push(summary);
+  const files = task.diffStat ?? [];
+  if (files.length === 0) parts.push('No files changed.');
+  else {
+    const shown = files.slice(0, CHAT_FILES).map((f) => `- \`${f.path}\` +${f.add} −${f.del}`);
+    if (files.length > CHAT_FILES) shown.push(`- …and ${files.length - CHAT_FILES} more`);
+    parts.push(`**Files changed (${files.length})**\n${shown.join('\n')}`);
+  }
+  return parts.join('\n\n');
+}
 export class BossSession extends EventEmitter {
   private runner: AgentRunner | null = null;
   private textThisTurn = false;
@@ -56,7 +73,7 @@ export class BossSession extends EventEmitter {
 
   start(): void {
     const onEvent = (e: ManagerEvent) => {
-      if (e.type === 'task-finished') this.notify(describeFinished(e.task, e.agent.name), e.task.id).catch(() => undefined);
+      if (e.type === 'task-finished') this.notify(describeFinished(e.task, e.agent.name), e.task.id, finishedChatText(e.task, e.agent.name)).catch(() => undefined);
       if (e.type === 'agent-replied') this.notify(e.ok ? `${e.agent.name} replied: ${e.text}` : `${e.agent.name} could not answer: ${e.text}`).catch(() => undefined);
     };
     this.d.manager.on('event', onEvent);
@@ -72,8 +89,9 @@ export class BossSession extends EventEmitter {
     await this.deliver(text);
   }
 
-  async notify(text: string, taskId?: string): Promise<void> {
-    await this.add({ kind: 'event', at: this.now(), text, ...(taskId ? { taskId } : {}) });
+  /** `chatText` is what the user sees when it should differ from what the boss is told. */
+  async notify(text: string, taskId?: string, chatText?: string): Promise<void> {
+    await this.add({ kind: 'event', at: this.now(), text: chatText ?? text, ...(taskId ? { taskId } : {}) });
     await this.deliver(`[AgentOffice] ${text}`);
   }
 
