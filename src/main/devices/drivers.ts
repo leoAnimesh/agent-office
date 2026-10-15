@@ -50,6 +50,7 @@ export class AndroidDriver implements DeviceDriver {
   readonly kind = 'android' as const;
   readonly canInput = true;
   private serial: string | null = null;
+  private avd: string | null = null;
   private proc: ReturnType<typeof startTool> | null = null;
   private size: { w: number; h: number } | null = null;
   constructor(private readonly t: DeviceTools, private readonly o: { bootMs?: number } = {}) {}
@@ -59,6 +60,8 @@ export class AndroidDriver implements DeviceDriver {
   private shell(...args: string[]) { return ok(runTool(this.adb, [...this.s(), 'shell', ...args]), args[0]); }
 
   async start(prefer?: string): Promise<DeviceInfo> {
+    // Our own emulator is still there (e.g. briefly 'offline' under load): wait for it, never attach or launch another.
+    if (this.proc && !this.proc.hasExited() && this.serial) return this.waitBoot(this.avd ?? this.serial);
     const running = parseAdbDevices((await runTool(this.adb, ['devices'])).stdout.toString());
     if (running.length > 0) {
       this.serial = running[0];
@@ -71,23 +74,31 @@ export class AndroidDriver implements DeviceDriver {
     const port = 5554 + 2 * Math.floor(Math.random() * 64);
     this.proc = startTool(emulator, ['-avd', avd, '-no-window', '-no-audio', '-no-boot-anim', '-no-snapshot-save', '-port', String(port)]);
     this.serial = `emulator-${port}`;
+    this.avd = avd;
+    try {
+      return await this.waitBoot(avd);
+    } catch (e) {
+      await this.stop();
+      throw e;
+    }
+  }
+
+  private async waitBoot(avd: string): Promise<DeviceInfo> {
+    const proc = need(this.proc ?? undefined, 'The emulator is not running');
+    const serial = need(this.serial ?? undefined, 'The emulator is not running');
     const deadline = Date.now() + (this.o.bootMs ?? 180_000);
     while (Date.now() < deadline) {
-      if (this.proc.hasExited()) {
-        const out = this.proc.output();
-        this.proc = null;
-        this.serial = null;
+      if (proc.hasExited()) {
+        const out = proc.output();
         throw new Error(`${emulatorHint(out)}The emulator stopped while starting. Its output:\n${out}`);
       }
-      const listed = parseAdbDevices((await runTool(this.adb, ['devices'])).stdout.toString()).includes(this.serial);
+      const listed = parseAdbDevices((await runTool(this.adb, ['devices'])).stdout.toString()).includes(serial);
       if (listed && (await runTool(this.adb, [...this.s(), 'shell', 'getprop', 'sys.boot_completed'])).stdout.toString().trim() === '1') {
-        return { kind: 'android', id: this.serial, name: avd, startedByApp: true };
+        return { kind: 'android', id: serial, name: avd, startedByApp: true };
       }
       await sleep(1000);
     }
-    const out = this.proc.output();
-    await this.stop();
-    throw new Error(`The emulator did not finish starting in time. Last output:\n${out}`);
+    throw new Error(`The emulator did not finish starting in time. Last output:\n${proc.output()}`);
   }
 
   async running(): Promise<boolean> {
@@ -103,6 +114,7 @@ export class AndroidDriver implements DeviceDriver {
       await p.kill();
     }
     this.serial = p ? null : this.serial;
+    this.size = null;
   }
 
   async snapshot(): Promise<Outline> {
@@ -150,13 +162,19 @@ export class IosDriver implements DeviceDriver {
   async start(prefer?: string): Promise<DeviceInfo> {
     const sims = parseSimulators((await this.simctl('list', 'devices', 'available', '-j')).stdout.toString());
     const booted = sims.find((s) => s.state === 'Booted');
-    if (booted) { this.udid = booted.udid; return { kind: 'ios', id: booted.udid, name: booted.name, startedByApp: false }; }
+    this.size = null;
+    if (booted) { this.udid = booted.udid; this.booted = false; return { kind: 'ios', id: booted.udid, name: booted.name, startedByApp: false }; }
     const sim = sims.find((s) => s.udid === prefer) ?? sims[0];
     if (!sim) throw new Error('No iPhone simulator found: add one in Xcode (Window → Devices and Simulators).');
     this.udid = sim.udid;
     await this.simctl('boot', sim.udid);
     this.booted = true;
-    await ok(runTool(this.xcrun, ['simctl', 'bootstatus', sim.udid], { timeoutMs: this.o.bootMs ?? 180_000 }), 'Boot');
+    try {
+      await ok(runTool(this.xcrun, ['simctl', 'bootstatus', sim.udid], { timeoutMs: this.o.bootMs ?? 180_000 }), 'Boot');
+    } catch (e) {
+      await this.stop();
+      throw e;
+    }
     return { kind: 'ios', id: sim.udid, name: sim.name, startedByApp: true };
   }
 

@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeviceService } from '../src/main/devices/deviceService';
+import { AndroidDriver } from '../src/main/devices/drivers';
 import { resolveDeviceTools } from '../src/main/devices/tools';
 import { fakeDevices } from './helpers/fakeDevices';
 
@@ -50,5 +51,40 @@ describe('DeviceService', () => {
     const none = new DeviceService({ tools: { platform: 'linux' }, nameOf: (x) => x, taskOf: () => undefined });
     await expect(none.use('a1', 'ios')).rejects.toThrow(/macOS/);
     await none.close();
+  });
+});
+
+describe('DeviceService while a device is booting', () => {
+  it('still shuts down a device the app was starting when the project closes', async () => {
+    const stop = vi.fn(async () => undefined);
+    const slow = {
+      kind: 'android' as const, canInput: true,
+      start: () => new Promise<{ kind: 'android'; id: string; name: string; startedByApp: boolean }>((r) => setTimeout(() => r({ kind: 'android', id: 'emulator-5554', name: 'Phone', startedByApp: true }), 300)),
+      running: async () => true, stop,
+    } as unknown as import('../src/main/devices/drivers').DeviceDriver;
+    const s = new DeviceService({ tools: { platform: 'linux' }, nameOf: (x) => x, taskOf: () => undefined, drivers: { android: slow } });
+    const using = s.use('a1', 'android');
+    await new Promise((r) => setTimeout(r, 50));
+    await s.close(); // the boot is still going
+    await using.catch(() => undefined);
+    expect(stop).toHaveBeenCalled();
+  });
+});
+
+describe('DeviceService with a device the user started', () => {
+  it('attaches to it and leaves it running when the project closes', async () => {
+    const f = await fakeDevices();
+    const tools = resolveDeviceTools({}, 'darwin', f.override);
+    const users = new AndroidDriver(tools, { bootMs: 10_000 });
+    await users.start(); // "the user's" emulator
+    const s = new DeviceService({ tools, bootMs: 10_000, nameOf: (x) => x, taskOf: () => undefined });
+    await s.use('a1', 'android');
+    expect((await s.states()).find((x) => x.kind === 'android')).toMatchObject({ startedByApp: false });
+    const before = (await f.calls()).length;
+    await s.close();
+    expect((await f.calls()).slice(before).some((c) => c.includes('kill'))).toBe(false);
+    expect(await users.running()).toBe(true);
+    await users.stop();
+    await f.cleanup();
   });
 });

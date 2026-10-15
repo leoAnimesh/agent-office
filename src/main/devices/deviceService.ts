@@ -78,6 +78,7 @@ export class DeviceService {
   async startByUser(kind: DeviceKind) { await this.ensure(kind); }
   async shutdownByUser(kind: DeviceKind) {
     const s = this.slots[kind];
+    await s.starting?.catch(() => undefined);
     if (!s.startedByApp) throw new Error('This device was started outside AgentOffice; close it there.');
     if (this.watched === kind) this.watch(null);
     await s.driver.stop();
@@ -135,7 +136,9 @@ export class DeviceService {
   async close() {
     this.watch(null);
     for (const s of Object.values(this.slots)) {
-      if (s.startedByApp) await s.driver.stop().catch(() => undefined);
+      // A boot may still be running: let it settle, then stop. Drivers only stop devices they started.
+      await s.starting?.catch(() => undefined);
+      await s.driver.stop().catch(() => undefined);
       Object.assign(s, { started: false, startedByApp: false, holder: null });
     }
   }
