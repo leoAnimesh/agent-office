@@ -32,6 +32,10 @@ export interface Agent {
 
 export interface DiffStat { path: string; add: number; del: number }
 
+/** One commit in the History view: numbers are what it brought in (a merge counts against its first parent). */
+export interface CommitSummary { sha: string; short: string; subject: string; author: string; date: string; isMerge: boolean; taskId: string | null; files: number; add: number; del: number }
+export interface CommitDetail { sha: string; subject: string; body: string; author: string; email: string; date: string; parents: number; taskId: string | null; files: DiffStat[] }
+
 /** Role model value meaning "let the classifier pick per task". */
 export const AUTO_MODEL = 'auto';
 export type TaskSize = 'small' | 'medium' | 'large';
@@ -56,6 +60,8 @@ export interface Task {
   /** Model the task runs on; undefined while the classifier is still deciding. */
   model?: string;
   modelPick?: ModelPick;
+  /** The commit that merged this task into the base branch (shown in History). */
+  mergeCommit?: string;
   /** Position in the queue set by the user; unset tasks come after, oldest first. */
   order?: number;
   createdAt: string;

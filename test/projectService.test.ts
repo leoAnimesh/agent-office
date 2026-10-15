@@ -173,7 +173,9 @@ describe('ProjectService', () => {
     events = [];
     await svc.open(repo);
     await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.id === 'T-101' && t.status === 'review'));
-    await until((e) => e.type === 'chat' && e.entry.kind === 'event' && /restarted/.test(e.entry.text));
+    // The notice must make clear the work was kept, not thrown away (the boss repeats it to the user).
+    const notice = await until((e) => e.type === 'chat' && e.entry.kind === 'event' && /T-101/.test(e.entry.text));
+    expect(notice).toMatchObject({ entry: { text: 'The app restarted while T-101 was running. Its work was kept (files and the agent\'s conversation), and it has picked up where it left off.' } });
   });
 
   it('keeps pending merge approvals across a restart', async () => {

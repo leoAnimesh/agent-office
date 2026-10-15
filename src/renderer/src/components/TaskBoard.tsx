@@ -8,12 +8,12 @@ import { dropAction, dropMode, queueDropBefore, type Column } from '../tasks/mov
 import { canReassign, queueOf, taskActions } from '../tasks/taskDetail';
 import { TaskDrawer } from './TaskDrawer';
 
-interface Props { ws: WorkspaceSnapshot; roles: Role[]; onOpenAgent: (id: string) => void; onNewTask: () => void; onError: (m: string) => void }
+interface Props { ws: WorkspaceSnapshot; roles: Role[]; onOpenAgent: (id: string) => void; onViewCommit: (sha: string) => void; onNewTask: () => void; onError: (m: string) => void }
 
 /** Where a queued card being dragged would land: before/after the card under the pointer. */
 interface Insert { over: string; half: 'top' | 'bottom'; before: string | null | undefined }
 
-export function TaskBoard({ ws, roles, onOpenAgent, onNewTask, onError }: Props) {
+export function TaskBoard({ ws, roles, onOpenAgent, onViewCommit, onNewTask, onError }: Props) {
   const [who, setWho] = useState<string>('all');
   const [openId, setOpenId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -138,7 +138,7 @@ export function TaskBoard({ ws, roles, onOpenAgent, onNewTask, onError }: Props)
           );
         })}
       </div>
-      {open && <TaskDrawer key={open.id} task={open} ws={ws} roles={roles} onClose={() => setOpenId(null)} onOpenAgent={onOpenAgent} onError={onError} />}
+      {open && <TaskDrawer key={open.id} task={open} ws={ws} roles={roles} onClose={() => setOpenId(null)} onOpenAgent={onOpenAgent} onViewCommit={onViewCommit} onError={onError} />}
     </section>
   );
 }

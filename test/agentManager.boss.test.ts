@@ -15,7 +15,10 @@ describe('AgentManager (boss support)', () => {
     await manager.createTask({ assignee: 'Pixel', title: 'a', brief: 'a', createdBy: 'boss' });
     await exited;
     await manager.idle();
-    expect(await manager.merge('T-101')).toMatchObject({ status: 'merged' });
+    const merged = await manager.merge('T-101');
+    expect(merged).toMatchObject({ status: 'merged' });
+    // The task remembers its merge commit so the History view can show it.
+    expect(manager.getTask('T-101')!.mergeCommit).toBe((merged as { commit: string }).commit);
     const replied = waitFor(manager, (e) => e.type === 'agent-replied');
     expect(await manager.messageAgent('pixel', 'What did you learn?')).toEqual({ delivered: 'started', taskId: null });
     expect(await replied).toMatchObject({ type: 'agent-replied', text: expect.stringContaining('What did you learn?'), ok: true });

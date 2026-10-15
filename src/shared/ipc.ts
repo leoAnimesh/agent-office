@@ -1,4 +1,4 @@
-import type { Agent, AppSettings, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot, TerminalEvent } from './types';
+import type { Agent, AppSettings, CommitDetail, CommitSummary, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot, TerminalEvent } from './types';
 
 export const IPC = {
   appStatus: 'app:status',
@@ -29,6 +29,10 @@ export const IPC = {
   getSettings: 'settings:get',
   saveSettings: 'settings:save',
   event: 'workspace:event',
+  historyBranches: 'history:branches',
+  historyList: 'history:list',
+  historyCommit: 'history:commit',
+  historyDiff: 'history:diff',
   terminalOpen: 'terminal:open',
   terminalWrite: 'terminal:write',
   terminalResize: 'terminal:resize',
@@ -68,6 +72,11 @@ export interface AgentOfficeApi {
   getSettings(): Promise<AppSettings>;
   saveSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
   onEvent(cb: (e: WorkspaceEvent) => void): () => void;
+  /** Read-only git history of the open project. */
+  historyBranches(): Promise<string[]>;
+  historyList(ref: string, skip: number, mergesOnly: boolean): Promise<CommitSummary[]>;
+  historyCommit(sha: string): Promise<CommitDetail>;
+  historyDiff(sha: string, path: string): Promise<string>;
   /** The open project's terminal: start it (or get its recent output back), type into it, resize, restart. */
   terminalOpen(cols: number, rows: number): Promise<{ backlog: string }>;
   terminalWrite(data: string): Promise<void>;

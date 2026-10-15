@@ -8,12 +8,12 @@ import { cardMeta } from '../tasks/board';
 import { chipDetail, modelChip } from '../tasks/modelChip';
 import { canReassign, fileTotals, queueNeighbours, taskActions } from '../tasks/taskDetail';
 
-interface Props { task: Task; ws: WorkspaceSnapshot; roles: Role[]; onClose: () => void; onOpenAgent: (id: string) => void; onError: (m: string) => void }
+interface Props { task: Task; ws: WorkspaceSnapshot; roles: Role[]; onClose: () => void; onOpenAgent: (id: string) => void; onViewCommit: (sha: string) => void; onError: (m: string) => void }
 
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString() : '—');
 
 /** Task details in a slide-over. A native modal <dialog>: Esc closes, focus stays inside, the board behind is inert. */
-export function TaskDrawer({ task, ws, roles, onClose, onOpenAgent, onError }: Props) {
+export function TaskDrawer({ task, ws, roles, onClose, onOpenAgent, onViewCommit, onError }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
@@ -48,6 +48,13 @@ export function TaskDrawer({ task, ws, roles, onClose, onOpenAgent, onError }: P
           {agent ? <button type="button" className="btn small" onClick={() => { ref.current?.close(); onOpenAgent(agent.id); }}>{agent.name}</button> : <span className="small muted">unassigned</span>}
           <span className="small muted">from {task.createdBy === 'boss' ? 'the boss' : 'you'}</span>
         </div>
+
+        {task.mergeCommit && (
+          <div className="row">
+            <span className="small muted">Merged as <span className="mono">{task.mergeCommit.slice(0, 10)}</span></span>
+            <button type="button" className="btn small" onClick={() => { ref.current?.close(); onViewCommit(task.mergeCommit!); }}>View in history</button>
+          </div>
+        )}
 
         <div className="row branch-row">
           <span className="mono small branch" title={task.branch}>{task.branch}</span>
