@@ -62,9 +62,6 @@
 .log-line { display: grid; grid-template-columns: 72px 64px minmax(0, 1fr); gap: 12px; overflow-wrap: anywhere; }
 .log-time { color: var(--faint); }
 .tone-tool { color: var(--teal); } .tone-result { color: var(--green); } .tone-text { color: var(--text); } .tone-bad { color: var(--red-soft); } .tone-meta { color: var(--muted); }
-.team-col { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
-.team-only { max-width: 760px; }
-.team-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; min-width: 0; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
 .editor { flex: 999 1 460px; min-width: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .toggle { min-height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid var(--line-2); background: transparent; color: var(--muted); font: 500 13px var(--font-mono); }
@@ -165,10 +162,6 @@
 .drawer-md code { overflow-wrap: anywhere; }
 .side-bottom { margin-top: auto; }
 .agent-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-.team-info { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; overflow: hidden; white-space: nowrap; }
-.team-info > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
-.team-name { font-weight: 600; flex: 0 0 auto !important; }
-.team-actions { flex: none; display: flex; align-items: center; gap: 8px; }
 
 /* Task board drag and drop */
 .task-card[draggable="true"] { cursor: grab; }
@@ -230,3 +223,32 @@
   .commit-list { max-height: 50vh; }
   .history-detail { overflow: visible; }
 }
+
+/* Team: the boss across the top, employees as a card grid */
+.team { display: flex; flex-direction: column; gap: 16px; max-width: 1200px; }
+.team-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+.team-head h2 { margin: 0; font-size: 18px; }
+.team-sections { display: flex; flex-direction: column; gap: 14px; }
+.team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.team-card { position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; background: var(--card); border: 1px solid #33374a; border-radius: 10px; box-shadow: 0 2px 0 #0e0f16; cursor: pointer; }
+.team-card:hover { border-color: var(--line-2); }
+.team-card.wide { background: var(--panel-2); }
+.team-card-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.team-card-id { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.team-open { all: unset; cursor: pointer; font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 4px; }
+.team-open:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.team-card-menu { flex: none; align-self: flex-start; }
+.team-status { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.status-pill { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 12px; font-weight: 600; }
+.team-bubble { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-task { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.team-task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-foot { display: flex; gap: 12px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line); }
+.team-task .chip { flex: none; white-space: nowrap; }
+/* The boss: one row across the top */
+.team-card.wide { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.team-card.wide .team-card-top { display: contents; }
+.team-card.wide .team-card-id { flex: 0 1 180px; }
+.team-card.wide .team-card-menu { order: 10; align-self: center; }
+.team-card.wide .team-task { flex: 2 1 240px; }
+.team-card.wide .team-foot { margin: 0 0 0 auto; padding: 0; border: 0; }
