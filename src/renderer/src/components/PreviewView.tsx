@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PreviewTab, WorkspaceSnapshot } from '../../../shared/types';
-import { emptyState, fitRect, keyToInput, statusLine, toFraction } from '../preview/input';
+import { emptyState, fitRect, keyToInput, statusLine, toFraction, wheelGate } from '../preview/input';
 import { deviceStatus, targetLabel } from '../preview/targets';
 
 interface Props { ws: WorkspaceSnapshot; onError: (m: string) => void }
@@ -68,7 +68,14 @@ export function PreviewView({ ws, onError }: Props) {
   const device = tab?.device;
   // A device without idb (iOS) can be watched but not driven.
   const send = (ev: Parameters<typeof window.agentOffice.previewInput>[1]) => { if (agentId && (!device || (device.running && device.canInput))) void window.agentOffice.previewInput(agentId, ev).catch(fail); };
-  const act = (action: 'start' | 'home' | 'back' | 'shutdown') => { if (device) void window.agentOffice.previewDevice(device.kind, action).catch(fail); };
+  // Booting can take minutes: show it, and don't offer Start twice.
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const act = (action: 'start' | 'home' | 'back' | 'shutdown') => {
+    if (!device) return;
+    if (action === 'start' || action === 'shutdown') setBusyAction(action);
+    void window.agentOffice.previewDevice(device.kind, action).catch(fail).finally(() => setBusyAction(null));
+  };
+  const deviceWheel = useRef(wheelGate(400));
 
   const empty = emptyState(browserOk);
   if (tabs.length === 0) {
@@ -89,10 +96,10 @@ export function PreviewView({ ws, onError }: Props) {
         {tab && <span className="small muted mono preview-status" title={tab.title}>{device ? deviceStatus(tab, nameOf) : statusLine(tab, nameOf(tab.agentId))}</span>}
         {device ? (
           <span className="preview-actions">
-            {!device.running && <button type="button" className="btn small" onClick={() => act('start')}>Start</button>}
+            {!device.running && <button type="button" className="btn small" disabled={busyAction === 'start'} onClick={() => act('start')}>{busyAction === 'start' ? 'Starting… (this can take a few minutes)' : 'Start'}</button>}
             {device.running && device.canInput && <button type="button" className="btn small" onClick={() => act('home')}>Home</button>}
             {device.running && device.canInput && device.kind === 'android' && <button type="button" className="btn small" onClick={() => act('back')}>Back</button>}
-            {device.running && device.startedByApp && <button type="button" className="btn small" onClick={() => act('shutdown')}>Shut down</button>}
+            {device.running && device.startedByApp && <button type="button" className="btn small" disabled={busyAction === 'shutdown'} onClick={() => act('shutdown')}>{busyAction === 'shutdown' ? 'Shutting down…' : 'Shut down'}</button>}
           </span>
         ) : (
           <span className="preview-actions">
@@ -111,7 +118,7 @@ export function PreviewView({ ws, onError }: Props) {
         aria-label={device ? `Live view of the ${device.kind === 'android' ? 'Android' : 'iOS'} device` : `Live view of ${tab ? nameOf(tab.agentId) : 'the employee'}'s browser tab`}
         onMouseDown={(e) => { e.currentTarget.focus(); const p = at(e); if (p) send({ kind: 'click', x: p.x, y: p.y, button: e.button === 2 ? 'right' : 'left' }); }}
         onContextMenu={(e) => e.preventDefault()}
-        onWheel={(e) => { const p = at(e); if (p) send({ kind: 'wheel', x: p.x, y: p.y, dy: Math.max(-5000, Math.min(5000, e.deltaY)) }); }}
+        onWheel={(e) => { if (device && !deviceWheel.current(e.timeStamp)) return; const p = at(e); if (p) send({ kind: 'wheel', x: p.x, y: p.y, dy: Math.max(-5000, Math.min(5000, e.deltaY)) }); }}
         onKeyDown={(e) => { const ev = keyToInput(e); if (ev) { e.preventDefault(); send(ev); } }}
       />
     </div>

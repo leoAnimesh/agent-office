@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ANDROID_KEYS, adbText, shQuote, androidOutline, androidUrl, iosOutline, parseAdbDevices, parseAvds, parseSimulators, pngSize, type DeviceKey, type Outline } from './parse';
+import { ANDROID_KEYS, adbTextChunks, freeEmulatorPort, shQuote, androidOutline, androidUrl, iosOutline, parseAdbDevices, parseAvds, parseSimulators, pngSize, type DeviceKey, type Outline } from './parse';
 import { runTool, startTool, type DeviceTools, type ToolCmd } from './tools';
 
 export type DeviceKind = 'android' | 'ios';
@@ -62,7 +62,8 @@ export class AndroidDriver implements DeviceDriver {
   async start(prefer?: string): Promise<DeviceInfo> {
     // Our own emulator is still there (e.g. briefly 'offline' under load): wait for it, never attach or launch another.
     if (this.proc && !this.proc.hasExited() && this.serial) return this.waitBoot(this.avd ?? this.serial);
-    const running = parseAdbDevices((await runTool(this.adb, ['devices'])).stdout.toString());
+    const listing = (await runTool(this.adb, ['devices'])).stdout.toString();
+    const running = parseAdbDevices(listing);
     if (running.length > 0) {
       this.serial = running[0];
       return { kind: 'android', id: this.serial, name: this.serial, startedByApp: false };
@@ -71,7 +72,8 @@ export class AndroidDriver implements DeviceDriver {
     const avds = parseAvds((await runTool(emulator, ['-list-avds'])).stdout.toString());
     const avd = prefer && avds.includes(prefer) ? prefer : avds[0];
     if (!avd) throw new Error('No Android emulator found: create one in Android Studio (Device Manager).');
-    const port = 5554 + 2 * Math.floor(Math.random() * 64);
+    // A port no other emulator uses, including one that is still booting (listed as offline).
+    const port = freeEmulatorPort(listing);
     this.proc = startTool(emulator, ['-avd', avd, '-no-window', '-no-audio', '-no-boot-anim', '-no-snapshot-save', '-port', String(port)]);
     this.serial = `emulator-${port}`;
     this.avd = avd;
@@ -128,7 +130,7 @@ export class AndroidDriver implements DeviceDriver {
   }
 
   async tap(x: number, y: number) { await this.shell('input', 'tap', String(Math.round(x)), String(Math.round(y))); }
-  async type(text: string) { await this.shell('input', 'text', adbText(text)); }
+  async type(text: string) { for (const chunk of adbTextChunks(text)) await this.shell('input', 'text', chunk); }
   async swipe(dir: 'up' | 'down' | 'left' | 'right') { const { w, h } = await this.screenSize(); await this.shell('input', 'swipe', ...swipeLine(w, h, dir), '250'); }
   async press(key: DeviceKey) { await this.shell('input', 'keyevent', ANDROID_KEYS[key]); }
   async install(file: string) { await ok(runTool(this.adb, [...this.s(), 'install', '-r', file], { timeoutMs: 180_000 }), 'Install'); }
@@ -139,7 +141,7 @@ export class AndroidDriver implements DeviceDriver {
     this.size = pngSize(r.stdout) ?? this.size;
     return r.stdout;
   }
-  async logs() { return (await runTool(this.adb, [...this.s(), 'logcat', '-d', '-t', '200', '*:W'])).stdout.toString() || 'No warnings or errors.'; }
+  async logs() { return (await runTool(this.adb, [...this.s(), 'logcat', '-d', '-t', '200', '*:W'], { tail: true })).stdout.toString() || 'No warnings or errors.'; }
   async screenSize() { if (!this.size) await this.screenshot(); return need(this.size ?? undefined, 'Could not read the screen size'); }
 }
 
@@ -194,7 +196,8 @@ export class IosDriver implements DeviceDriver {
   }
 
   async tap(x: number, y: number) { await this.idb('ui', 'tap', String(Math.round(x)), String(Math.round(y))); }
-  async type(text: string) { await this.idb('ui', 'text', text); }
+  // `--` so text starting with '-' is typed, not read as an option.
+  async type(text: string) { await ok(runTool(need(this.t.idb, IDB_HINT), ['ui', 'text', '--udid', this.id(), '--', text]), 'text'); }
   async swipe(dir: 'up' | 'down' | 'left' | 'right') { const { w, h } = await this.screenSize(); await this.idb('ui', 'swipe', ...swipeLine(w, h, dir)); }
   async press(key: DeviceKey) {
     if (key === 'back') throw new Error('iOS has no Back button; swipe right from the left edge or tap the app\'s back control.');
@@ -215,7 +218,7 @@ export class IosDriver implements DeviceDriver {
     }
   }
   async logs() {
-    const r = await runTool(this.xcrun, ['simctl', 'spawn', this.id(), 'log', 'show', '--last', '2m', '--style', 'compact', '--predicate', 'messageType >= 16']);
+    const r = await runTool(this.xcrun, ['simctl', 'spawn', this.id(), 'log', 'show', '--last', '2m', '--style', 'compact', '--predicate', 'messageType >= 16'], { tail: true });
     return r.stdout.toString().split('\n').slice(-200).join('\n') || 'No errors.';
   }
   /** Taps are in points: the Application element's frame from idb (screenshots are in pixels). */

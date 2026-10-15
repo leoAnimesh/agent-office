@@ -21,6 +21,14 @@ describe('device tools', () => {
     expect(t.platform).toBe('darwin');
   });
 
+  it('keeps the end of long output when asked to, instead of failing', async () => {
+    const cmd = { bin: process.execPath, pre: ['-e', "process.stdout.write('a'.repeat(5000) + 'THE END')"] };
+    await expect(runTool(cmd, [], { maxBytes: 100 })).rejects.toThrow(/more output/);
+    const r = await runTool(cmd, [], { maxBytes: 100, tail: true });
+    expect(r.stdout.length).toBeLessThanOrEqual(100);
+    expect(r.stdout.toString().endsWith('THE END')).toBe(true);
+  });
+
   it('reports what is available', async () => {
     const support = await detectDevices(resolveDeviceTools({}, 'darwin', fake.override));
     expect(support.android).toMatchObject({ ok: true, avds: ['Medium_Phone'] });

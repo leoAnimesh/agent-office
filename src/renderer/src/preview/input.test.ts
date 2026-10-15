@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyState, fitRect, keyToInput, statusLine, toFraction } from './input';
+import { emptyState, fitRect, keyToInput, statusLine, toFraction, wheelGate } from './input';
 
 const k = (key: string, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) =>
   ({ key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
@@ -43,5 +43,15 @@ describe('emptyState', () => {
     expect(emptyState(false)).toEqual({ text: 'No browser found. Install Google Chrome or Microsoft Edge, then try again.', install: true });
     expect(emptyState(true)).toEqual({ text: "An employee's browser tab appears here when it starts testing.", install: false });
     expect(emptyState(null)).toEqual({ text: "An employee's browser tab appears here when it starts testing.", install: false });
+  });
+});
+
+describe('wheelGate', () => {
+  it('lets one device swipe through per 400 ms of scrolling', () => {
+    const gate = wheelGate(400);
+    expect(gate(1000)).toBe(true);
+    expect(gate(1100)).toBe(false);
+    expect(gate(1399)).toBe(false);
+    expect(gate(1400)).toBe(true);
   });
 });

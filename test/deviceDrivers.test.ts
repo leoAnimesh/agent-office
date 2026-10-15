@@ -16,7 +16,7 @@ describe('AndroidDriver', () => {
     const info = await d.start();
     expect(info).toMatchObject({ kind: 'android', name: 'Medium_Phone', startedByApp: true });
     const avd = (await fake.calls()).find((c) => c[0] === 'emulator' && c[1] === '-avd')!;
-    expect(avd).toEqual(expect.arrayContaining(['-no-window', '-no-audio', '-no-boot-anim', '-no-snapshot-save']));
+    expect(avd).toEqual(expect.arrayContaining(['-no-window', '-no-audio', '-no-boot-anim', '-no-snapshot-save', '-port', '5554']));
     expect(await d.running()).toBe(true);
     await d.stop();
     expect(await d.running()).toBe(false);
@@ -49,6 +49,7 @@ describe('AndroidDriver', () => {
     expect((await d.snapshot()).text).toBe('- Button "Continue" (clickable) [ref=a1]');
     await d.tap(2, 4);
     await d.type('a&b c');
+    await d.type('50%sale');
     await d.swipe('up');
     await d.press('back');
     await d.openUrl('http://localhost:5173/?a=1&b=2;x');
@@ -56,6 +57,8 @@ describe('AndroidDriver', () => {
     expect(shell).toEqual([
       'input tap 2 4',
       'input text a\\&b%sc',
+      'input text 50%',
+      'input text sale',
       expect.stringMatching(/^input swipe \d+ \d+ \d+ \d+ 250$/),
       'input keyevent KEYCODE_BACK',
       "am start -a android.intent.action.VIEW -d 'http://10.0.2.2:5173/?a=1&b=2;x'",
@@ -81,7 +84,7 @@ describe('IosDriver', () => {
     await d.openUrl('http://localhost:3000/');
     expect(await after(from)).toEqual([
       ['idb', 'ui', 'tap', '1', '2', '--udid', 'SIM-1'],
-      ['idb', 'ui', 'text', 'hi there', '--udid', 'SIM-1'],
+      ['idb', 'ui', 'text', '--udid', 'SIM-1', '--', 'hi there'],
       ['idb', 'ui', 'key', '40', '--udid', 'SIM-1'],
       ['xcrun', 'simctl', 'openurl', 'SIM-1', 'http://localhost:3000/'],
     ]);

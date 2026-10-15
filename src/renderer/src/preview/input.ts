@@ -38,3 +38,13 @@ export function statusLine(t: PreviewTab, name: string): string {
 export function emptyState(browserAvailable: boolean | null): { text: string; install: boolean } {
   return browserAvailable === false ? { text: NO_BROWSER, install: true } : { text: "An employee's browser tab appears here when it starts testing.", install: false };
 }
+
+/** A trackpad fires dozens of wheel events per gesture; a device swipe is slow, so let one through per `ms`. */
+export function wheelGate(ms: number): (now: number) => boolean {
+  let last = -Infinity;
+  return (now) => {
+    if (now - last < ms) return false;
+    last = now;
+    return true;
+  };
+}

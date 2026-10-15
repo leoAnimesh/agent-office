@@ -13,7 +13,8 @@ export interface RunResult { code: number | null; stdout: Buffer; stderr: string
 export type { DeviceSupport };
 
 /** Runs a platform tool (argv array, no shell) with a timeout and an output cap. */
-export function runTool(t: ToolCmd, args: string[], o: { timeoutMs?: number; maxBytes?: number } = {}): Promise<RunResult> {
+/** `tail`: keep only the last `maxBytes` of a long output (logs) instead of failing. */
+export function runTool(t: ToolCmd, args: string[], o: { timeoutMs?: number; maxBytes?: number; tail?: boolean } = {}): Promise<RunResult> {
   const max = o.maxBytes ?? 1024 * 1024;
   return new Promise((resolve, reject) => {
     const child = spawn(t.bin, [...t.pre, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
@@ -23,10 +24,22 @@ export function runTool(t: ToolCmd, args: string[], o: { timeoutMs?: number; max
     let done = false;
     const finish = (fn: () => void) => { if (!done) { done = true; clearTimeout(timer); fn(); } };
     const timer = setTimeout(() => finish(() => { if (child.pid) killTree(child.pid, process.platform, 'SIGKILL'); reject(new Error(`${path.basename(t.pre.at(-1) ?? t.bin)} ${args[0] ?? ''} timed out`)); }), o.timeoutMs ?? 30_000);
-    child.stdout?.on('data', (c: Buffer) => { size += c.length; if (size <= max) out.push(c); else if (child.pid) killTree(child.pid); });
+    child.stdout?.on('data', (c: Buffer) => {
+      size += c.length;
+      if (o.tail) {
+        out.push(c);
+        let kept = out.reduce((n, b) => n + b.length, 0);
+        while (kept - out[0].length >= max) kept -= out.shift()!.length;
+      } else if (size <= max) out.push(c);
+      else if (child.pid) killTree(child.pid);
+    });
     child.stderr?.on('data', (c: Buffer) => { if (err.length < 64 * 1024) err += c.toString('utf8'); });
     child.on('error', (e) => finish(() => reject(e)));
-    child.on('close', (code) => finish(() => (size > max ? reject(new Error('The tool sent more output than expected')) : resolve({ code, stdout: Buffer.concat(out), stderr: err }))));
+    child.on('close', (code) => finish(() => {
+      if (size > max && !o.tail) return reject(new Error('The tool sent more output than expected'));
+      const all = Buffer.concat(out);
+      resolve({ code, stdout: all.length > max ? all.subarray(all.length - max) : all, stderr: err });
+    }));
   });
 }
 
