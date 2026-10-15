@@ -15,6 +15,9 @@ import { BrowserService } from '../browser/browserService';
 import { DevServerService } from '../browser/devServers';
 import { employeeTools } from '../browser/employeeTools';
 import { previewRows } from '../browser/previewRows';
+import { DeviceService } from '../devices/deviceService';
+import { deviceTools } from '../devices/deviceTools';
+import { resolveDeviceTools, type DeviceToolsOverride } from '../devices/tools';
 import { AttachmentStore } from '../boss/attachments';
 import type { DataPaths } from '../store/paths';
 import { ProjectStore } from '../store/projectStore';
@@ -36,6 +39,8 @@ export interface ProjectServiceDeps {
   /** Read each time a runner is created. */
   claudeEnv?: NodeJS.ProcessEnv;
   isolateUserSettings?: boolean;
+  /** Test hook: fake device tools. */
+  deviceTools?: DeviceToolsOverride;
 }
 
 interface Workspace {
@@ -48,6 +53,7 @@ interface Workspace {
   /** The employees' tool server (browser and dev servers), one token per employee. */
   office: McpHost;
   attachments: AttachmentStore;
+  devices: DeviceService;
   broker: ApprovalBroker;
   tools: ToolDef[];
   /** What each answered approval card led to (null when declined or dropped), so mergeNow can report failures. */
@@ -178,7 +184,16 @@ export class ProjectService extends EventEmitter {
     const previewChanged = () => { if (ws) this.emitWs(ws, { type: 'preview-changed' }); };
     const devServers = new DevServerService({ cwdFor: (agentId) => managerRef?.agents().find((a) => a.id === agentId)?.worktreePath, onChange: previewChanged });
     const browser = new BrowserService({ onChange: previewChanged, onFrame: (f) => { if (ws && this.ws === ws) this.emit('preview-frame', f); } });
-    const office = new McpHost(employeeTools({ browser, devServers }), 'office');
+    const devices = new DeviceService({
+      tools: resolveDeviceTools(process.env, process.platform, this.d.deviceTools),
+      prefer: (kind) => (kind === 'android' ? project.androidDevice : project.iosDevice) || undefined,
+      nameOf: (agentId) => managerRef?.findAgent(agentId)?.name ?? 'an employee',
+      taskOf: (agentId) => managerRef?.tasks().find((t) => t.assigneeId === agentId && t.status === 'working')?.id,
+      onChange: previewChanged,
+      onFrame: (f) => { if (ws && this.ws === ws) this.emit('preview-frame', f); },
+    });
+    const worktreeOf = (agentId: string) => managerRef?.agents().find((a) => a.id === agentId)?.worktreePath;
+    const office = new McpHost([...employeeTools({ browser, devServers }), ...deviceTools({ devices, worktreeOf })], 'office');
     await office.start();
     const employeeMcp = async (agent: Agent): Promise<string | null> => {
       if (project.browserTools === false) return null;
@@ -232,7 +247,7 @@ export class ProjectService extends EventEmitter {
       attachments, project, manager, roles: this.roles, skills: this.skills, store: this.store, createRunner,
       claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, mcpConfigPath, isolateUserSettings: isolate,
     });
-    ws = { project, manager, host, boss, broker, tools, browser, devServers, office, attachments, outcomes: new Map() };
+    ws = { project, manager, host, boss, broker, tools, browser, devServers, office, attachments, devices, outcomes: new Map() };
     manager.on('event', (e: ManagerEvent) => this.forward(ws, e));
     boss.on('chat', (entry) => this.emitWs(ws, { type: 'chat', entry }));
     boss.on('stream', (text: string | null) => this.emitWs(ws, { type: 'boss-stream', text }));
@@ -378,6 +393,7 @@ export class ProjectService extends EventEmitter {
     await ws.manager.shutdown();
     await ws.devServers.stopAll();
     await ws.browser.close();
+    await ws.devices.close();
     await ws.office.close();
     await ws.host.close();
   }
@@ -423,8 +439,8 @@ export class ProjectService extends EventEmitter {
       case 'task-finished': return this.emitWs(ws, { type: 'tasks', tasks: ws.manager.tasks() });
       case 'agent-event': return this.emitWs(ws, { type: 'agent-event', agentId: e.agentId, event: e.event, at: new Date().toISOString() });
       case 'error': return this.emitWs(ws, { type: 'error', message: e.message });
-      case 'work-ended': void ws.devServers.stop(e.agentId); return undefined;
-      case 'fired': void ws.devServers.stop(e.agentId); void ws.browser.closeFor(e.agentId); ws.office.removeClient(e.agentId); return undefined;
+      case 'work-ended': void ws.devServers.stop(e.agentId); ws.devices.release(e.agentId); return undefined;
+      case 'fired': ws.devices.release(e.agentId); void ws.devServers.stop(e.agentId); void ws.browser.closeFor(e.agentId); ws.office.removeClient(e.agentId); return undefined;
       default: return undefined;
     }
   }

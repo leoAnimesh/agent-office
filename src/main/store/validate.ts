@@ -39,6 +39,8 @@ export const projectPatchSchema = z.object({
   maxConcurrent: z.number().int().min(1).max(8).optional(),
   autoMerge: z.boolean().optional(),
   browserTools: z.boolean().optional(),
+  androidDevice: z.string().max(200).optional(),
+  iosDevice: z.string().max(200).optional(),
 }).strict();
 
 export const settingsSchema = z.object({

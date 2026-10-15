@@ -86,6 +86,9 @@ export interface Project {
   skillsExcluded?: string[];
   /** Employees get the browser tools (undefined = on). */
   browserTools?: boolean;
+  /** Preferred Android emulator (AVD name) and iOS simulator (UDID); automatic when unset. */
+  androidDevice?: string;
+  iosDevice?: string;
 }
 
 export type RunnerEvent =
@@ -155,7 +158,7 @@ export type TerminalEvent =
   | { type: 'exit'; projectId: string; exitCode: number };
 
 export interface AppSettings { claudePath: string | null; isolateUserSettings: boolean; autoModelMigrated?: boolean; allToolsMigrated?: boolean }
-export interface ProjectPatch { maxConcurrent?: number; autoMerge?: boolean; browserTools?: boolean }
+export interface ProjectPatch { maxConcurrent?: number; autoMerge?: boolean; browserTools?: boolean; androidDevice?: string; iosDevice?: string }
 export interface OpenOptions { bossName?: string; bossModel?: string }
 export interface CreateProjectInput extends OpenOptions { parentDir: string; name: string; brief?: string }
 export interface LogEntry { at: string; event: RunnerEvent }

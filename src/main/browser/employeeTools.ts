@@ -8,7 +8,8 @@ export const AGENT_KEYS = ['Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'Arr
 const MAX_SNAPSHOT = 40 * 1024;
 const MAX_SHOT = 2 * 1024 * 1024;
 
-function def<S extends z.ZodRawShape>(name: string, description: string, input: S, run: (args: z.infer<z.ZodObject<S>>, agentId: string) => Promise<unknown>): ToolDef {
+/** An employee-only tool: the caller's id comes from its token. */
+export function employeeTool<S extends z.ZodRawShape>(name: string, description: string, input: S, run: (args: z.infer<z.ZodObject<S>>, agentId: string) => Promise<unknown>): ToolDef {
   const schema = z.object(input);
   return {
     name, description, input,
@@ -33,19 +34,19 @@ export function employeeTools(d: { browser: BrowserService; devServers: DevServe
     return note ? { ...value, note } : value;
   };
   return [
-    def('start_dev_server', 'Start the project\'s dev server in your folder on a free port (e.g. "npm run dev"; "{port}" in the command is replaced by the port). Returns the URL to open. No shell: use a package script for compound commands. It stops when your task ends.',
+    employeeTool('start_dev_server', 'Start the project\'s dev server in your folder on a free port (e.g. "npm run dev"; "{port}" in the command is replaced by the port). Returns the URL to open. No shell: use a package script for compound commands. It stops when your task ends.',
       { command: z.string().min(1).max(300) }, async ({ command }, agentId) => devServers.start(agentId, command)),
-    def('dev_server_logs', 'Read the last lines of your dev server\'s output.', { lines: z.number().int().min(1).max(200).optional() },
+    employeeTool('dev_server_logs', 'Read the last lines of your dev server\'s output.', { lines: z.number().int().min(1).max(200).optional() },
       async ({ lines }, agentId) => devServers.logs(agentId, lines ?? 60)),
-    def('stop_dev_server', 'Stop your dev server.', {}, async (_a, agentId) => ({ stopped: await devServers.stop(agentId) })),
-    def('browser_open', 'Open a local URL (localhost / 127.0.0.1 only) in your private browser tab.', { url: z.string().min(1).max(2000) }, async ({ url }, agentId) => {
+    employeeTool('stop_dev_server', 'Stop your dev server.', {}, async (_a, agentId) => ({ stopped: await devServers.stop(agentId) })),
+    employeeTool('browser_open', 'Open a local URL (localhost / 127.0.0.1 only) in your private browser tab.', { url: z.string().min(1).max(2000) }, async ({ url }, agentId) => {
       const u = allowedUrl(url);
       if (!u) throw new Error(LOCAL_ONLY);
       const page = await browser.pageFor(agentId);
       const res = await page.goto(u.href, { timeout: 30_000 });
       return withNote(agentId, { url: page.url(), title: await page.title(), status: res?.status() ?? null });
     }),
-    def('browser_snapshot', 'Read your tab as an accessibility outline. Elements have [ref=eN] ids to use with browser_click and browser_type. Refs change after every snapshot.', {}, async (_a, agentId) => {
+    employeeTool('browser_snapshot', 'Read your tab as an accessibility outline. Elements have [ref=eN] ids to use with browser_click and browser_type. Refs change after every snapshot.', {}, async (_a, agentId) => {
       const page = await browser.pageFor(agentId);
       const snap = await page.ariaSnapshot({ mode: 'ai', timeout: 10_000 });
       const head = `Page: ${page.url()} — ${await page.title()}\n`;
@@ -53,23 +54,23 @@ export function employeeTools(d: { browser: BrowserService; devServers: DevServe
       const body = snap.length > MAX_SNAPSHOT ? `${snap.slice(0, MAX_SNAPSHOT)}\n… (cut at 40 KB)` : snap;
       return `${note ? `${note}\n` : ''}${head}${body}`;
     }),
-    def('browser_click', 'Click an element by its ref from the latest browser_snapshot.', { ref: z.string().min(1).max(20), double: z.boolean().optional() }, async ({ ref, double }, agentId) => {
+    employeeTool('browser_click', 'Click an element by its ref from the latest browser_snapshot.', { ref: z.string().min(1).max(20), double: z.boolean().optional() }, async ({ ref, double }, agentId) => {
       const page = await browser.pageFor(agentId);
       await page.getByRef(ref).click({ timeout: 10_000, clickCount: double ? 2 : 1 }).catch(staleRef);
       return withNote(agentId, { ok: true, url: page.url(), title: await page.title() });
     }),
-    def('browser_type', 'Fill a text field by its ref, optionally pressing Enter after.', { ref: z.string().min(1).max(20), text: z.string().max(5000), submit: z.boolean().optional() }, async ({ ref, text, submit }, agentId) => {
+    employeeTool('browser_type', 'Fill a text field by its ref, optionally pressing Enter after.', { ref: z.string().min(1).max(20), text: z.string().max(5000), submit: z.boolean().optional() }, async ({ ref, text, submit }, agentId) => {
       const page = await browser.pageFor(agentId);
       await page.getByRef(ref).fill(text, { timeout: 10_000 }).catch(staleRef);
       if (submit) await page.keyboard.press('Enter');
       return withNote(agentId, { ok: true });
     }),
-    def('browser_press', 'Press a key in your tab.', { key: z.enum(AGENT_KEYS) }, async ({ key }, agentId) => {
+    employeeTool('browser_press', 'Press a key in your tab.', { key: z.enum(AGENT_KEYS) }, async ({ key }, agentId) => {
       const page = await browser.pageFor(agentId);
       await page.keyboard.press(key === 'Space' ? ' ' : key);
       return withNote(agentId, { ok: true });
     }),
-    def('browser_screenshot', 'Take a screenshot of your tab (the visible part, or the full page).', { full_page: z.boolean().optional() }, async ({ full_page }, agentId) => {
+    employeeTool('browser_screenshot', 'Take a screenshot of your tab (the visible part, or the full page).', { full_page: z.boolean().optional() }, async ({ full_page }, agentId) => {
       const page = await browser.pageFor(agentId);
       let buf = await page.screenshot({ type: 'png', fullPage: full_page ?? false, timeout: 10_000 });
       let mimeType = 'image/png';
@@ -77,11 +78,11 @@ export function employeeTools(d: { browser: BrowserService; devServers: DevServe
       const image: ToolImage = { type: 'image', data: buf.toString('base64'), mimeType, note: browser.takeUserNote(agentId) };
       return image;
     }),
-    def('browser_console', 'Console errors and warnings, page errors and failed requests since you last asked.', {}, async (_a, agentId) => {
+    employeeTool('browser_console', 'Console errors and warnings, page errors and failed requests since you last asked.', {}, async (_a, agentId) => {
       const lines = browser.takeConsole(agentId);
       return lines.length > 0 ? lines.join('\n') : 'Nothing new.';
     }),
-    def('browser_resize', 'Resize your tab to check other screen sizes (e.g. 390x844 for a phone).', { width: z.number().int().min(320).max(2560), height: z.number().int().min(320).max(1600) }, async ({ width, height }, agentId) => {
+    employeeTool('browser_resize', 'Resize your tab to check other screen sizes (e.g. 390x844 for a phone).', { width: z.number().int().min(320).max(2560), height: z.number().int().min(320).max(1600) }, async ({ width, height }, agentId) => {
       const page = await browser.pageFor(agentId);
       await page.setViewportSize({ width, height });
       return withNote(agentId, { ok: true });

@@ -163,6 +163,7 @@ app.whenReady().then(async () => {
     claudeBin: status.current.claude?.path ?? 'claude',
     claudeBinArgs: OVR.claudeArgs.length > 0 ? OVR.claudeArgs : undefined,
     isolateUserSettings: current.isolateUserSettings,
+    deviceTools: OVR.deviceTools,
   });
   await service.init();
   await migrateRolesToAuto(new RoleStore(paths.rolesDir), settings).catch((e) => console.error('role migration failed', e));
