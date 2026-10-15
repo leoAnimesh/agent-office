@@ -34,5 +34,6 @@ describe('statusLine', () => {
     expect(statusLine({ agentId: 'a', url: 'http://127.0.0.1:5174/', title: 'App', devServer: { url: 'http://127.0.0.1:5174/', running: true } }, 'Pixel'))
       .toBe('Pixel · http://127.0.0.1:5174/ · dev server running');
     expect(statusLine({ agentId: 'a', url: 'about:blank', title: '', devServer: null }, 'Pixel')).toBe('Pixel · about:blank · no dev server');
+    expect(statusLine({ agentId: 'a', url: '', title: '', devServer: { url: 'http://127.0.0.1:6000/', running: true } }, 'Pixel')).toBe('Pixel · no page open · dev server running at http://127.0.0.1:6000/');
   });
 });

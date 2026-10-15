@@ -56,6 +56,11 @@ export class DevServerService {
     throw new Error(`Nothing answered on port ${port} after ${Math.round((this.opts.waitMs ?? 90_000) / 1000)} s. The server may be ignoring the PORT variable: pass the port yourself with {port}, e.g. "npm run dev -- --port {port}". Last output:\n${run.lines.slice(-40).join('\n')}`);
   }
 
+  /** Every employee's dev server, running or not. */
+  all(): { agentId: string; info: DevServerInfo }[] {
+    return [...this.servers].map(([agentId, r]) => ({ agentId, info: { ...r.info } }));
+  }
+
   info(agentId: string): DevServerInfo | null {
     const r = this.servers.get(agentId);
     return r ? { ...r.info } : null;

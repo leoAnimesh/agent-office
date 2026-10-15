@@ -538,6 +538,8 @@ export class AgentManager extends EventEmitter {
 
     if (ev.type === 'exit') {
       if (mine) this.live.delete(agentId);
+      // A plain question has no task to leave 'working', so say here that the session's work is over.
+      if (mine && taskId === null) this.emitEvent({ type: 'work-ended', agentId });
       try {
         if (mine?.resumed && !mine.sawInit && ev.code !== 0) {
           // The saved session could not be resumed (expired or deleted): forget it and start fresh.

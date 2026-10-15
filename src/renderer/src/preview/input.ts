@@ -29,5 +29,7 @@ export function keyToInput(e: { key: string; ctrlKey: boolean; metaKey: boolean;
 
 export function statusLine(t: PreviewTab, name: string): string {
   const dev = !t.devServer ? 'no dev server' : t.devServer.running ? 'dev server running' : 'dev server stopped';
+  // A dev server without a tab: say where it runs, since there is no page to show.
+  if (!t.url) return `${name} · no page open · ${t.devServer?.running ? `dev server running at ${t.devServer.url}` : dev}`;
   return `${name} · ${t.url} · ${dev}`;
 }

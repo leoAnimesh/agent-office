@@ -14,6 +14,7 @@ import { McpHost } from '../mcp/mcpHost';
 import { BrowserService } from '../browser/browserService';
 import { DevServerService } from '../browser/devServers';
 import { employeeTools } from '../browser/employeeTools';
+import { previewRows } from '../browser/previewRows';
 import type { DataPaths } from '../store/paths';
 import { ProjectStore } from '../store/projectStore';
 import { RoleStore } from '../store/roleStore';
@@ -295,10 +296,7 @@ export class ProjectService extends EventEmitter {
   /** Employees' browser tabs and their dev servers, for the Preview tab. */
   async previewList(): Promise<PreviewTab[]> {
     const ws = this.mustWs();
-    return (await ws.browser.tabs()).map((t) => {
-      const d = ws.devServers.info(t.agentId);
-      return { ...t, devServer: d ? { url: d.url, running: d.running } : null };
-    });
+    return previewRows(await ws.browser.tabs(), ws.devServers.all());
   }
 
   listSkills(): Promise<Skill[]> { return this.skills.list(); }
