@@ -70,3 +70,24 @@ describe('BossChat', () => {
     await m.done();
   });
 });
+
+describe('BossChat reply handoff', () => {
+  it('shows the landed reply in place once its reveal has already caught up', async () => {
+    const { BossChat } = await import('../components/BossChat');
+    (window as unknown as { agentOffice: unknown }).agentOffice = { sendToBoss: async () => undefined, answerMerge: async () => undefined, openExternal: async () => undefined };
+    const look = { hair: '#000000', shirt: '#000000', skin: '#000000' };
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const user = { kind: 'user' as const, at: 't', text: 'hi' };
+    const base = { merges: [], boss: undefined, bossLook: look, bossModel: 'opus', busy: false, onError: () => undefined };
+    await act(async () => { root.render(<BossChat {...base} chat={[user]} stream="Hello world" />); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 800)); }); // the reveal finishes before the reply lands
+    await act(async () => { root.render(<BossChat {...base} chat={[user, { kind: 'boss', at: 't', text: 'Hello world' }]} stream={null} />); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+    expect(host.querySelector('.streaming')).toBeNull();
+    expect(host.querySelector('.msg.boss')?.textContent).toContain('Hello world');
+    await act(async () => { root.unmount(); });
+    host.remove();
+  });
+});
