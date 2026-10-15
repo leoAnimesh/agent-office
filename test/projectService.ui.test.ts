@@ -39,9 +39,8 @@ const until = (pred: (e: WorkspaceEvent) => boolean, ms = 20000) => new Promise<
 
 describe('ProjectService (UI features)', () => {
   it('applies open options to a new project and its boss', async () => {
-    const snap = await svc.open(repo, { bossName: 'Ada', bossModel: 'sonnet', bossCanHire: false });
+    const snap = await svc.open(repo, { bossName: 'Ada', bossModel: 'sonnet' });
     expect(snap.agents.find((a) => a.kind === 'boss')!.name).toBe('Ada');
-    expect(snap.project.bossCanHire).toBe(false);
     expect((await svc.listRoles()).find((r) => r.id === 'boss')!.model).toBe('sonnet');
   });
 
@@ -70,15 +69,11 @@ describe('ProjectService (UI features)', () => {
     expect((await svc.snapshot()).project.maxConcurrent).toBe(2);
   });
 
-  it('saves roles and skills after validating them', async () => {
+  it('lists roles and skills for the screens (they are changed only through the boss)', async () => {
     await svc.open(repo);
-    const fe = (await svc.listRoles()).find((r) => r.id === 'frontend')!;
-    await svc.saveRole({ ...fe, model: 'opus' });
-    expect((await svc.listRoles()).find((r) => r.id === 'frontend')!.model).toBe('opus');
-    await expect(svc.saveRole({ ...fe, id: '../evil' })).rejects.toThrow(/Invalid role/);
-    const skill = await svc.saveSkill({ id: 'house-style', name: 'House style', description: 'How we write code', body: '- Use tabs.' });
-    expect(skill.id).toBe('house-style');
-    expect((await svc.listSkills()).map((s) => s.id)).toContain('house-style');
+    expect((await svc.listRoles()).map((r) => r.id)).toContain('frontend');
+    expect((await svc.listSkills()).map((s) => s.id)).toContain('git-hygiene');
+    expect('saveRole' in svc).toBe(false);
   });
 
   it('streams agent events with timestamps, serves their log, and guards worktree paths', async () => {
@@ -110,5 +105,38 @@ describe('ProjectService (UI features)', () => {
     expect(isInside(path.join('/a', 'b'), path.join('/a', 'b'))).toBe(false);
     expect(isInside(path.join('/a', 'bc'), path.join('/a', 'b'))).toBe(false);
     expect(isInside(path.join('/a', 'b', '..', 'x'), path.join('/a', 'b'))).toBe(false);
+  });
+});
+
+describe('ProjectService terminal', () => {
+  const waitOut = async (out: () => string, text: string) => {
+    const end = Date.now() + 15000;
+    while (!out().includes(text)) {
+      if (Date.now() > end) throw new Error(`no "${text}" in terminal output:\n${out()}`);
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  };
+
+  it('runs a shell in the open project folder and ends it when the project closes', async () => {
+    let out = '';
+    svc.on('terminal', (e: { type: string; data?: string }) => { if (e.type === 'data') out += e.data; });
+    await expect(svc.terminalOpen(80, 24)).rejects.toThrow(/Open a project first/);
+    await svc.open(repo);
+    await svc.terminalOpen(100, 30);
+    svc.terminalWrite('echo ao-svc-term\r');
+    await waitOut(() => out, 'ao-svc-term');
+    svc.terminalWrite('pwd\r');
+    await waitOut(() => out, path.basename(repo));
+    await svc.close();
+    expect(svc.terminalSessions()).toBe(0);
+  });
+});
+
+describe('roles changed from chat', () => {
+  it('tells the renderer so it reloads the role list', async () => {
+    await svc.open(repo);
+    await svc.tools().find((t) => t.name === 'create_role')!.run({ name: 'Data Engineer', description: 'Pipelines', system_prompt: 'Build pipelines.' });
+    expect(events).toContainEqual({ type: 'roles-changed' });
+    expect((await svc.listRoles()).map((r) => r.id)).toContain('data-engineer');
   });
 });

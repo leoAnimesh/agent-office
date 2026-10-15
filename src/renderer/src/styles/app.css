@@ -62,11 +62,8 @@
 .log-line { display: grid; grid-template-columns: 72px 64px minmax(0, 1fr); gap: 12px; overflow-wrap: anywhere; }
 .log-time { color: var(--faint); }
 .tone-tool { color: var(--teal); } .tone-result { color: var(--green); } .tone-text { color: var(--text); } .tone-bad { color: var(--red-soft); } .tone-meta { color: var(--muted); }
-.team-layout { display: flex; flex-wrap: wrap; gap: 24px; }
 .team-col { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
-.role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.role-card { text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--panel-2); border: 2px solid var(--line); border-radius: 8px; min-height: 60px; color: var(--text); }
-.role-card[aria-pressed='true'] { border-color: var(--amber); background: #262939; }
+.team-only { max-width: 760px; }
 .team-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; min-width: 0; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
 .editor { flex: 999 1 460px; min-width: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
@@ -110,6 +107,12 @@
 .md blockquote { margin: 0 0 8px; padding-left: 10px; border-left: 3px solid var(--line-2); color: var(--muted); }
 .md table { border-collapse: collapse; margin: 0 0 8px; font-size: 13px; display: block; overflow-x: auto; }
 .md th, .md td { border: 1px solid var(--line-2); padding: 4px 8px; text-align: left; }
+/* Cells wrap between words only (bubbles otherwise break anywhere, splitting "Area" into "Are/a"); a table wider
+   than the bubble scrolls sideways instead of squeezing. */
+.md th, .md td { overflow-wrap: normal; word-break: normal; vertical-align: top; }
+.md td { max-width: 42ch; }
+.md th { white-space: nowrap; }
+.msg:has(table) { max-width: 100%; }
 .md a { color: var(--amber); text-decoration: underline; }
 .md hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
 .msg.user .md code { background: rgba(0,0,0,.12); }
@@ -181,3 +184,12 @@
 .card-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); cursor: default; }
 @media (prefers-reduced-motion: reduce) { .task-card.dragging { opacity: 1; } }
 .column { position: relative; }
+
+/* Terminal dock: below the project view, resizable from its top edge */
+.terminal-dock { flex: none; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--line); background: var(--panel); }
+.terminal-sep { flex: none; height: 6px; cursor: row-resize; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.terminal-sep:hover, .terminal-sep:focus-visible { background: var(--line-2); }
+.terminal-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.terminal-host { flex: 1; min-height: 0; padding: 6px 10px; }
+.terminal-note { margin: 0; padding: 6px 12px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); }
+#terminal-toggle[aria-pressed="true"] { border-color: var(--teal); color: var(--teal); }

@@ -1,4 +1,4 @@
-import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test';
+import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
@@ -7,8 +7,8 @@ import { makeRepo } from '../test/helpers/repo';
 
 const FAKE = path.resolve('test/fake-claude/fake-claude.mjs');
 
-async function launch(env: Record<string, string>): Promise<{ app: ElectronApplication; userData: string }> {
-  const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-e2e-'));
+async function launch(env: Record<string, string>, reuse?: string): Promise<{ app: ElectronApplication; userData: string }> {
+  const userData = reuse ?? (await fs.mkdtemp(path.join(os.tmpdir(), 'ao-e2e-')));
   const base = { ...process.env } as Record<string, string>;
   delete base.ELECTRON_RENDERER_URL;
   const args = process.platform === 'linux' ? ['--no-sandbox', path.resolve('.')] : [path.resolve('.')];
@@ -16,11 +16,35 @@ async function launch(env: Record<string, string>): Promise<{ app: ElectronAppli
   return { app, userData };
 }
 
-test('first launch → open a repo → chat with the boss → hire → see the desk', async () => {
+/** Hiring goes through the boss chat, which the fake CLI cannot do: add employees to the saved team instead. */
+async function seedTeam(userData: string, people: { name: string; roleId: string }[]): Promise<string> {
+  const pdir = path.join(userData, 'projects', (await fs.readdir(path.join(userData, 'projects')))[0]);
+  const file = path.join(pdir, 'agents.json');
+  const agents = JSON.parse(await fs.readFile(file, 'utf8')) as unknown[];
+  people.forEach((p, i) => agents.push({ id: `seed-${i}`, projectId: path.basename(pdir), name: p.name, roleId: p.roleId, kind: 'employee', status: 'idle', bubble: 'Idle' }));
+  await fs.writeFile(file, JSON.stringify(agents));
+  return pdir;
+}
+
+/** Relaunch on the same app data and get back into the project. */
+async function reopen(env: Record<string, string>, userData: string): Promise<{ app: ElectronApplication; win: Page }> {
+  const { app } = await launch(env, userData);
+  const win = await app.firstWindow();
+  const browse = win.getByRole('button', { name: 'Browse' });
+  await expect(browse.or(win.getByRole('button', { name: /^Max, Boss/ }))).toBeVisible();
+  if (await browse.isVisible()) {
+    await browse.click();
+    await win.getByRole('button', { name: /Open the office/ }).click();
+  }
+  return { app, win };
+}
+
+test('first launch → open a repo → chat with the boss → team → see the desk', async () => {
   const repo = await makeRepo();
-  const { app, userData } = await launch({ AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: repo });
+  const env = { AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: repo };
+  let { app, userData } = await launch(env);
   try {
-    const win = await app.firstWindow();
+    let win = await app.firstWindow();
     await expect(win.getByRole('heading', { name: 'Welcome to AgentOffice' })).toBeVisible();
     await win.getByRole('button', { name: 'Browse' }).click();
     await win.getByRole('button', { name: /Open the office/ }).click();
@@ -37,9 +61,12 @@ test('first launch → open a repo → chat with the boss → hire → see the d
     await expect(reply.locator('strong', { hasText: 'bold' })).toBeVisible();
     await expect(reply.locator('li')).toHaveCount(2);
 
+    await app.close();
+    await seedTeam(userData, [{ name: 'Pixel', roleId: 'frontend' }]);
+    ({ app, win } = await reopen(env, userData));
     await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Team' }).click();
-    await win.getByRole('button', { name: /^Frontend Engineer/ }).click();
-    await win.getByRole('button', { name: 'Hire Frontend Engineer' }).click();
+    await expect(win.getByRole('region', { name: 'Role library' })).toHaveCount(0);
+    await expect(win.getByText('ask the boss in the chat')).toBeVisible();
 
     // Each team member's actions sit behind a ⋯ menu.
     const options = win.getByRole('button', { name: 'Options for Pixel' });
@@ -181,17 +208,11 @@ test('task cards open a details drawer', async () => {
     let win = await app.firstWindow();
     await win.getByRole('button', { name: 'Browse' }).click();
     await win.getByRole('button', { name: /Open the office/ }).click();
-    await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Team' }).click();
-    await win.getByRole('button', { name: /^Frontend Engineer/ }).click();
-    await win.getByRole('button', { name: 'Hire Frontend Engineer' }).click();
-    await expect(win.getByRole('button', { name: 'Options for Pixel' })).toBeVisible();
-    await win.getByRole('button', { name: /^Backend Engineer/ }).click();
-    await win.getByRole('button', { name: 'Hire Backend Engineer' }).click();
-    await expect(win.getByRole('button', { name: 'Options for Byte' })).toBeVisible();
+    await expect(win.getByRole('button', { name: /^Max, Boss/ })).toBeVisible();
     await app.close();
 
-    // Seed a reviewed task with a markdown result, then reopen the app on the same data.
-    const pdir = path.join(userData, 'projects', (await fs.readdir(path.join(userData, 'projects')))[0]);
+    // Seed the team and a reviewed task with a markdown result, then reopen the app on the same data.
+    const pdir = await seedTeam(userData, [{ name: 'Pixel', roleId: 'frontend' }, { name: 'Byte', roleId: 'backend' }]);
     const pixel = (JSON.parse(await fs.readFile(path.join(pdir, 'agents.json'), 'utf8')) as { id: string; name: string }[]).find((a) => a.name === 'Pixel')!;
     const now = new Date().toISOString();
     await fs.writeFile(path.join(pdir, 'tasks.json'), JSON.stringify([{
@@ -206,18 +227,9 @@ test('task cards open a details drawer', async () => {
     }))]));
     // The reviewed task's branch must exist for the drag-to-Done merge.
     execFileSync('git', ['branch', 'ao/pixel/remove-dead-code-t-101'], { cwd: repo });
-    const base = { ...process.env } as Record<string, string>;
-    delete base.ELECTRON_RENDERER_URL;
-    app = await electron.launch({ args: process.platform === 'linux' ? ['--no-sandbox', path.resolve('.')] : [path.resolve('.')], env: { ...base, AO_USER_DATA: userData, ...env } });
-    win = await app.firstWindow();
+    ({ app, win } = await reopen(env, userData));
     // The size CI runs at: the board scrolls sideways, so drags must start with both ends on screen.
     await win.setViewportSize({ width: 1024, height: 645 });
-    const browse = win.getByRole('button', { name: 'Browse' });
-    await expect(browse.or(win.getByRole('button', { name: /^Max, Boss/ }))).toBeVisible();
-    if (await browse.isVisible()) {
-      await win.getByRole('button', { name: 'Browse' }).click();
-      await win.getByRole('button', { name: /Open the office/ }).click();
-    }
     await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: /^Tasks/ }).click();
 
     const card = win.locator('.task-card', { hasText: 'Remove dead code' });
@@ -263,6 +275,40 @@ test('task cards open a details drawer', async () => {
     await win.getByRole('region', { name: 'Done' }).scrollIntoViewIfNeeded();
     await card.dragTo(win.getByRole('region', { name: 'Done' }));
     await expect(win.getByRole('region', { name: 'Done' }).locator('.task-card', { hasText: 'Remove dead code' })).toBeVisible();
+  } finally {
+    await app.close();
+    await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});
+
+test('a project terminal runs commands in the project folder', async () => {
+  const repo = await makeRepo();
+  const env = { AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: repo };
+  const { app, userData } = await launch(env);
+  try {
+    const win = await app.firstWindow();
+    await win.getByRole('button', { name: 'Browse' }).click();
+    await win.getByRole('button', { name: /Open the office/ }).click();
+    const toggle = win.getByRole('button', { name: 'Terminal' });
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const term = win.locator('.terminal-host');
+    await expect(term).toBeVisible();
+    await term.click();
+    await win.keyboard.type('echo ao-terminal-ok');
+    await win.keyboard.press('Enter');
+    // The echoed command and its output: at least two copies once the command has run.
+    await expect.poll(async () => ((await term.innerText()).match(/ao-terminal-ok/g) ?? []).length, { timeout: 20000 }).toBeGreaterThanOrEqual(2);
+
+    // Hiding and showing keeps the same shell and its output; Ctrl+` toggles too.
+    await toggle.click();
+    await expect(term).toBeHidden();
+    await win.keyboard.press('Control+Backquote');
+    await expect(term).toBeVisible();
+    await expect(term).toContainText('ao-terminal-ok');
+    await expect(win.getByRole('separator', { name: 'Resize terminal' })).toBeVisible();
   } finally {
     await app.close();
     await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });

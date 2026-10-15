@@ -19,9 +19,23 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # npm installs only this machine's PTY binary; the macOS DMGs are built for arm64 and x64 on one runner,
+      # so add the other architecture's prebuilt terminal binary too (same pinned version).
+      - if: runner.os == 'macOS'
+        run: |
+          V=$(node -p "require('./package.json').dependencies['@lydell/node-pty']")
+          npm install --no-save --force "@lydell/node-pty-darwin-x64@$V" "@lydell/node-pty-darwin-arm64@$V"
       - run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # Fail the release rather than ship a Mac build whose terminal cannot start.
+      - if: runner.os == 'macOS'
+        run: |
+          for arch in mac/AgentOffice.app:x64 mac-arm64/AgentOffice.app:arm64; do
+            app=${arch%%:*}; cpu=${arch##*:}
+            helper="release/$app/Contents/Resources/app.asar.unpacked/node_modules/@lydell/node-pty-darwin-$cpu/prebuilds/darwin-$cpu/spawn-helper"
+            test -x "$helper" || { echo "missing terminal binary: $helper"; exit 1; }
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: agentoffice-${{ matrix.os }}

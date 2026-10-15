@@ -13,6 +13,7 @@ import { SettingsStore } from './store/settingsStore';
 import { migrateRolesAllTools, migrateRolesToAuto } from './store/migrations';
 import { RoleStore } from './store/roleStore';
 import { ProjectService } from './workspace/projectService';
+import { termData, termSize } from './terminal/ipcArgs';
 
 let win: BrowserWindow | null = null;
 let service: ProjectService | null = null;
@@ -87,7 +88,6 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
     return svc.open(str(repoPath, 'folder'), {
       bossName: typeof o.bossName === 'string' ? o.bossName.slice(0, 40) : undefined,
       bossModel: typeof o.bossModel === 'string' ? o.bossModel.slice(0, 80) : undefined,
-      bossCanHire: typeof o.bossCanHire === 'boolean' ? o.bossCanHire : undefined,
     });
   });
   handle(IPC.createProject, (input: unknown) => {
@@ -98,7 +98,6 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
       brief: typeof o.brief === 'string' ? o.brief.slice(0, 20_000) : undefined,
       bossName: typeof o.bossName === 'string' ? o.bossName.slice(0, 40) : undefined,
       bossModel: typeof o.bossModel === 'string' ? o.bossModel.slice(0, 80) : undefined,
-      bossCanHire: typeof o.bossCanHire === 'boolean' ? o.bossCanHire : undefined,
     });
   });
   handle(IPC.defaultProjectsDir, () => app.getPath('documents'));
@@ -107,9 +106,7 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   handle(IPC.snapshot, () => (svc.current() ? svc.snapshot() : null));
   handle(IPC.sendToBoss, (text: unknown) => svc.sendToBoss(str(text, 'message')));
   handle(IPC.listRoles, () => svc.listRoles());
-  handle(IPC.saveRole, (role: unknown) => svc.saveRole(role));
   handle(IPC.listSkills, () => svc.listSkills());
-  handle(IPC.saveSkill, (skill: unknown) => svc.saveSkill(skill));
   handle(IPC.hire, (roleId: unknown, name: unknown) => svc.hire(str(roleId, 'role'), typeof name === 'string' && name.trim() ? name.slice(0, 40) : undefined));
   handle(IPC.fireAgent, (id: unknown) => svc.fire(str(id, 'agent id')));
   handle(IPC.agentLog, (id: unknown) => svc.agentLog(str(id, 'agent id')));
@@ -124,6 +121,10 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   handle(IPC.moveTask, (id: unknown, beforeId: unknown) => svc.moveTask(str(id, 'task id'), beforeId === null ? null : str(beforeId, 'task id')));
   handle(IPC.reassignTask, (id: unknown, agent: unknown) => svc.reassignTask(str(id, 'task id'), str(agent, 'agent')));
   handle(IPC.mergeNow, (id: unknown) => svc.mergeNow(str(id, 'task id')));
+  handle(IPC.terminalOpen, (cols: unknown, rows: unknown) => { const z = termSize(cols, rows); return svc.terminalOpen(z.cols, z.rows); });
+  handle(IPC.terminalRestart, (cols: unknown, rows: unknown) => { const z = termSize(cols, rows); return svc.terminalRestart(z.cols, z.rows); });
+  handle(IPC.terminalWrite, (data: unknown) => svc.terminalWrite(termData(data)));
+  handle(IPC.terminalResize, (cols: unknown, rows: unknown) => { const z = termSize(cols, rows); svc.terminalResize(z.cols, z.rows); });
   handle(IPC.answerMerge, (requestId: unknown, ok: unknown) => svc.answerMerge(str(requestId, 'request id'), ok === true));
   handle(IPC.getSettings, () => settings.get());
   handle(IPC.saveSettings, async (patch: unknown) => {
@@ -151,6 +152,7 @@ app.whenReady().then(async () => {
   await migrateRolesToAuto(new RoleStore(paths.rolesDir), settings).catch((e) => console.error('role migration failed', e));
   await migrateRolesAllTools(new RoleStore(paths.rolesDir), settings).catch((e) => console.error('tool migration failed', e));
   service.on('event', (e) => win?.webContents.send(IPC.event, e));
+  service.on('terminal', (e) => win?.webContents.send(IPC.terminalEvent, e));
   registerIpc(service, settings, status);
   createWindow();
   app.on('activate', () => {

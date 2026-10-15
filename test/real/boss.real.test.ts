@@ -23,7 +23,7 @@ describe.skipIf(!process.env.AO_REAL_CLAUDE)('real Claude Code end-to-end', () =
     await roles.save({ ...(await roles.get('frontend'))!, model: 'haiku' });
     const id = projectIdFor(repo);
     await fs.mkdir(paths.projectDir(id), { recursive: true });
-    await fs.writeFile(paths.projectFile(id), JSON.stringify({ id, name: 'real', repoPath: repo, baseBranch: 'main', maxConcurrent: 2, bossCanHire: true, autoMerge: true }));
+    await fs.writeFile(paths.projectFile(id), JSON.stringify({ id, name: 'real', repoPath: repo, baseBranch: 'main', maxConcurrent: 2, autoMerge: true }));
     const log: string[] = [];
     svc.on('event', (e) => { if (e.type === 'chat') log.push(`${e.entry.kind}: ${'text' in e.entry ? e.entry.text : e.entry.tool}`); });
     try {

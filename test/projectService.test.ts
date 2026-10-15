@@ -214,7 +214,7 @@ describe('ProjectService', () => {
     const paths = dataPaths(data);
     const id = projectIdFor(repo);
     await fs.mkdir(paths.projectDir(id), { recursive: true });
-    await fs.writeFile(paths.projectFile(id), JSON.stringify({ id, name: 'x', repoPath: repo, baseBranch: 'main', maxConcurrent: 4, bossCanHire: true, autoMerge: true }));
+    await fs.writeFile(paths.projectFile(id), JSON.stringify({ id, name: 'x', repoPath: repo, baseBranch: 'main', maxConcurrent: 4, autoMerge: true }));
     await svc.open(repo);
     await tool('hire', { role_id: 'frontend' });
     await tool('assign_task', { agent: 'Pixel', title: 'Notes', brief: 'write notes' });

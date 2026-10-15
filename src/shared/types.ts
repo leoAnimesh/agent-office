@@ -69,7 +69,6 @@ export interface Project {
   baseBranch: string;
   bossId?: string;
   maxConcurrent: number;
-  bossCanHire: boolean;
   autoMerge: boolean;
 }
 
@@ -116,6 +115,7 @@ export interface WorkspaceSnapshot {
 }
 
 export type WorkspaceEvent =
+  | { type: 'roles-changed' }
   | { type: 'agents'; agents: Agent[] }
   | { type: 'tasks'; tasks: Task[] }
   | { type: 'chat'; entry: ChatEntry }
@@ -127,8 +127,13 @@ export type WorkspaceEvent =
   | { type: 'merge-resolved'; requestId: string }
   | { type: 'error'; message: string };
 
+/** Output from, or the exit of, the open project's terminal. */
+export type TerminalEvent =
+  | { type: 'data'; projectId: string; data: string }
+  | { type: 'exit'; projectId: string; exitCode: number };
+
 export interface AppSettings { claudePath: string | null; isolateUserSettings: boolean; autoModelMigrated?: boolean; allToolsMigrated?: boolean }
-export interface ProjectPatch { maxConcurrent?: number; autoMerge?: boolean; bossCanHire?: boolean }
-export interface OpenOptions { bossName?: string; bossModel?: string; bossCanHire?: boolean }
+export interface ProjectPatch { maxConcurrent?: number; autoMerge?: boolean}
+export interface OpenOptions { bossName?: string; bossModel?: string }
 export interface CreateProjectInput extends OpenOptions { parentDir: string; name: string; brief?: string }
 export interface LogEntry { at: string; event: RunnerEvent }

@@ -25,7 +25,7 @@ npm test          # unit + integration tests (uses a fake claude CLI)
 ```
 
 ## How it works
-- **Boss:** a long-running `claude` session in your repo with read-only tools plus AgentOffice's MCP tools (`list_team`, `hire`, `assign_task`, `get_task`, `message_agent`, `request_merge`, …). It plans and reviews; it never edits files.
+- **Boss:** a long-running `claude` session in your repo with read-only tools plus AgentOffice's MCP tools (`list_team`, `hire`, `create_role`, `update_role`, `assign_task`, `get_task`, `message_agent`, `request_merge`, `sync_branch`, …). It plans and reviews; it never edits files. You manage the team and its roles by asking it in the chat.
 - **Employees:** each task runs as `claude -p` in the employee's own git worktree (`.agentoffice/wt/<name>`) on branch `ao/<name>/<task>`.
 - **Merging:** the boss asks; you approve in the chat (unless auto-merge is on). Merges never run while your checkout has uncommitted changes to tracked files or is on another branch.
 - Real end-to-end test (spends Claude usage): `AO_REAL_CLAUDE=1 npx vitest run test/real`
