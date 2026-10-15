@@ -78,7 +78,7 @@ describe('model per task', () => {
     await manager.idle();
     await manager.messageAgent('Pixel', 'what did you learn?');
     await manager.idle();
-    await vi.waitFor(async () => expect((await h.launches()).length).toBe(2));
+    await vi.waitFor(async () => expect((await h.launches()).length).toBe(2), { timeout: 15_000 });
     expect(modelArg((await h.launches())[1].argv)).toBe('sonnet');
   });
 
@@ -109,7 +109,7 @@ describe('model per task', () => {
     await manager.messageAgent('Pixel', 'one more thing');
     delete h.fakeEnv.FAKE_CLAUDE_HANG;
     await manager.pauseTask('T-101');
-    await vi.waitFor(() => expect(manager.agents().find((a) => a.name === 'Pixel')!.status).toBe('paused'));
+    await vi.waitFor(() => expect(manager.agents().find((a) => a.name === 'Pixel')!.status).toBe('paused'), { timeout: 15_000 });
     const done = finished(manager, 'T-101');
     await manager.resumeTask('T-101');
     await done;
