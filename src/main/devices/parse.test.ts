@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { adbText, androidOutline, shQuote, androidUrl, insideWorktree, iosOutline, parseAdbDevices, parseAvds, parseSimulators, pngSize } from './parse';
+import { adbText, adbTextChunks, freeEmulatorPort, androidOutline, shQuote, androidUrl, insideWorktree, iosOutline, parseAdbDevices, parseAvds, parseSimulators, pngSize } from './parse';
 
 const XML = `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?><hierarchy rotation="0"><node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.example" content-desc="" clickable="false" bounds="[0,0][1080,2400]"><node index="0" text="Sign in &amp; go" resource-id="com.example:id/title" class="android.widget.TextView" content-desc="" clickable="false" bounds="[100,200][980,300]" /><node index="1" text="" resource-id="com.example:id/email" class="android.widget.EditText" content-desc="Email" clickable="true" bounds="[100,400][980,520]" /><node index="2" text="Continue" resource-id="com.example:id/go" class="android.widget.Button" content-desc="" clickable="true" bounds="[100,600][980,720]" /></node></hierarchy>UI hierchary dumped to: /dev/tty`;
 
@@ -102,5 +102,25 @@ describe('shQuote', () => {
   it('quotes a value for the device shell so & ; $() and quotes stay literal', () => {
     expect(shQuote("http://10.0.2.2:3000/a?x=1&y=$(id);z|w")).toBe("'http://10.0.2.2:3000/a?x=1&y=$(id);z|w'");
     expect(shQuote("it's")).toBe("'it'\\''s'");
+  });
+});
+
+describe('review follow-ups', () => {
+  it('types a literal %s by splitting it across two input commands', () => {
+    expect(adbTextChunks('50%sale now')).toEqual(['50%', 'sale%snow']);
+    expect(adbTextChunks('plain')).toEqual(['plain']);
+  });
+
+  it('accepts names that only start with two dots', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-dots-'));
+    await fs.mkdir(path.join(root, '..build'));
+    await fs.writeFile(path.join(root, '..build', 'app.apk'), 'x');
+    expect(await insideWorktree(root, '..build/app.apk')).toBe(await fs.realpath(path.join(root, '..build', 'app.apk')));
+    await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  });
+
+  it('picks an emulator port no other emulator uses, even one still booting', () => {
+    expect(freeEmulatorPort('List of devices attached\nemulator-5554\tdevice\nemulator-5556\toffline\n')).toBe(5558);
+    expect(freeEmulatorPort('List of devices attached\n')).toBe(5554);
   });
 });

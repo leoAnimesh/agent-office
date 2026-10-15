@@ -77,6 +77,21 @@ export function shQuote(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
+/**
+ * Text for one or more `input text` calls. `input text` turns "%s" into a space, so a literal "%s" is split
+ * between two calls ("50%" then "sale"), which types it as written.
+ */
+export function adbTextChunks(text: string): string[] {
+  return text.split(/(?<=%)(?=s)/).map(adbText);
+}
+
+/** The first even console port (5554–5682) no listed emulator uses, in any state. */
+export function freeEmulatorPort(adbDevicesOut: string): number {
+  const used = new Set(adbDevicesOut.split(/\r?\n/).map((l) => /^emulator-(\d+)/.exec(l.trim())?.[1]).filter(Boolean).map(Number));
+  for (let p = 5554; p <= 5682; p += 2) if (!used.has(p)) return p;
+  throw new Error('Too many emulators are running');
+}
+
 export const ANDROID_KEYS: Record<DeviceKey, string> = { back: 'KEYCODE_BACK', home: 'KEYCODE_HOME', enter: 'KEYCODE_ENTER', delete: 'KEYCODE_DEL', tab: 'KEYCODE_TAB' };
 
 /** The emulator reaches the host computer at 10.0.2.2, not localhost. */
@@ -92,7 +107,7 @@ export async function insideWorktree(root: string, p: string): Promise<string> {
   let real: string;
   try { real = await fs.realpath(path.resolve(realRoot, p)); } catch { throw new Error(`${p} was not found in your folder`); }
   const rel = path.relative(realRoot, real);
-  if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`Install only files inside your folder (${p} is outside it)`);
+  if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) throw new Error(`Install only files inside your folder (${p} is outside it)`);
   return real;
 }
 
