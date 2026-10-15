@@ -281,3 +281,37 @@ test('task cards open a details drawer', async () => {
     await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });
+
+test('a project terminal runs commands in the project folder', async () => {
+  const repo = await makeRepo();
+  const env = { AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: repo };
+  const { app, userData } = await launch(env);
+  try {
+    const win = await app.firstWindow();
+    await win.getByRole('button', { name: 'Browse' }).click();
+    await win.getByRole('button', { name: /Open the office/ }).click();
+    const toggle = win.getByRole('button', { name: 'Terminal' });
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    const term = win.locator('.terminal-host');
+    await expect(term).toBeVisible();
+    await term.click();
+    await win.keyboard.type('echo ao-terminal-ok');
+    await win.keyboard.press('Enter');
+    // The echoed command and its output: at least two copies once the command has run.
+    await expect.poll(async () => ((await term.innerText()).match(/ao-terminal-ok/g) ?? []).length, { timeout: 20000 }).toBeGreaterThanOrEqual(2);
+
+    // Hiding and showing keeps the same shell and its output; Ctrl+` toggles too.
+    await toggle.click();
+    await expect(term).toBeHidden();
+    await win.keyboard.press('Control+Backquote');
+    await expect(term).toBeVisible();
+    await expect(term).toContainText('ao-terminal-ok');
+    await expect(win.getByRole('separator', { name: 'Resize terminal' })).toBeVisible();
+  } finally {
+    await app.close();
+    await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});

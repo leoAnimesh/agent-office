@@ -178,3 +178,12 @@
 .card-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); cursor: default; }
 @media (prefers-reduced-motion: reduce) { .task-card.dragging { opacity: 1; } }
 .column { position: relative; }
+
+/* Terminal dock: below the project view, resizable from its top edge */
+.terminal-dock { flex: none; display: flex; flex-direction: column; min-height: 0; border-top: 1px solid var(--line); background: var(--panel); }
+.terminal-sep { flex: none; height: 6px; cursor: row-resize; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.terminal-sep:hover, .terminal-sep:focus-visible { background: var(--line-2); }
+.terminal-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.terminal-host { flex: 1; min-height: 0; padding: 6px 10px; }
+.terminal-note { margin: 0; padding: 6px 12px; font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); }
+#terminal-toggle[aria-pressed="true"] { border-color: var(--teal); color: var(--teal); }

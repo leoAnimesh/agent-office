@@ -11,6 +11,8 @@ import { ProjectSettingsView } from './components/ProjectSettingsView';
 import { Sidebar } from './components/Sidebar';
 import { TaskBoard } from './components/TaskBoard';
 import { TeamView } from './components/TeamView';
+import { TerminalPanel } from './components/TerminalPanel';
+import { clampHeight, keyResize, readHeight, writeHeight } from './terminal/dock';
 import { lookFor } from './sprites/sprite';
 import { initialState, reducer, type View } from './state';
 
@@ -20,6 +22,31 @@ export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [state, dispatch] = useReducer(reducer, initialState);
   const [newProject, setNewProject] = useState(false);
+  // The terminal dock: mounted on first open and then only hidden, so the shell and its scrollback survive toggling.
+  const [termOpen, setTermOpen] = useState(false);
+  const [termMounted, setTermMounted] = useState(false);
+  const [termHeight, setTermHeight] = useState(() => readHeight(localStore(), window.innerHeight));
+  const toggleTerminal = useCallback(() => {
+    setTermMounted(true);
+    setTermOpen((o) => {
+      if (o) requestAnimationFrame(() => document.getElementById('terminal-toggle')?.focus());
+      return !o;
+    });
+  }, []);
+  useEffect(() => {
+    // Ctrl+` (Cmd+` is the macOS window switcher).
+    const onKey = (e: KeyboardEvent) => { if (e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'Backquote') { e.preventDefault(); toggleTerminal(); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toggleTerminal]);
+  const resizeTo = (h: number) => { const next = clampHeight(h, window.innerHeight); setTermHeight(next); writeHeight(localStore(), next); };
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => setTermHeight(clampHeight(window.innerHeight - ev.clientY, window.innerHeight));
+    const up = (ev: PointerEvent) => { resizeTo(window.innerHeight - ev.clientY); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
   const onError = useCallback((m: string) => dispatch({ type: 'error', message: clean(m) }), []);
   const viewAgentId = state.view.name === 'agent' ? state.view.agentId : null;
   const onLogs = useCallback((entries: LogEntry[]) => { if (viewAgentId) dispatch({ type: 'logs-loaded', agentId: viewAgentId, entries }); }, [viewAgentId]);
@@ -70,7 +97,7 @@ export function App() {
         {/* App settings are app-wide: no project header or tabs above them. */}
         {state.view.name === 'settings'
           ? <header className="header"><h1>App settings</h1></header>
-          : <Header project={ws.project} claude={status.claude} view={state.view} openTasks={openTasks} onNavigate={go} />}
+          : <Header project={ws.project} claude={status.claude} view={state.view} openTasks={openTasks} onNavigate={go} terminalOpen={termOpen} onToggleTerminal={toggleTerminal} />}
         {state.errors.length > 0 && (
           <div className="errors" role="alert">
             {state.errors.map((m, i) => (
@@ -86,7 +113,21 @@ export function App() {
             </aside>
           )}
         </div>
+        {termMounted && (
+          <div className="terminal-dock" style={{ height: termHeight, display: termOpen ? undefined : 'none' }}>
+            <div className="terminal-sep" role="separator" aria-orientation="horizontal" aria-label="Resize terminal" tabIndex={0}
+              aria-valuenow={termHeight} aria-valuemin={120} aria-valuemax={Math.round(window.innerHeight * 0.7)}
+              onPointerDown={startDrag}
+              onKeyDown={(e) => { const next = keyResize(e.key, termHeight, window.innerHeight); if (next !== null) { e.preventDefault(); resizeTo(next); } }} />
+            <TerminalPanel key={ws.project.id} projectId={ws.project.id} onError={onError} />
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+/** localStorage can be missing or throw on access (blocked storage); the dock works without it. */
+function localStore(): Storage | null {
+  try { return window.localStorage; } catch { return null; }
 }
