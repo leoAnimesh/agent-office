@@ -1,3 +1,5 @@
+import type { DeviceToolsOverride } from './devices/tools';
+
 /** Hooks for tests and development. Packaged builds ignore all of them. */
 export interface TestOverrides {
   userData?: string;
@@ -6,6 +8,8 @@ export interface TestOverrides {
   claudeMissing: boolean;
   pickFolder?: string;
   rendererUrl?: string;
+  /** Fake adb / emulator / xcrun / idb for tests (AO_DEVICE_TOOLS). */
+  deviceTools?: DeviceToolsOverride;
 }
 
 export function readTestOverrides(env: Record<string, string | undefined>, isPackaged: boolean): TestOverrides {
@@ -20,5 +24,11 @@ export function readTestOverrides(env: Record<string, string | undefined>, isPac
   if (env.AO_CLAUDE_BIN) o.claudeBin = env.AO_CLAUDE_BIN;
   if (env.AO_E2E_PICK_FOLDER) o.pickFolder = env.AO_E2E_PICK_FOLDER;
   if (env.ELECTRON_RENDERER_URL) o.rendererUrl = env.ELECTRON_RENDERER_URL;
+  if (env.AO_DEVICE_TOOLS) {
+    try {
+      const v: unknown = JSON.parse(env.AO_DEVICE_TOOLS);
+      if (v && typeof v === 'object') o.deviceTools = v as DeviceToolsOverride;
+    } catch { /* ignore broken JSON */ }
+  }
   return o;
 }

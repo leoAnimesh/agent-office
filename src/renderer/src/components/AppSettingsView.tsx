@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { AppSettings, AppStatus } from '../../../shared/types';
+import type { AppSettings, AppStatus, DeviceSupport } from '../../../shared/types';
 
 interface Props { onStatus: (s: AppStatus) => void; onError: (m: string) => void }
 
@@ -8,6 +8,8 @@ export function AppSettingsView({ onStatus, onError }: Props) {
   const [app, setApp] = useState<AppSettings | null>(null);
   const [claudePath, setClaudePath] = useState('');
   const [note, setNote] = useState<string | null>(null);
+  const [support, setSupport] = useState<DeviceSupport | null>(null);
+  useEffect(() => { window.agentOffice.deviceSupport().then(setSupport, () => undefined); }, []);
   useEffect(() => { window.agentOffice.getSettings().then((s) => { setApp(s); setClaudePath(s.claudePath ?? ''); }, () => undefined); }, []);
 
   const save = async () => {
@@ -37,6 +39,16 @@ export function AppSettingsView({ onStatus, onError }: Props) {
           </label>
         )}
         <div className="row"><button type="button" className="btn primary" onClick={() => void save()}>Save app settings</button></div>
+      </section>
+      <section className="panel-box" aria-labelledby="set-devices">
+        <h2 id="set-devices" style={{ margin: 0, fontSize: 16 }}>Mobile devices</h2>
+        <p className="small muted" style={{ margin: 0 }}>Employees can test apps on an Android emulator and an iOS Simulator installed on this computer.</p>
+        {!support ? <p className="small muted" style={{ margin: 0 }}>Checking…</p> : (
+          <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+            <li>Android: {support.android.ok ? `ready (${support.android.avds.join(', ')})` : support.android.reason}</li>
+            <li>iOS: {support.ios.ok ? `ready (${support.ios.devices.slice(0, 3).map((d) => d.name).join(', ')})${support.ios.idb ? '' : ' · view only until idb is installed: brew install facebook/fb/idb-companion and pip3 install fb-idb'}` : support.ios.reason}</li>
+          </ul>
+        )}
       </section>
     </div>
   );

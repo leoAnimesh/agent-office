@@ -397,7 +397,7 @@ test('the Preview tab shows an employee\'s browser tab live', async () => {
     }]));
     ({ app, win } = await reopen(env, userData));
     await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Preview' }).click();
-    await expect(win.getByLabel('Employee')).toHaveValue(pixel.id, { timeout: 30_000 });
+    await expect(win.getByLabel('Show')).toHaveValue(pixel.id, { timeout: 30_000 });
     const live = win.getByLabel(/Live view of Pixel/);
     await expect.poll(async () => Number(await live.getAttribute('data-frames')), { timeout: 20_000 }).toBeGreaterThan(0);
     await live.click({ position: { x: 20, y: 20 } });
@@ -456,5 +456,37 @@ test('pastes and drops attachments into the boss chat', async () => {
     await app.close();
     await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});
+
+test('the Preview tab shows the Android emulator and taps it', async () => {
+  const repo = await makeRepo();
+  const devDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-fdev-'));
+  const FT = path.resolve('test/fake-devices/fake-tool.mjs');
+  const env = {
+    AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: repo,
+    FAKE_DEVICE_DIR: devDir,
+    AO_DEVICE_TOOLS: JSON.stringify({ adb: [process.execPath, FT, 'adb'], emulator: [process.execPath, FT, 'emulator'], platform: 'linux' }),
+  };
+  const { app, userData } = await launch(env);
+  try {
+    const win = await app.firstWindow();
+    await win.getByRole('button', { name: 'Browse' }).click();
+    await win.getByRole('button', { name: /Open the office/ }).click();
+    await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Preview' }).click();
+    await expect(win.getByLabel('Show')).toContainText('Android · not running');
+    await win.getByRole('button', { name: 'Start' }).click();
+    await expect(win.getByLabel('Show')).toContainText('Android · Medium_Phone (free)', { timeout: 20_000 });
+    const live = win.getByLabel(/Live view of the Android device/);
+    await expect.poll(async () => Number(await live.getAttribute('data-frames')), { timeout: 20_000 }).toBeGreaterThan(0);
+    await live.click(); // the centre: a phone screen is drawn in the middle with space on either side
+    await expect.poll(async () => (await fs.readFile(path.join(devDir, 'calls.jsonl'), 'utf8')).includes('"tap"'), { timeout: 10_000 }).toBe(true);
+    await win.getByRole('button', { name: 'Shut down' }).click();
+    await expect(win.getByLabel('Show')).toContainText('Android · not running', { timeout: 20_000 });
+  } finally {
+    await app.close();
+    await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    await fs.rm(devDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });

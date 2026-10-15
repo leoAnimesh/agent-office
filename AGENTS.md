@@ -41,6 +41,8 @@ src/main/        Electron main (Node). Plain TS modules with injected deps, unit
   terminal/        TerminalService (one PTY per open project, batched output, backlog), pty (lazy @lydell/node-pty), ipcArgs
   browser/         BrowserService (one headless Chromium per project, a private tab per employee, screencast for the Preview tab),
                    DevServerService (one dev server per employee), employeeTools (the `office` MCP server's tools), rules, previewArgs
+  devices/         DeviceService (one Android emulator and one iOS Simulator per project, who holds each, live view),
+                   AndroidDriver / IosDriver (adb, emulator, simctl, idb), deviceTools (office MCP tools), parse, tools (find and run them)
   git/             worktrees.ts: git(), slugify, WorktreeManager (prepare/commitAll/diffStat/merge/remove/syncBranch);
                    history.ts: read-only branches, commit list, commit detail, file diff for the History tab
   store/           JSON stores (atomic writes), roles, skills, settings, zod validation
@@ -229,6 +231,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
  and resolve to a commit, and a diff path must be one of that commit's changed files.
 - Employee browser tools reach only the caller's own tab and dev server (the token identifies the employee). Only `localhost` / `127.0.0.1` / `[::1]` pages can be opened or navigated to (redirects elsewhere get a 403 page). Dev server commands run without a shell in the employee's worktree. Preview input is validated (`browser/previewArgs.ts`) and agents have no channel to it. Tabs use in-memory profiles, never the user's own, and no remote-debugging port is opened. `playwright-core` is pinned exactly and unpacked from the asar.
 - Chat attachments arrive from the renderer as bytes, never paths. Main checks them (count, size, image type by magic bytes) and stores them under app data with generated names. `readAttachment` returns only image files of the open project, by id. The boss reads attached files through `--add-dir <attachments folder>`.
+- Device tools take only enums, refs, short text and paths inside the caller's worktree (realpath-checked). Commands are argv arrays with timeouts and output caps. One employee holds a device at a time (released when its work ends or it is fired), and the app shuts down only devices it started.
 - The terminal is the user's own shell: it always starts in the open project's folder (decided in main, never sent by the renderer), takes validated sizes and ≤ 64 KB writes, and has no channel from the MCP host or agents. `@lydell/node-pty` is pinned exactly (it is a beta) and unpacked from the asar (`asarUnpack`).
 - The `AO_*` dev hooks and `ELECTRON_RENDERER_URL` are read only by `testOverrides.ts`, and **only when not packaged**. Packaged builds also turn on Electron fuses (no `RUN_AS_NODE`, no `NODE_OPTIONS`, no inspect, app loaded only from the asar).
 
@@ -246,6 +249,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
   - `FAKE_CLAUDE_DELAY_MS`: pause between fixture lines;
   - `FAKE_CLAUDE_ARGV_OUT`: record each launch's argv and cwd.
   - `FAKE_CLAUDE_RESULT`: use this exact text as the success result (e.g. classifier JSON).
+  - `test/fake-devices/fake-tool.mjs` stands in for adb, emulator, xcrun and idb (state in `FAKE_DEVICE_DIR`, every call in `calls.jsonl`); `test/helpers/fakeDevices.ts` wires it. The dev hook `AO_DEVICE_TOOLS` (unpackaged only) points the app at it.
   - `FAKE_CLAUDE_STDIN_OUT`: append each stdin line (the user turns, including image blocks) to this file.
   - `FAKE_CLAUDE_MCP_CALLS`: a JSON list of `{ tool, args }` that an employee calls on its MCP config before replying (`$URL` becomes the last returned url); the result lists what each call returned.
   - The fake treats a launch with `--allowedTools mcp__agentoffice` as the boss (it never writes files).
@@ -284,4 +288,5 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - With the role editor gone, role skill lists no longer do anything (employees get the project's skills), the app cannot change a role's permission mode or sprite look, delete a role, or change the boss's model after onboarding. Two role names that both slug to `role` (e.g. non-Latin names) collide.
 - Terminal: a shell that fails to start shows the error without a Restart button; reattaching (window reload) can draw one batch of output twice; the backlog can start mid escape sequence.
 - Preview: there is no in-app browser download (packaged builds cannot run Playwright's installer), so without Chrome or Edge the user is asked to install one. Employee tabs do not survive a restart.
+- Mobile devices: the live view is screenshot polling (about 3 frames a second); iOS tapping, typing and reading the screen need idb; real phones are not supported; device screenshots reach the model at full size.
 - Only the Claude Code CLI is supported. Codex would plug in behind the `AgentRunner` interface (`src/main/claude/runner.ts`).

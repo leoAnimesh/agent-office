@@ -70,6 +70,12 @@ describe('renderPrompt (boss project skills)', () => {
   });
 });
 describe('renderPrompt (browser tools)', () => {
+  it('tells employees how to use the mobile devices with the browser tools', () => {
+    const on = renderPrompt(role, [], { agentName: 'Pixel', bossName: 'Max', branch: 'b', projectName: 'demo', kind: 'employee', browserTools: true });
+    expect(on).toContain('`device_start`');
+    expect(on).toContain('`device_install`');
+  });
+
   it('tells employees how to check UI work only when the browser is on', () => {
     const on = renderPrompt(role, [], { agentName: 'Pixel', bossName: 'Max', branch: 'b', projectName: 'demo', kind: 'employee', browserTools: true });
     expect(on).toContain('`start_dev_server`');

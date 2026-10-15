@@ -1,4 +1,4 @@
-import type { Agent, AppSettings, CommitDetail, CommitSummary, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot, TerminalEvent, PreviewTab, PreviewFrame, PreviewInput, NewAttachment } from './types';
+import type { Agent, AppSettings, CommitDetail, CommitSummary, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot, TerminalEvent, PreviewTab, PreviewFrame, PreviewInput, NewAttachment, DeviceSupport } from './types';
 
 export const IPC = {
   appStatus: 'app:status',
@@ -42,6 +42,8 @@ export const IPC = {
   terminalEvent: 'terminal:event',
   previewList: 'preview:list',
   previewAvailable: 'preview:available',
+  previewDevice: 'preview:device',
+  deviceSupport: 'devices:support',
   previewWatch: 'preview:watch',
   previewAck: 'preview:ack',
   previewInput: 'preview:input',
@@ -99,6 +101,8 @@ export interface AgentOfficeApi {
   previewList(): Promise<PreviewTab[]>;
   /** Starts the project's browser if needed; false when none can start. */
   previewAvailable(): Promise<boolean>;
+  previewDevice(kind: 'android' | 'ios', action: 'start' | 'home' | 'back' | 'shutdown'): Promise<void>;
+  deviceSupport(): Promise<DeviceSupport>;
   previewWatch(agentId: string | null): Promise<void>;
   previewAck(): Promise<void>;
   previewInput(agentId: string, event: PreviewInput): Promise<void>;
