@@ -210,6 +210,8 @@ test('task cards open a details drawer', async () => {
     delete base.ELECTRON_RENDERER_URL;
     app = await electron.launch({ args: process.platform === 'linux' ? ['--no-sandbox', path.resolve('.')] : [path.resolve('.')], env: { ...base, AO_USER_DATA: userData, ...env } });
     win = await app.firstWindow();
+    // The size CI runs at: the board scrolls sideways, so drags must start with both ends on screen.
+    await win.setViewportSize({ width: 1024, height: 645 });
     const browse = win.getByRole('button', { name: 'Browse' });
     await expect(browse.or(win.getByRole('button', { name: /^Max, Boss/ }))).toBeVisible();
     if (await browse.isVisible()) {
@@ -257,6 +259,8 @@ test('task cards open a details drawer', async () => {
     await expect(one).toContainText('Byte');
 
     // Review to Done merges it.
+    // Scrolling the board mid-drag cancels a native drag, so bring Done (and the card beside it) into view first.
+    await win.getByRole('region', { name: 'Done' }).scrollIntoViewIfNeeded();
     await card.dragTo(win.getByRole('region', { name: 'Done' }));
     await expect(win.getByRole('region', { name: 'Done' }).locator('.task-card', { hasText: 'Remove dead code' })).toBeVisible();
   } finally {
