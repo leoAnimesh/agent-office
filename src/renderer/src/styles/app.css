@@ -294,3 +294,7 @@
 /* File chips inside the user's (amber) bubble: dark text on a light tint, not the panel colours. */
 .msg.user .attach-chip { background: rgba(0, 0, 0, 0.1); border-color: rgba(0, 0, 0, 0.25); color: var(--amber-ink); }
 .msg.user .attach-chip .muted { color: var(--amber-ink); opacity: 0.75; }
+
+/* Sidebar: what a project running in the background is doing */
+.side-note { margin-left: auto; padding-left: 8px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.side-note.attention { color: var(--amber); font-weight: 600; }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { Project, WorkspaceSnapshot } from '../../../shared/types';
+import type { OpenProjectStatus, Project, WorkspaceSnapshot } from '../../../shared/types';
+import { projectStatus } from './sidebarStatus';
 import type { View } from '../state';
 import logo from '../../../shared/logo.json';
 
@@ -31,6 +32,10 @@ function Icon({ name }: { name: 'settings' | 'plus' }) {
 export function Sidebar({ current, view, onOpened, onNewProject, onNavigate, onError }: Props) {
   const [projects, setProjects] = useState<Project[]>([]);
   useEffect(() => { window.agentOffice.listProjects().then(setProjects, () => setProjects([])); }, [current.id]);
+  // Projects keep running when you switch: show what the others are doing.
+  const [running, setRunning] = useState<OpenProjectStatus[]>([]);
+  useEffect(() => { window.agentOffice.openProjects().then(setRunning, () => undefined); }, [current.id]);
+  useEffect(() => window.agentOffice.onEvent((e) => { if (e.type === 'open-projects') setRunning(e.projects); }), []);
 
   const open = async (repoPath: string | null) => {
     if (!repoPath) return;
@@ -45,12 +50,16 @@ export function Sidebar({ current, view, onOpened, onNewProject, onNavigate, onE
       </div>
       <div className="side-section">
         <div className="side-title">PROJECTS</div>
-        {projects.map((p) => (
+        {projects.map((p) => {
+          const st = p.id === current.id ? null : projectStatus(running.find((r) => r.id === p.id));
+          return (
           <button key={p.id} type="button" className={p.id === current.id ? 'side-item current' : 'side-item'} aria-current={p.id === current.id ? 'true' : undefined} onClick={() => (p.id === current.id ? onNavigate({ name: 'office' }) : open(p.repoPath))}>
-            <span className="dot" style={{ background: p.id === current.id ? 'var(--amber)' : 'var(--blue)' }} aria-hidden="true" />
+            <span className="dot" style={{ background: p.id === current.id ? 'var(--amber)' : st?.running ? 'var(--green)' : 'var(--blue)' }} aria-hidden="true" />
             <span className="side-label">{p.name}</span>
+            {st?.text && <span className={st.attention ? 'side-note attention' : 'side-note'}>{st.text}</span>}
           </button>
-        ))}
+          );
+        })}
         <button type="button" className="side-item muted" onClick={onNewProject}>
           <Icon name="plus" /><span className="side-label">New project</span>
         </button>

@@ -490,3 +490,43 @@ test('the Preview tab shows the Android emulator and taps it', async () => {
     await fs.rm(devDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });
+
+test('switching projects keeps the other project working', async () => {
+  const a = await makeRepo();
+  const b = await makeRepo();
+  const env = { AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: a, FAKE_CLAUDE_HANG: 'employee' };
+  let { app, userData } = await launch(env);
+  try {
+    let win = await app.firstWindow();
+    await win.getByRole('button', { name: 'Browse' }).click();
+    await win.getByRole('button', { name: /Open the office/ }).click();
+    await expect(win.getByRole('button', { name: /^Max, Boss/ })).toBeVisible();
+    await app.close();
+    const pdir = await seedTeam(userData, [{ name: 'Pixel', roleId: 'frontend' }]);
+    const pixel = (JSON.parse(await fs.readFile(path.join(pdir, 'agents.json'), 'utf8')) as { id: string; name: string }[]).find((x) => x.name === 'Pixel')!;
+    const now = new Date().toISOString();
+    await fs.writeFile(path.join(pdir, 'tasks.json'), JSON.stringify([{
+      id: 'T-101', projectId: path.basename(pdir), title: 'Long job', brief: 'take your time', assigneeId: pixel.id, createdBy: 'boss', status: 'queued',
+      held: false, attempts: 0, branch: 'ao/pixel/long-t-101', dependsOn: [], createdAt: now, updatedAt: now, model: 'haiku',
+    }]));
+    // Project A reopens on launch and its task starts; the folder picker now returns project B.
+    ({ app, win } = await reopen({ ...env, AO_E2E_PICK_FOLDER: b }, userData));
+    await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: /^Tasks/ }).click();
+    await expect(win.getByRole('region', { name: 'Working' }).getByText('Long job')).toBeVisible({ timeout: 20_000 });
+
+    await win.getByRole('button', { name: 'New project' }).click();
+    await win.getByRole('radio', { name: /Open an existing repo/ }).click();
+    await win.getByRole('button', { name: 'Browse' }).click();
+    await win.getByRole('button', { name: /Open the office/ }).click();
+    const sidebar = win.getByRole('navigation', { name: 'Projects and library' });
+    const sideA = sidebar.getByRole('button', { name: new RegExp(path.basename(a)) });
+    await expect(sideA).toContainText('1 working', { timeout: 15_000 });
+
+    await sideA.click();
+    await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: /^Tasks/ }).click();
+    await expect(win.getByRole('region', { name: 'Working' }).getByText('Long job')).toBeVisible();
+  } finally {
+    await app.close();
+    for (const d of [a, b, userData]) await fs.rm(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});
