@@ -37,6 +37,7 @@ src/main/        Electron main (Node). Plain TS modules with injected deps, unit
                    prompt (role prompt + skills), bossTools (zod-validated MCP tool defs)
   boss/            BossSession: the boss's long-lived claude session ↔ chat entries
   mcp/             McpHost: Streamable-HTTP MCP server on 127.0.0.1 with a bearer token
+  terminal/        TerminalService (one PTY per open project, batched output, backlog), pty (lazy @lydell/node-pty), ipcArgs
   git/             worktrees.ts: git(), slugify, WorktreeManager (prepare/commitAll/diffStat/merge/remove)
   store/           JSON stores (atomic writes), roles, skills, settings, zod validation
   workspace/       ProjectService (one open project: wires everything, emits WorkspaceEvents), ApprovalBroker,
@@ -107,6 +108,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - Model and agent text is rendered only as React text. Never use `dangerouslySetInnerHTML`.
 - The MCP host listens only on `127.0.0.1`, uses a random bearer token compared in constant time, and caps the body size. Its `mcp.json` is mode 0600.
 - `worktreeFor()` only opens paths inside `<repo>/.agentoffice/wt/`.
+- The terminal is the user's own shell: it always starts in the open project's folder (decided in main, never sent by the renderer), takes validated sizes and ≤ 64 KB writes, and has no channel from the MCP host or agents. `@lydell/node-pty` is pinned exactly (it is a beta) and unpacked from the asar (`asarUnpack`).
 - The `AO_*` dev hooks and `ELECTRON_RENDERER_URL` are read only by `testOverrides.ts`, and **only when not packaged**. Packaged builds also turn on Electron fuses (no `RUN_AS_NODE`, no `NODE_OPTIONS`, no inspect, app loaded only from the asar).
 
 ## Testing conventions
