@@ -2,10 +2,13 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { AUTO_MODEL, type ChatEntry, type DiffStat, type Project, type RunnerEvent, type Task } from '../../shared/types';
+import { canSend } from '../../shared/attachments';
+import { AUTO_MODEL, type ChatEntry, type DiffStat, type NewAttachment, type Project, type RunnerEvent, type Task } from '../../shared/types';
 import type { AgentManager, ManagerEvent } from '../agents/agentManager';
 import { renderPrompt } from '../agents/prompt';
+import type { UserMessage } from '../claude/args';
 import { waitForExit, type AgentRunner, type ClaudeRunnerOptions } from '../claude/runner';
+import type { AttachmentStore } from './attachments';
 import type { ProjectStore } from '../store/projectStore';
 import type { RoleStore } from '../store/roleStore';
 import type { SkillStore } from '../store/skillStore';
@@ -23,6 +26,8 @@ export interface BossSessionDeps {
   promptDir: string;
   mcpConfigPath: string;
   isolateUserSettings: boolean;
+  /** Where chat attachments are kept; the boss may read this folder (--add-dir). */
+  attachments: AttachmentStore;
   now?: () => Date;
 }
 
@@ -50,7 +55,8 @@ export class BossSession extends EventEmitter {
   private resumed = false;
   private sawInit = false;
   /** Last message delivered, replayed once if a stale session has to be replaced. */
-  private lastText: string | null = null;
+  /** Re-sent (with its images) when a fresh boss session has to be started. */
+  private lastMessage: UserMessage | null = null;
   private stopping = false;
   private detach: (() => void) | null = null;
   /** Delivery is serialized so two quick messages never start two boss processes. */
@@ -74,9 +80,12 @@ export class BossSession extends EventEmitter {
     return this.d.store.readChat(this.d.project.id, limit);
   }
 
-  async send(text: string): Promise<void> {
-    await this.add({ kind: 'user', at: this.now(), text });
-    await this.deliver(text);
+  async send(text: string, files: NewAttachment[] = []): Promise<void> {
+    if (!canSend(text, files.length)) throw new Error('The message is empty');
+    const saved = files.length > 0 ? await this.d.attachments.save(files) : { meta: [], images: [], fileLines: [] };
+    await this.add({ kind: 'user', at: this.now(), text, ...(saved.meta.length > 0 ? { attachments: saved.meta } : {}) });
+    const full = [text, ...saved.fileLines].filter((s) => s.trim()).join('\n\n');
+    await this.deliver(saved.images.length > 0 ? { text: full, images: saved.images } : full);
   }
 
   /** `chatText` is what the user sees when it should differ from what the boss is told; `files` is shown as a file list. */
@@ -103,13 +112,13 @@ export class BossSession extends EventEmitter {
     await this.events;
   }
 
-  private deliver(text: string): Promise<void> {
+  private deliver(msg: UserMessage): Promise<void> {
     const next = this.delivery.then(async () => {
       if (this.stopping) return;
       const runner = await this.ensureRunner();
-      this.lastText = text;
+      this.lastMessage = msg;
       if (runner.running) {
-        runner.send(text);
+        runner.send(msg);
         this.setPending(this.pending + 1);
       }
     });
@@ -127,6 +136,7 @@ export class BossSession extends EventEmitter {
     if (!role) throw new Error(`Role ${boss.roleId} is missing`);
     const skills = await this.d.skills.getMany(role.skills);
     const chosen = await this.d.skills.getMany((this.d.project.skills ?? []).map((s) => s.id));
+    await fs.mkdir(this.d.attachments.dir, { recursive: true });
     const promptFile = path.join(this.d.promptDir, `${boss.id}.md`);
     await fs.mkdir(this.d.promptDir, { recursive: true });
     await fs.writeFile(promptFile, renderPrompt(role, skills, {
@@ -148,6 +158,7 @@ export class BossSession extends EventEmitter {
         sessionId: boss.sessionId ? undefined : randomUUID(),
         isolateUserSettings: this.d.isolateUserSettings,
         includePartialMessages: true,
+        addDirs: [this.d.attachments.dir],
       },
     });
     runner.on('event', (ev) => {
@@ -198,7 +209,7 @@ export class BossSession extends EventEmitter {
           // The saved conversation is gone (expired or deleted). Start over instead of failing forever.
           await this.d.manager.setSessionId(bossId, null).catch(() => undefined);
           await this.add({ kind: 'error', at: this.now(), text: 'The earlier boss conversation could not be restored, so a fresh boss session was started. It may need a reminder of what you were working on.' });
-          if (this.lastText) void this.deliver(this.lastText);
+          if (this.lastMessage) void this.deliver(this.lastMessage);
         } else if (!this.stopping && ev.code !== 0) {
           const tail = runner.lastStderr;
           await this.add({ kind: 'error', at: this.now(), text: `The boss session ${ev.code === null && ev.signal === null ? 'could not start' : `stopped (${ev.code ?? ev.signal})`}. It will restart with your next message.${tail ? `\n${tail}` : ''}` });

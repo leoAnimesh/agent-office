@@ -31,7 +31,10 @@ const out = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 let turns = 0;
 let queue = Promise.resolve();
 const rl = readline.createInterface({ input: process.stdin });
-rl.on('line', (line) => { queue = queue.then(() => handle(line)); });
+rl.on('line', (line) => {
+  if (env.FAKE_CLAUDE_STDIN_OUT) fs.appendFileSync(env.FAKE_CLAUDE_STDIN_OUT, line + '\n');
+  queue = queue.then(() => handle(line));
+});
 rl.on('close', () => { queue.then(() => process.exit(0)); });
 
 async function handle(line) {
