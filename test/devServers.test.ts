@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { DevServerService } from '../src/main/browser/devServers';
+import { freePort } from '../src/main/browser/rules';
 
 const FIXTURE = path.resolve('test/fixtures/dev-server.mjs');
 const cmd = (extra = '') => `node "${FIXTURE}" ${extra}`.trim();
@@ -48,6 +49,13 @@ describe('DevServerService', () => {
     await svc.stopAll();
     expect(await answers(other.url)).toBe(false);
     expect(svc.info('a2')).toBeNull();
+  });
+
+  it('kills what a launcher left behind when it exits early', async () => {
+    const port = await freePort();
+    await expect(svc.start('a1', cmd(`--fork-and-exit --ignore-port --port ${port}`))).rejects.toThrow(/exited/);
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(await answers(`http://127.0.0.1:${port}/`)).toBe(false);
   });
 
   it('refuses when the employee has no folder yet, or the command uses the shell', async () => {

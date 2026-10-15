@@ -45,6 +45,8 @@ export class DevServerService {
     while (Date.now() < deadline) {
       if (!run.info.running) {
         this.servers.delete(agentId);
+        // A launcher (npm, a script) can exit while the server it started keeps the port: kill its whole group.
+        if (child.pid) killTree(child.pid);
         throw new Error(`The dev server exited before it was ready. Last output:\n${run.lines.slice(-40).join('\n')}`);
       }
       if (await answers(port)) return { url, port };
@@ -69,6 +71,7 @@ export class DevServerService {
     const r = this.servers.get(agentId);
     if (!r) return false;
     this.servers.delete(agentId);
+    if (!r.info.running && r.child.pid) killTree(r.child.pid); // the launcher is gone; its group may not be
     if (r.info.running && r.child.pid) {
       killTree(r.child.pid);
       // Escalate if it ignores SIGTERM, then wait for the exit so ports and folders are free.

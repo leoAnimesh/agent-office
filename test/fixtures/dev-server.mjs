@@ -1,4 +1,10 @@
 import http from 'node:http';
+if (process.argv.includes('--fork-and-exit')) {
+  // Like a launcher (npm) that starts the real server and goes away: the child keeps the port.
+  const { spawn } = await import('node:child_process');
+  spawn(process.execPath, [process.argv[1], ...process.argv.slice(2).filter((a) => a !== '--fork-and-exit')], { stdio: 'ignore' });
+  process.exit(0);
+}
 if (process.argv.includes('--die')) { console.error('boom: cannot start'); process.exit(2); }
 const port = process.argv.includes('--ignore-port') ? 0 : Number(process.env.PORT);
 const portArg = process.argv.indexOf('--port');
