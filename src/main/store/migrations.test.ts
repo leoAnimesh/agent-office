@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { RoleStore } from './roleStore';
 import { SettingsStore } from './settingsStore';
-import { migrateRolesToAuto } from './migrations';
+import { migrateRolesAllTools, migrateRolesToAuto } from './migrations';
+import { ALL_TOOLS } from '../../shared/tools';
 
 let dir: string;
 let roles: RoleStore;
@@ -33,5 +34,29 @@ describe('migrateRolesToAuto', () => {
     await roles.save({ ...(await roles.get('custom'))!, model: 'opus' });
     expect(await migrateRolesToAuto(roles, settings)).toBe(0);
     expect((await roles.get('custom'))!.model).toBe('opus');
+  });
+});
+
+describe('migrateRolesAllTools', () => {
+  it('gives every employee role every tool, keeps extras, leaves the boss, and runs once', async () => {
+    const fe = (await roles.get('frontend'))!;
+    await roles.save({ ...fe, id: 'custom', name: 'Custom', allowedTools: ['Read', 'mcp__docs'] });
+    await migrateRolesAllTools(roles, settings);
+    for (const r of await roles.list()) {
+      if (r.id === 'boss') expect(r.allowedTools).toEqual(['Read', 'Grep', 'Glob']);
+      else expect(r.allowedTools).toEqual(expect.arrayContaining(ALL_TOOLS));
+    }
+    expect((await roles.get('custom'))!.allowedTools).toContain('mcp__docs');
+    expect((await settings.get()).allToolsMigrated).toBe(true);
+
+    await roles.save({ ...(await roles.get('custom'))!, allowedTools: ['Read'] });
+    expect(await migrateRolesAllTools(roles, settings)).toBe(0);
+    expect((await roles.get('custom'))!.allowedTools).toEqual(['Read']);
+  });
+});
+
+describe('built-in roles', () => {
+  it('ship every employee role with every tool', async () => {
+    for (const r of await roles.list()) if (r.id !== 'boss') expect(r.allowedTools).toEqual(ALL_TOOLS);
   });
 });

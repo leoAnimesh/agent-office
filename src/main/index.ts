@@ -10,7 +10,7 @@ import { readTestOverrides } from './testOverrides';
 import { fixGuiPath } from './claude/shellPath';
 import { dataPaths } from './store/paths';
 import { SettingsStore } from './store/settingsStore';
-import { migrateRolesToAuto } from './store/migrations';
+import { migrateRolesAllTools, migrateRolesToAuto } from './store/migrations';
 import { RoleStore } from './store/roleStore';
 import { ProjectService } from './workspace/projectService';
 
@@ -149,6 +149,7 @@ app.whenReady().then(async () => {
   });
   await service.init();
   await migrateRolesToAuto(new RoleStore(paths.rolesDir), settings).catch((e) => console.error('role migration failed', e));
+  await migrateRolesAllTools(new RoleStore(paths.rolesDir), settings).catch((e) => console.error('tool migration failed', e));
   service.on('event', (e) => win?.webContents.send(IPC.event, e));
   registerIpc(service, settings, status);
   createWindow();

@@ -13,8 +13,12 @@
     "Read",
     "Edit",
     "Write",
+    "Bash",
     "Grep",
-    "Glob"
+    "Glob",
+    "WebFetch",
+    "WebSearch",
+    "NotebookEdit"
   ],
   "look": {
     "hair": "#8A4B2A",

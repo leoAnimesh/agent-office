@@ -1,5 +1,5 @@
 import type { AppStatus, Project } from '../../../shared/types';
-import { claudeLabel } from '../layout/sidebarPref';
+import { claudeLabel } from '../layout/claudeLabel';
 import type { View } from '../state';
 
 const TABS: { name: 'office' | 'tasks' | 'team' | 'project-settings'; label: string }[] = [

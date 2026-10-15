@@ -1,6 +1,8 @@
 import type { Role } from '../../../shared/types';
 
-export const KNOWN_TOOLS = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob', 'WebFetch', 'WebSearch', 'NotebookEdit'];
+import { ALL_TOOLS } from '../../../shared/tools';
+
+export const KNOWN_TOOLS = ALL_TOOLS;
 export const MODELS = ['opus', 'sonnet', 'haiku'];
 
 export function toggle(list: string[], item: string): string[] {
@@ -16,7 +18,7 @@ export function roleIdFromName(name: string, taken: string[]): string {
 export function blankRole(): Role {
   return {
     id: '', name: '', blurb: '', systemPrompt: '', skills: ['git-hygiene'], model: 'auto', permissionMode: 'acceptEdits',
-    allowedTools: ['Read', 'Edit', 'Write', 'Grep', 'Glob'], look: { hair: '#8A4B2A', shirt: '#3E8E5A', skin: '#F1C9A5' },
+    allowedTools: [...ALL_TOOLS], look: { hair: '#8A4B2A', shirt: '#3E8E5A', skin: '#F1C9A5' },
   };
 }
 

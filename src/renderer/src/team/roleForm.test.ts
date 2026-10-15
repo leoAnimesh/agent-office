@@ -15,9 +15,9 @@ describe('role form helpers', () => {
     expect(roleIdFromName('../../etc', [])).toBe('etc');
   });
 
-  it('starts new roles with safe defaults', () => {
+  it('starts new roles on auto with every tool', () => {
     const r = blankRole();
-    expect(r).toMatchObject({ id: '', model: 'auto', permissionMode: 'acceptEdits', allowedTools: ['Read', 'Edit', 'Write', 'Grep', 'Glob'] });
+    expect(r).toMatchObject({ id: '', model: 'auto', permissionMode: 'acceptEdits', allowedTools: KNOWN_TOOLS });
     expect(r.look.shirt).toMatch(/^#[0-9A-F]{6}$/i);
   });
 
