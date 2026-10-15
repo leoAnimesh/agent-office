@@ -33,6 +33,8 @@ export class BrowserService {
   private creating = new Map<string, Promise<Tab>>();
   private cast: { agentId: string; cdp: CDPSession } | null = null;
   private inFlight = false;
+  /** watch() calls run one at a time, so a restart never overlaps another start or stop. */
+  private watchChain: Promise<void> = Promise.resolve();
   private closed = false;
 
   constructor(private readonly opts: { launch?: () => Promise<Browser>; onChange?(): void; onFrame?(f: Frame): void } = {}) {}
@@ -90,7 +92,13 @@ export class BrowserService {
     page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') keep(`${m.type()}: ${m.text()}`); });
     page.on('pageerror', (e) => keep(`page error: ${e.message}`));
     page.on('requestfailed', (r) => keep(`request failed: ${r.method()} ${r.url()} (${r.failure()?.errorText ?? 'failed'})`));
-    page.on('framenavigated', (f) => { if (f === page.mainFrame()) this.opts.onChange?.(); });
+    page.on('framenavigated', (f) => {
+      if (f !== page.mainFrame()) return;
+      // A navigation can move the page to a new renderer process, which silently ends a screencast that was
+      // starting at that moment: restart it for the watched tab.
+      if (this.cast?.agentId === agentId) void this.watch(agentId);
+      this.opts.onChange?.();
+    });
     this.tabsById.set(agentId, tab);
     this.opts.onChange?.();
     return tab;
@@ -130,7 +138,13 @@ export class BrowserService {
   }
 
   /** Stream one tab to the Preview tab (null stops). */
-  async watch(agentId: string | null): Promise<void> {
+  watch(agentId: string | null): Promise<void> {
+    const next = this.watchChain.then(() => this.switchWatch(agentId));
+    this.watchChain = next.catch(() => undefined);
+    return next;
+  }
+
+  private async switchWatch(agentId: string | null): Promise<void> {
     if (this.cast) {
       const old = this.cast;
       this.cast = null;

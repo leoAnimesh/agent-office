@@ -72,6 +72,32 @@ describe('BrowserService (real headless browser)', () => {
     await watched.close();
   });
 
+  it('sends a first frame of an idle page as soon as it is watched', async ({ skip }) => {
+    if (!canRun) skip();
+    const frames: number[] = [];
+    const idle = new BrowserService({ onFrame: (f) => { frames.push(f.width); idle.ack(); } });
+    const page = await idle.pageFor('a1');
+    await page.goto(base);
+    await new Promise((r) => setTimeout(r, 1500)); // fully painted and still
+    await idle.watch('a1');
+    await expect.poll(() => frames.length, { timeout: 3000 }).toBeGreaterThan(0);
+    await idle.close();
+  });
+
+  it('keeps streaming when the watched tab navigates to its first page', async ({ skip }) => {
+    if (!canRun) skip();
+    const frames: number[] = [];
+    const early = new BrowserService({ onFrame: () => { frames.push(Date.now()); early.ack(); } });
+    const page = await early.pageFor('a1');
+    // Watching starts while the tab is still blank and the employee's page is loading (the race the Preview tab hits).
+    await Promise.all([early.watch('a1'), page.goto(base)]);
+    await new Promise((r) => setTimeout(r, 300));
+    const after = Date.now();
+    await page.evaluate(() => { document.body.style.background = 'rgb(200, 220, 255)'; });
+    await expect.poll(() => frames.filter((t) => t >= after).length, { timeout: 3000 }).toBeGreaterThan(0);
+    await early.close();
+  });
+
   it('says how to get a browser when none can start', async () => {
     const none = new BrowserService({ launch: async () => { throw new Error('no chrome'); } });
     expect(await none.available()).toBe(false);
