@@ -25,7 +25,7 @@ function themeFromTokens(): Record<string, string> {
  * The open project's shell, drawn with xterm.js. The shell runs in the main process (always in the project
  * folder); this component only sends keystrokes and sizes and draws what comes back.
  */
-export function TerminalPanel({ projectId, onError }: { projectId: string; onError: (m: string) => void }) {
+export function TerminalPanel({ projectId, visible, onError }: { projectId: string; visible: boolean; onError: (m: string) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const [exited, setExited] = useState<number | null>(null);
@@ -65,6 +65,9 @@ export function TerminalPanel({ projectId, onError }: { projectId: string; onErr
     term.focus();
     return () => { disposed = true; off(); input.dispose(); ro.disconnect(); term.dispose(); termRef.current = null; };
   }, [projectId]);
+
+  // Showing the panel again puts the keyboard back in the shell.
+  useEffect(() => { if (visible) termRef.current?.focus(); }, [visible]);
 
   const restart = async () => {
     const term = termRef.current;

@@ -85,7 +85,7 @@ export class ProjectService extends EventEmitter {
     await this.roles.seed(path.join(this.d.resourcesDir, 'roles'));
     await this.skills.seed(path.join(this.d.resourcesDir, 'skills'));
     try {
-      this.terminals = new TerminalService({ spawn: await loadSpawnPty(), killTree: (pid) => killTree(pid) });
+      this.terminals = new TerminalService({ spawn: await loadSpawnPty(), killTree: (pid, signal) => killTree(pid, process.platform, signal) });
       this.terminals.on('event', (e: TerminalEvent) => this.emit('terminal', e));
     } catch (e) {
       this.terminalError = e instanceof Error ? e.message : String(e);

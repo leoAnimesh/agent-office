@@ -24,7 +24,7 @@ export interface TerminalDeps {
   /** How much recent output is kept to redraw the panel when it is reopened. */
   backlogBytes?: number;
   /** Windows: kill the shell's whole process tree so nothing keeps the project folder locked. */
-  killTree?: (pid: number) => void;
+  killTree?: (pid: number, signal?: NodeJS.Signals) => void;
 }
 
 interface Session { pty: PtyLike; backlog: string; pending: string; timer: NodeJS.Timeout | null; exited: Promise<void> }
@@ -75,11 +75,16 @@ export class TerminalService extends EventEmitter {
     this.sessions.get(projectId)?.pty.resize(clamp(cols, 2, 500), clamp(rows, 1, 300));
   }
 
+  /** Ends the shell; its exit is reported (the panel then offers Restart). */
   async kill(projectId: string): Promise<void> {
     const s = this.sessions.get(projectId);
     if (!s) return;
-    this.sessions.delete(projectId);
     await this.stop(s);
+    // Still here: it never exited, even after SIGKILL. Forget it and say so.
+    if (this.sessions.get(projectId) === s) {
+      this.sessions.delete(projectId);
+      this.emit('event', { type: 'exit', projectId, exitCode: -1 } satisfies TerminalEvent);
+    }
   }
 
   async killAll(): Promise<void> {
@@ -120,17 +125,23 @@ export class TerminalService extends EventEmitter {
 
   private flush(projectId: string, s: Session): void {
     if (s.timer) { clearTimeout(s.timer); s.timer = null; }
-    if (!s.pending) return;
+    // A replaced (restarted) shell's last words must not land in the new one.
+    if (!s.pending || this.sessions.get(projectId) !== s) { s.pending = ''; return; }
     const data = s.pending;
     s.pending = '';
     this.emit('event', { type: 'data', projectId, data } satisfies TerminalEvent);
   }
 
   /** Ends a shell and waits (briefly) for it to go, so Windows releases the project folder. */
-  private stop(s: Session): Promise<void> {
+  private async stop(s: Session): Promise<void> {
     const platform = this.d.platform ?? process.platform;
-    try { s.pty.kill(); } catch { /* already gone */ }
+    const within = (ms: number) => Promise.race([s.exited.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), ms).unref?.())]);
+    // Windows: take the tree down while the shell still links it (dev servers started from the shell included).
     if (platform === 'win32') { try { this.d.killTree?.(s.pty.pid); } catch { /* already gone */ } }
-    return Promise.race([s.exited, new Promise<void>((r) => setTimeout(r, 2000).unref?.())]);
+    try { s.pty.kill(); } catch { /* already gone */ }
+    if (await within(2000)) return;
+    // macOS/Linux: something ignored the hang-up; the shell leads its own process group, so SIGKILL the group.
+    if (platform !== 'win32') { try { this.d.killTree?.(s.pty.pid, 'SIGKILL'); } catch { /* already gone */ } }
+    await within(1000);
   }
 }

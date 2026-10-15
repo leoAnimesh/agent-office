@@ -119,3 +119,32 @@ describe('shellsFor', () => {
     expect(shellsFor('win32', { ComSpec: 'C:\\Windows\\cmd.exe' })).toEqual([{ file: 'powershell.exe', args: ['-NoLogo'] }, { file: 'C:\\Windows\\cmd.exe', args: [] }]);
   });
 });
+
+describe('ending a shell from the app', () => {
+  it('reports the exit, so the panel offers Restart instead of going silently dead', async () => {
+    const svc = make();
+    svc.open('p1', '/repo', 80, 24);
+    await svc.kill('p1');
+    expect(events).toContainEqual({ type: 'exit', projectId: 'p1', exitCode: 0 });
+    expect(svc.size).toBe(0);
+  });
+
+  it('kills the whole tree before the shell on Windows, and SIGKILLs a POSIX shell that ignores the hang-up', async () => {
+    const order: string[] = [];
+    const killTree = vi.fn((_pid: number, sig?: string) => order.push(`tree${sig ? ':' + sig : ''}`));
+    const win = make({ platform: 'win32', env: {}, killTree });
+    win.open('p1', 'C:\\repo', 80, 24);
+    const orig = spawned[0].kill.bind(spawned[0]);
+    spawned[0].kill = () => { order.push('pty'); orig(); };
+    await win.kill('p1');
+    expect(order).toEqual(['tree', 'pty']);
+
+    const stubborn = make({ killTree, platform: 'darwin' });
+    stubborn.open('p2', '/repo', 80, 24);
+    spawned[1].kill = () => undefined; // ignores SIGHUP
+    const done = stubborn.kill('p2');
+    await vi.advanceTimersByTimeAsync(3500);
+    await done;
+    expect(killTree).toHaveBeenLastCalledWith(4242, 'SIGKILL');
+  });
+});

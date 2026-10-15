@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { AppStatus, LogEntry } from '../../shared/types';
 import { AgentDetailView } from './components/AgentDetailView';
 import { BossChat } from './components/BossChat';
@@ -26,7 +26,11 @@ export function App() {
   const [termOpen, setTermOpen] = useState(false);
   const [termMounted, setTermMounted] = useState(false);
   const [termHeight, setTermHeight] = useState(() => readHeight(localStore(), window.innerHeight));
+  // Only a project view has a terminal (not onboarding or App settings).
+  const canTerminal = useRef(false);
+  canTerminal.current = !!state.ws && state.view.name !== 'settings';
   const toggleTerminal = useCallback(() => {
+    if (!canTerminal.current) return;
     setTermMounted(true);
     setTermOpen((o) => {
       if (o) requestAnimationFrame(() => document.getElementById('terminal-toggle')?.focus());
@@ -39,6 +43,9 @@ export function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [toggleTerminal]);
+  // A hidden terminal must not start a shell in a project the user just switched to.
+  const currentProject = state.ws?.project.id;
+  useEffect(() => { if (!termOpen) setTermMounted(false); }, [currentProject]); // eslint-disable-line react-hooks/exhaustive-deps
   const resizeTo = (h: number) => { const next = clampHeight(h, window.innerHeight); setTermHeight(next); writeHeight(localStore(), next); };
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -117,13 +124,13 @@ export function App() {
             </aside>
           )}
         </div>
-        {termMounted && (
+        {termMounted && state.view.name !== 'settings' && (
           <div className="terminal-dock" style={{ height: termHeight, display: termOpen ? undefined : 'none' }}>
             <div className="terminal-sep" role="separator" aria-orientation="horizontal" aria-label="Resize terminal" tabIndex={0}
               aria-valuenow={termHeight} aria-valuemin={120} aria-valuemax={Math.round(window.innerHeight * 0.7)}
               onPointerDown={startDrag}
               onKeyDown={(e) => { const next = keyResize(e.key, termHeight, window.innerHeight); if (next !== null) { e.preventDefault(); resizeTo(next); } }} />
-            <TerminalPanel key={ws.project.id} projectId={ws.project.id} onError={onError} />
+            <TerminalPanel key={ws.project.id} projectId={ws.project.id} visible={termOpen} onError={onError} />
           </div>
         )}
       </div>
