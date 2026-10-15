@@ -38,6 +38,8 @@ src/main/        Electron main (Node). Plain TS modules with injected deps, unit
   boss/            BossSession: the boss's long-lived claude session ↔ chat entries
   mcp/             McpHost: Streamable-HTTP MCP server on 127.0.0.1 with a bearer token
   terminal/        TerminalService (one PTY per open project, batched output, backlog), pty (lazy @lydell/node-pty), ipcArgs
+  browser/         BrowserService (one headless Chromium per project, a private tab per employee, screencast for the Preview tab),
+                   DevServerService (one dev server per employee), employeeTools (the `office` MCP server's tools), rules, previewArgs
   git/             worktrees.ts: git(), slugify, WorktreeManager (prepare/commitAll/diffStat/merge/remove/syncBranch);
                    history.ts: read-only branches, commit list, commit detail, file diff for the History tab
   store/           JSON stores (atomic writes), roles, skills, settings, zod validation
@@ -60,7 +62,8 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
    - queued tasks start in the user's order (`Task.order`, set by dragging in the board or Move up/down; unset tasks follow, oldest first);
    - if the role's model is `auto`, `classifier.ts` first runs a one-shot Opus call (outside `run()`) that sizes the task and sets `task.model` (small→haiku, medium→sonnet, large→opus, sonnet on any failure); `runnableTasks` holds the task until then;
    - `WorktreeManager.prepare` creates or checks out `.agentoffice/wt/<agent>` on branch `ao/<agent>/<slug>-<task id>`;
-   - a `ClaudeRunner` spawns `claude -p --input-format stream-json --output-format stream-json …` in that worktree.
+   - a `ClaudeRunner` spawns `claude -p --input-format stream-json --output-format stream-json …` in that worktree;
+   - unless the project turned the browser off, the employee launches with its own `office` MCP config (`projects/<id>/mcp-<agentId>.json`, a per-employee token) for the browser and dev-server tools; its dev server stops when the task stops running.
 5. `StreamParser` turns the stream into `RunnerEvent`s, which update the agent's status and bubble, go to the log, and reach the UI as `agent-event`.
 6. When the task finishes:
    - leftover changes are committed and the diff stat is computed;
@@ -223,6 +226,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - `worktreeFor()` only opens paths inside `<repo>/.agentoffice/wt/`.
 - Roles are app-wide and only the boss changes them (`create_role` / `update_role`, no approval step). Every change is posted to the chat in full (including new instructions), the boss role is protected, `permissionMode` stays `acceptEdits`, and models and tools are fixed enums. A prompt-injected boss could still rewrite a role's instructions for every project: it is visible, not blocked.
  and resolve to a commit, and a diff path must be one of that commit's changed files.
+- Employee browser tools reach only the caller's own tab and dev server (the token identifies the employee). Only `localhost` / `127.0.0.1` / `[::1]` pages can be opened or navigated to (redirects elsewhere get a 403 page). Dev server commands run without a shell in the employee's worktree. Preview input is validated (`browser/previewArgs.ts`) and agents have no channel to it. Tabs use in-memory profiles, never the user's own, and no remote-debugging port is opened. `playwright-core` is pinned exactly and unpacked from the asar.
 - The terminal is the user's own shell: it always starts in the open project's folder (decided in main, never sent by the renderer), takes validated sizes and ≤ 64 KB writes, and has no channel from the MCP host or agents. `@lydell/node-pty` is pinned exactly (it is a beta) and unpacked from the asar (`asarUnpack`).
 - The `AO_*` dev hooks and `ELECTRON_RENDERER_URL` are read only by `testOverrides.ts`, and **only when not packaged**. Packaged builds also turn on Electron fuses (no `RUN_AS_NODE`, no `NODE_OPTIONS`, no inspect, app loaded only from the asar).
 
@@ -240,6 +244,8 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
   - `FAKE_CLAUDE_DELAY_MS`: pause between fixture lines;
   - `FAKE_CLAUDE_ARGV_OUT`: record each launch's argv and cwd.
   - `FAKE_CLAUDE_RESULT`: use this exact text as the success result (e.g. classifier JSON).
+  - `FAKE_CLAUDE_MCP_CALLS`: a JSON list of `{ tool, args }` that an employee calls on its MCP config before replying (`$URL` becomes the last returned url); the result lists what each call returned.
+  - The fake treats a launch with `--allowedTools mcp__agentoffice` as the boss (it never writes files).
 - Dev and E2E hooks, read only when unpackaged:
   - `AO_USER_DATA`: app data folder;
   - `AO_CLAUDE_BIN` + `AO_CLAUDE_ARGS`: e.g. `node` + `["test/fake-claude/fake-claude.mjs"]`;
@@ -274,4 +280,5 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - There's no back-off when a crashing boss is restarted.
 - With the role editor gone, role skill lists no longer do anything (employees get the project's skills), the app cannot change a role's permission mode or sprite look, delete a role, or change the boss's model after onboarding. Two role names that both slug to `role` (e.g. non-Latin names) collide.
 - Terminal: a shell that fails to start shows the error without a Restart button; reattaching (window reload) can draw one batch of output twice; the backlog can start mid escape sequence.
+- Preview: there is no in-app browser download (packaged builds cannot run Playwright's installer), so without Chrome or Edge the user is asked to install one. Employee tabs do not survive a restart.
 - Only the Claude Code CLI is supported. Codex would plug in behind the `AgentRunner` interface (`src/main/claude/runner.ts`).

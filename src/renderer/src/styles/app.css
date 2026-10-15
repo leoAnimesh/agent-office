@@ -263,3 +263,14 @@
 .skill-remove:hover, .skill-remove:focus-visible { color: var(--text); background: var(--panel); }
 .skills-add { flex-wrap: wrap; gap: 8px; }
 .skills-add select { min-width: 0; flex: 1 1 220px; max-width: 420px; }
+
+/* Preview tab: a live view of an employee's browser tab */
+.view:has(> .preview) { overflow: hidden; display: flex; flex-direction: column; }
+.preview { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
+.preview-bar { flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.preview-bar select { max-width: 220px; }
+.preview-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 200px; }
+.preview-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.preview-canvas { flex: 1; min-height: 240px; width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.preview-canvas:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.preview-empty { align-items: center; justify-content: center; }

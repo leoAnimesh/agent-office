@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import type { ToolDef } from '../agents/bossTools';
+import { isToolImage, type ToolContext, type ToolDef } from '../agents/bossTools';
 
 const MAX_BODY = 1024 * 1024;
 
@@ -45,6 +45,8 @@ export class McpHost {
   readonly token = randomBytes(24).toString('hex');
   private server: http.Server | null = null;
   private port = 0;
+  /** Employee tokens: token -> agent id. */
+  private clients = new Map<string, string>();
 
   constructor(private readonly tools: ToolDef[], private readonly name = 'agentoffice') {}
 
@@ -73,6 +75,25 @@ export class McpHost {
     await fs.chmod(file, 0o600).catch(() => undefined);
   }
 
+  /** A token for one employee; tools called with it get that employee's id. Replaces the employee's old token. */
+  addClient(agentId: string): string {
+    this.removeClient(agentId);
+    const token = randomBytes(24).toString('hex');
+    this.clients.set(token, agentId);
+    return token;
+  }
+
+  removeClient(agentId: string): void {
+    for (const [t, id] of this.clients) if (id === agentId) this.clients.delete(t);
+  }
+
+  async writeClientConfig(_agentId: string, token: string, file: string): Promise<void> {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const config = { mcpServers: { [this.name]: { type: 'http', url: this.url, headers: { Authorization: `Bearer ${token}` } } } };
+    await fs.writeFile(file, JSON.stringify(config, null, 2), { mode: 0o600 });
+    await fs.chmod(file, 0o600).catch(() => undefined);
+  }
+
   async close(): Promise<void> {
     const s = this.server;
     this.server = null;
@@ -81,20 +102,27 @@ export class McpHost {
     await new Promise<void>((resolve) => s.close(() => resolve()));
   }
 
-  private authorized(header: string | undefined): boolean {
-    const expected = Buffer.from(`Bearer ${this.token}`);
+  /** The caller's context for a valid bearer token (compared in constant time), or null. */
+  private caller(header: string | undefined): ToolContext | null {
     const got = Buffer.from(header ?? '');
-    return got.length === expected.length && timingSafeEqual(got, expected);
+    const same = (token: string) => {
+      const expected = Buffer.from(`Bearer ${token}`);
+      return got.length === expected.length && timingSafeEqual(got, expected);
+    };
+    if (same(this.token)) return {};
+    for (const [t, agentId] of this.clients) if (same(t)) return { agentId };
+    return null;
   }
 
   private async handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     try {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
       if (url.pathname !== '/mcp') throw new HttpError(404);
-      if (!this.authorized(req.headers.authorization)) throw new HttpError(401);
+      const ctx = this.caller(req.headers.authorization);
+      if (!ctx) throw new HttpError(401);
       if (Number(req.headers['content-length'] ?? 0) > MAX_BODY) throw new HttpError(413);
       const body = await readJsonBody(req);
-      const mcp = this.buildServer();
+      const mcp = this.buildServer(ctx);
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       res.on('close', () => { void transport.close(); void mcp.close(); });
       await mcp.connect(transport);
@@ -106,12 +134,15 @@ export class McpHost {
     }
   }
 
-  private buildServer(): McpServer {
+  private buildServer(ctx: ToolContext): McpServer {
     const mcp = new McpServer({ name: this.name, version: '0.1.0' });
     for (const t of this.tools) {
       mcp.registerTool(t.name, { description: t.description, inputSchema: t.input }, async (args: unknown) => {
         try {
-          const value = await t.run(args);
+          const value = await t.run(args, ctx);
+          if (isToolImage(value)) {
+            return { content: [{ type: 'image' as const, data: value.data, mimeType: value.mimeType }, ...(value.note ? [{ type: 'text' as const, text: value.note }] : [])] };
+          }
           return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] };
         } catch (err) {
           return { content: [{ type: 'text' as const, text: err instanceof Error ? err.message : String(err) }], isError: true };

@@ -20,6 +20,8 @@ if (env.FAKE_CLAUDE_RESUME_FAIL === '1' && argv.includes('--resume')) {
 }
 
 const flag = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
+// The boss is the one allowed to use the agentoffice MCP tools (employees may have their own MCP config).
+const isBoss = argv.includes('mcp__agentoffice');
 const sessionId = flag('--resume') ?? flag('--session-id') ?? randomUUID();
 const fixture = env.FAKE_CLAUDE_FIXTURE ? fs.readFileSync(env.FAKE_CLAUDE_FIXTURE, 'utf8').split(/\r?\n/).filter(Boolean) : [];
 const delay = Number(env.FAKE_CLAUDE_DELAY_MS ?? 0);
@@ -47,13 +49,14 @@ async function handle(line) {
     out(o);
     if (delay) await sleep(delay);
   }
-  if (env.FAKE_CLAUDE_FILE && !argv.includes('--mcp-config')) fs.appendFileSync(env.FAKE_CLAUDE_FILE, `turn ${turns}: ${content.split('\n')[0]}\n`);
+  if (env.FAKE_CLAUDE_FILE && !isBoss) fs.appendFileSync(env.FAKE_CLAUDE_FILE, `turn ${turns}: ${content.split('\n')[0]}\n`);
   if (env.FAKE_CLAUDE_CRASH === '1') {
     process.stderr.write('boom: simulated crash\n');
     process.exit(3);
   }
   if (env.FAKE_CLAUDE_HANG === '1') return;
   const fail = env.FAKE_CLAUDE_FAIL === '1';
+  const mcpText = env.FAKE_CLAUDE_MCP_CALLS && !isBoss && flag('--mcp-config') ? await mcpCalls().catch((e) => `mcp failed: ${e.message}`) : '';
   if (!fail && argv.includes('--include-partial-messages')) {
     // Like the real CLI: stream the reply in small pieces, then send the complete message.
     const reply = `echo: ${content.slice(0, 200)}`;
@@ -65,7 +68,29 @@ async function handle(line) {
   }
   out({
     type: 'result', subtype: fail ? 'error_during_execution' : 'success', is_error: fail,
-    result: fail ? 'simulated failure' : (env.FAKE_CLAUDE_RESULT ?? `echo: ${content.slice(0, 200)}`),
+    result: fail ? 'simulated failure' : (env.FAKE_CLAUDE_RESULT ?? (mcpText || `echo: ${content.slice(0, 200)}`)),
     session_id: sessionId, num_turns: turns, total_cost_usd: 0, duration_ms: 1,
   });
+}
+
+/** Calls the employee tools listed in FAKE_CLAUDE_MCP_CALLS; "$URL" in args becomes the last returned url. */
+async function mcpCalls() {
+  // Loaded only here: some tests copy this script to a folder where the SDK cannot be resolved.
+  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+  const { StreamableHTTPClientTransport } = await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+  const cfg = JSON.parse(fs.readFileSync(flag('--mcp-config'), 'utf8'));
+  const server = Object.values(cfg.mcpServers)[0];
+  const client = new Client({ name: 'fake-claude', version: '1.0.0' });
+  await client.connect(new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers: server.headers } }));
+  const lines = [];
+  let lastUrl = '';
+  for (const c of JSON.parse(env.FAKE_CLAUDE_MCP_CALLS)) {
+    const args = JSON.parse(JSON.stringify(c.args ?? {}).split('$URL').join(lastUrl));
+    const r = await client.callTool({ name: c.tool, arguments: args });
+    const text = (r.content ?? []).map((x) => x.text ?? `[${x.type}]`).join(' ');
+    try { const v = JSON.parse(text); if (v && typeof v.url === 'string') lastUrl = v.url; } catch { /* not JSON */ }
+    lines.push(`${c.tool}${r.isError ? ' (error)' : ''}: ${text.slice(0, 300)}`);
+  }
+  await client.close();
+  return lines.join('\n');
 }

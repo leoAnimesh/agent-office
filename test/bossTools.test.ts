@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bossTools, type ToolDef } from '../src/main/agents/bossTools';
-import { finished, harness, type Harness } from './helpers/manager';
+import { finished, harness, waitFor, type Harness } from './helpers/manager';
 import { ALL_TOOLS } from '../src/shared/tools';
 import type { Project } from '../src/shared/types';
 
@@ -174,5 +174,20 @@ describe('project skills tools', () => {
     expect(await call(tools, 'assign_task', { agent: 'Pixel', title: 'a', brief: 'a' })).toMatchObject({ reminder: expect.stringContaining('set_project_skills') });
     project.skills = [];
     expect(await call(tools, 'assign_task', { agent: 'Pixel', title: 'b', brief: 'b' })).not.toHaveProperty('reminder');
+  });
+});
+
+describe('dev servers outside tasks', () => {
+  it('reports work ended when a plain-question session exits, so its dev server is stopped', async () => {
+    const { manager } = await h.make();
+    await manager.hire('frontend');
+    const pixel = manager.findAgent('Pixel')!;
+    const done = finished(manager, 'T-101');
+    await manager.createTask({ assignee: 'Pixel', title: 'a', brief: 'a', createdBy: 'user' });
+    await done;
+    await manager.markDone('T-101'); // no open task: the next message is a plain question
+    const ended = waitFor(manager, (e) => e.type === 'work-ended' && e.agentId === pixel.id);
+    expect(await manager.messageAgent('Pixel', 'what framework is this?')).toMatchObject({ taskId: null });
+    await ended;
   });
 });

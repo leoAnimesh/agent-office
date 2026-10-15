@@ -1,4 +1,4 @@
-import type { Agent, AppSettings, CommitDetail, CommitSummary, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot, TerminalEvent } from './types';
+import type { Agent, AppSettings, CommitDetail, CommitSummary, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot, TerminalEvent, PreviewTab, PreviewFrame, PreviewInput } from './types';
 
 export const IPC = {
   appStatus: 'app:status',
@@ -39,6 +39,14 @@ export const IPC = {
   terminalResize: 'terminal:resize',
   terminalRestart: 'terminal:restart',
   terminalEvent: 'terminal:event',
+  previewList: 'preview:list',
+  previewAvailable: 'preview:available',
+  previewWatch: 'preview:watch',
+  previewAck: 'preview:ack',
+  previewInput: 'preview:input',
+  previewReload: 'preview:reload',
+  previewStopDevServer: 'preview:stop-dev-server',
+  previewFrame: 'preview:frame',
 } as const;
 
 export interface AgentOfficeApi {
@@ -85,4 +93,13 @@ export interface AgentOfficeApi {
   terminalResize(cols: number, rows: number): Promise<void>;
   terminalRestart(cols: number, rows: number): Promise<{ backlog: string }>;
   onTerminal(cb: (e: TerminalEvent) => void): () => void;
+  previewList(): Promise<PreviewTab[]>;
+  /** Starts the project's browser if needed; false when none can start. */
+  previewAvailable(): Promise<boolean>;
+  previewWatch(agentId: string | null): Promise<void>;
+  previewAck(): Promise<void>;
+  previewInput(agentId: string, event: PreviewInput): Promise<void>;
+  previewReload(agentId: string): Promise<void>;
+  previewStopDevServer(agentId: string): Promise<void>;
+  onPreviewFrame(cb: (f: PreviewFrame) => void): () => void;
 }

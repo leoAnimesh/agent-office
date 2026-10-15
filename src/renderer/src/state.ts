@@ -1,6 +1,6 @@
 import type { LogEntry, Role, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
 
-export type View = { name: 'office' } | { name: 'tasks' } | { name: 'team' } | { name: 'settings' } | { name: 'project-settings' } | { name: 'history'; sha?: string } | { name: 'agent'; agentId: string };
+export type View = { name: 'office' } | { name: 'tasks' } | { name: 'team' } | { name: 'settings' } | { name: 'project-settings' } | { name: 'history'; sha?: string } | { name: 'preview' } | { name: 'agent'; agentId: string };
 
 export interface UiState {
   ws: WorkspaceSnapshot | null;
@@ -65,5 +65,6 @@ function applyEvent(s: UiState, e: WorkspaceEvent): UiState {
     case 'merge-request': return { ...s, ws: { ...s.ws, merges: [...s.ws.merges.filter((m) => m.requestId !== e.request.requestId), e.request] } };
     case 'merge-resolved': return { ...s, ws: { ...s.ws, merges: s.ws.merges.filter((m) => m.requestId !== e.requestId) } };
     case 'roles-changed': return s; // handled by App, which reloads the role list
+    case 'preview-changed': return s; // handled by the Preview tab, which lists tabs again
   }
 }

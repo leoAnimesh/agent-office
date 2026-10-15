@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
+import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, PreviewInput, PreviewTab, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
 import { AgentManager, type ManagerEvent, type MergeOutcome, type MessageResult } from '../agents/agentManager';
 import { applyUserEdit } from '../agents/projectSkills';
 import { bossTools, type ToolDef } from '../agents/bossTools';
@@ -11,6 +11,10 @@ import { BossSession } from '../boss/bossSession';
 import { ClaudeRunner, type ClaudeRunnerOptions } from '../claude/runner';
 import { WorktreeManager, inspectRepo, slugify } from '../git/worktrees';
 import { McpHost } from '../mcp/mcpHost';
+import { BrowserService } from '../browser/browserService';
+import { DevServerService } from '../browser/devServers';
+import { employeeTools } from '../browser/employeeTools';
+import { previewRows } from '../browser/previewRows';
 import type { DataPaths } from '../store/paths';
 import { ProjectStore } from '../store/projectStore';
 import { RoleStore } from '../store/roleStore';
@@ -38,6 +42,10 @@ interface Workspace {
   manager: AgentManager;
   host: McpHost;
   boss: BossSession;
+  browser: BrowserService;
+  devServers: DevServerService;
+  /** The employees' tool server (browser and dev servers), one token per employee. */
+  office: McpHost;
   broker: ApprovalBroker;
   tools: ToolDef[];
   /** What each answered approval card led to (null when declined or dropped), so mergeNow can report failures. */
@@ -161,14 +169,32 @@ export class ProjectService extends EventEmitter {
     project.repoPath = info.root;
     await this.store.saveProject(project);
 
+    // The tools need the boss session and the boss session needs the MCP config; `ws` closes the loop.
+    let ws!: Workspace;
+    // Employees' browser and dev servers, and the tool server they reach them through (one token per employee).
+    let managerRef: AgentManager | null = null;
+    const previewChanged = () => { if (ws) this.emitWs(ws, { type: 'preview-changed' }); };
+    const devServers = new DevServerService({ cwdFor: (agentId) => managerRef?.agents().find((a) => a.id === agentId)?.worktreePath, onChange: previewChanged });
+    const browser = new BrowserService({ onChange: previewChanged, onFrame: (f) => { if (ws && this.ws === ws) this.emit('preview-frame', f); } });
+    const office = new McpHost(employeeTools({ browser, devServers }), 'office');
+    await office.start();
+    const employeeMcp = async (agent: Agent): Promise<string | null> => {
+      if (project.browserTools === false) return null;
+      const file = path.join(this.d.paths.projectDir(id), `mcp-${agent.id}.json`);
+      await office.writeClientConfig(agent.id, office.addClient(agent.id), file);
+      return file;
+    };
+
     const createRunner = (o: ClaudeRunnerOptions) => new ClaudeRunner({ ...o, binArgs: this.d.claudeBinArgs, env: this.d.claudeEnv ? { ...process.env, ...this.d.claudeEnv } : undefined });
     const isolate = this.isolate;
     await fs.mkdir(this.d.paths.promptDir, { recursive: true });
     const manager = new AgentManager({
       project, store: this.store, roles: this.roles, skills: this.skills, worktrees: new WorktreeManager(info.root),
       createRunner, claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, isolateUserSettings: isolate,
+      employeeMcp,
       classify: createClassifier({ createRunner, claudeBin: this.claudeBin, cwd: this.d.paths.promptDir, isolateUserSettings: isolate }),
     });
+    managerRef = manager;
     const requeued = await manager.load();
     if (opts.bossModel && !existing) {
       const bossRole = await this.roles.get('boss');
@@ -179,8 +205,6 @@ export class ProjectService extends EventEmitter {
     await this.store.saveProject(project);
 
     const broker = new ApprovalBroker();
-    // The tools need the boss session and the boss session needs the MCP config; `ws` closes the loop.
-    let ws!: Workspace;
     const tools = bossTools({
       manager, roles: this.roles, project,
       requestMerge: (task) => this.requestMerge(ws, task),
@@ -197,6 +221,7 @@ export class ProjectService extends EventEmitter {
     } catch (err) {
       // Never leave a listening MCP server or a live manager behind a failed open.
       await host.close();
+      await office.close();
       await manager.shutdown();
       throw err;
     }
@@ -204,7 +229,7 @@ export class ProjectService extends EventEmitter {
       project, manager, roles: this.roles, skills: this.skills, store: this.store, createRunner,
       claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, mcpConfigPath, isolateUserSettings: isolate,
     });
-    ws = { project, manager, host, boss, broker, tools, outcomes: new Map() };
+    ws = { project, manager, host, boss, broker, tools, browser, devServers, office, outcomes: new Map() };
     manager.on('event', (e: ManagerEvent) => this.forward(ws, e));
     boss.on('chat', (entry) => this.emitWs(ws, { type: 'chat', entry }));
     boss.on('stream', (text: string | null) => this.emitWs(ws, { type: 'boss-stream', text }));
@@ -260,6 +285,19 @@ export class ProjectService extends EventEmitter {
     const change = [...(clean.add ?? []).map((id) => `+${id}`), ...(clean.remove ?? []).map((id) => `−${id}`)].join(' ');
     if (change) void ws.boss.notify(`The user changed the project skills: ${change}. Respect these; you cannot re-add skills the user removed.`).catch(() => undefined);
     return this.snapshot();
+  }
+
+  previewAvailable(): Promise<boolean> { return this.mustWs().browser.available(); }
+  async previewWatch(agentId: string | null): Promise<void> { await this.mustWs().browser.watch(agentId); }
+  previewAck(): void { this.ws?.browser.ack(); }
+  async previewInput(agentId: string, e: PreviewInput): Promise<void> { await this.mustWs().browser.input(agentId, e); }
+  async previewReload(agentId: string): Promise<void> { await this.mustWs().browser.reload(agentId); }
+  async previewStopDevServer(agentId: string): Promise<void> { await this.mustWs().devServers.stop(agentId); }
+
+  /** Employees' browser tabs and their dev servers, for the Preview tab. */
+  async previewList(): Promise<PreviewTab[]> {
+    const ws = this.mustWs();
+    return previewRows(await ws.browser.tabs(), ws.devServers.all());
   }
 
   listSkills(): Promise<Skill[]> { return this.skills.list(); }
@@ -327,6 +365,9 @@ export class ProjectService extends EventEmitter {
     await this.terminals?.kill(ws.project.id);
     await ws.boss.stop();
     await ws.manager.shutdown();
+    await ws.devServers.stopAll();
+    await ws.browser.close();
+    await ws.office.close();
     await ws.host.close();
   }
 
@@ -371,6 +412,8 @@ export class ProjectService extends EventEmitter {
       case 'task-finished': return this.emitWs(ws, { type: 'tasks', tasks: ws.manager.tasks() });
       case 'agent-event': return this.emitWs(ws, { type: 'agent-event', agentId: e.agentId, event: e.event, at: new Date().toISOString() });
       case 'error': return this.emitWs(ws, { type: 'error', message: e.message });
+      case 'work-ended': void ws.devServers.stop(e.agentId); return undefined;
+      case 'fired': void ws.devServers.stop(e.agentId); void ws.browser.closeFor(e.agentId); ws.office.removeClient(e.agentId); return undefined;
       default: return undefined;
     }
   }

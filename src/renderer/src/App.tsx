@@ -12,6 +12,7 @@ import { Sidebar } from './components/Sidebar';
 import { TaskBoard } from './components/TaskBoard';
 import { TeamView } from './components/TeamView';
 import { HistoryView } from './components/HistoryView';
+import { PreviewView } from './components/PreviewView';
 import { TerminalPanel } from './components/TerminalPanel';
 import { clampHeight, keyResize, readHeight, writeHeight } from './terminal/dock';
 import { lookFor } from './sprites/sprite';
@@ -99,7 +100,7 @@ export function App() {
   useEffect(() => { if (projectId) refreshRoles(); }, [projectId, refreshRoles]);
   const viewName = state.view.name;
   useEffect(() => {
-    if (projectId && (viewName === 'office' || viewName === 'tasks' || viewName === 'team' || viewName === 'history')) writeProjectUi(localStore(), projectId, { view: viewName });
+    if (projectId && (viewName === 'office' || viewName === 'tasks' || viewName === 'team' || viewName === 'history' || viewName === 'preview')) writeProjectUi(localStore(), projectId, { view: viewName });
   }, [projectId, viewName]);
   useEffect(() => { if (projectId) writeProjectUi(localStore(), projectId, { terminal: termOpen }); }, [termOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -122,6 +123,7 @@ export function App() {
       case 'team': return <TeamView ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onError={onError} />;
       case 'tasks': return <TaskBoard ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onViewCommit={(sha) => go({ name: 'history', sha })} onNewTask={() => { go({ name: 'office' }); setTimeout(() => document.getElementById('boss-msg')?.focus(), 0); }} onError={onError} />;
       case 'settings': return <AppSettingsView onStatus={setStatus} onError={onError} />;
+      case 'preview': return <PreviewView ws={ws} onError={onError} />;
       case 'history': return <HistoryView key={state.view.sha ?? ''} ws={ws} sha={state.view.sha} onError={onError} />;
       case 'project-settings': return <ProjectSettingsView ws={ws} onClosed={() => { writeLastProject(localStore(), null); dispatch({ type: 'closed' }); }} onError={onError} />;
     }

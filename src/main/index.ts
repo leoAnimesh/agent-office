@@ -14,6 +14,7 @@ import { migrateRolesAllTools, migrateRolesToAuto } from './store/migrations';
 import { RoleStore } from './store/roleStore';
 import { ProjectService } from './workspace/projectService';
 import { termData, termSize } from './terminal/ipcArgs';
+import { previewInput as checkPreviewInput } from './browser/previewArgs';
 
 let win: BrowserWindow | null = null;
 let service: ProjectService | null = null;
@@ -131,6 +132,13 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   handle(IPC.terminalRestart, (cols: unknown, rows: unknown) => { const z = termSize(cols, rows); return svc.terminalRestart(z.cols, z.rows); });
   handle(IPC.terminalWrite, (data: unknown) => svc.terminalWrite(termData(data)));
   handle(IPC.terminalResize, (cols: unknown, rows: unknown) => { const z = termSize(cols, rows); svc.terminalResize(z.cols, z.rows); });
+  handle(IPC.previewList, () => svc.previewList());
+  handle(IPC.previewAvailable, () => svc.previewAvailable());
+  handle(IPC.previewWatch, (agentId: unknown) => svc.previewWatch(agentId === null ? null : str(agentId, 'agent id')));
+  handle(IPC.previewAck, () => svc.previewAck());
+  handle(IPC.previewInput, (agentId: unknown, ev: unknown) => svc.previewInput(str(agentId, 'agent id'), checkPreviewInput(ev)));
+  handle(IPC.previewReload, (agentId: unknown) => svc.previewReload(str(agentId, 'agent id')));
+  handle(IPC.previewStopDevServer, (agentId: unknown) => svc.previewStopDevServer(str(agentId, 'agent id')));
   handle(IPC.answerMerge, (requestId: unknown, ok: unknown) => svc.answerMerge(str(requestId, 'request id'), ok === true));
   handle(IPC.getSettings, () => settings.get());
   handle(IPC.saveSettings, async (patch: unknown) => {
@@ -159,6 +167,7 @@ app.whenReady().then(async () => {
   await migrateRolesAllTools(new RoleStore(paths.rolesDir), settings).catch((e) => console.error('tool migration failed', e));
   service.on('event', (e) => win?.webContents.send(IPC.event, e));
   service.on('terminal', (e) => win?.webContents.send(IPC.terminalEvent, e));
+  service.on('preview-frame', (f) => win?.webContents.send(IPC.previewFrame, f));
   registerIpc(service, settings, status);
   createWindow();
   app.on('activate', () => {

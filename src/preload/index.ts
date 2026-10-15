@@ -44,6 +44,18 @@ const api: AgentOfficeApi = {
     ipcRenderer.on(IPC.terminalEvent, listener);
     return () => { ipcRenderer.removeListener(IPC.terminalEvent, listener); };
   },
+  previewList: () => ipcRenderer.invoke(IPC.previewList),
+  previewAvailable: () => ipcRenderer.invoke(IPC.previewAvailable),
+  previewWatch: (agentId) => ipcRenderer.invoke(IPC.previewWatch, agentId),
+  previewAck: () => ipcRenderer.invoke(IPC.previewAck),
+  previewInput: (agentId, event) => ipcRenderer.invoke(IPC.previewInput, agentId, event),
+  previewReload: (agentId) => ipcRenderer.invoke(IPC.previewReload, agentId),
+  previewStopDevServer: (agentId) => ipcRenderer.invoke(IPC.previewStopDevServer, agentId),
+  onPreviewFrame: (cb) => {
+    const listener = (_e: unknown, f: Parameters<typeof cb>[0]) => cb(f);
+    ipcRenderer.on(IPC.previewFrame, listener);
+    return () => { ipcRenderer.removeListener(IPC.previewFrame, listener); };
+  },
   onEvent: (cb) => {
     const listener = (_e: IpcRendererEvent, event: WorkspaceEvent) => cb(event);
     ipcRenderer.on(IPC.event, listener);

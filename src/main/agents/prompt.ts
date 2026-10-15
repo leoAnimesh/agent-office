@@ -8,6 +8,8 @@ export interface PromptContext {
   kind: 'boss' | 'employee';
   /** Boss only: the project's skill set, or that it is not chosen yet. */
   projectSkills?: { chosen: boolean; names: string[] };
+  /** Employee only: the browser tools are available. */
+  browserTools?: boolean;
 }
 
 export function renderPrompt(role: Role, skills: Skill[], ctx: PromptContext): string {
@@ -51,6 +53,7 @@ export function renderPrompt(role: Role, skills: Skill[], ctx: PromptContext): s
         '- Commit your work in small steps with clear messages. Do not switch branches.',
         '- Run the tests that cover your change before you finish.',
         '- Finish with a summary of at most 5 lines: what changed and how you verified it.',
+        ...(ctx.browserTools ? ['- To check UI work: `start_dev_server` with the project\'s dev command, `browser_open` the URL it returns, use `browser_snapshot`, `browser_click`, `browser_type` and `browser_screenshot` to verify, and say in your summary what you checked.'] : []),
       ].join('\n'),
     );
   }
