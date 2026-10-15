@@ -1,6 +1,7 @@
 import type { PreviewFrame, PreviewInput } from '../../shared/types';
 import { AndroidDriver, IosDriver, type DeviceDriver, type DeviceKind } from './drivers';
 import { pngSize, type Outline } from './parse';
+import { electronShrink, type Shrink } from './shrink';
 import type { DeviceTools } from './tools';
 
 export interface DeviceState { kind: DeviceKind; running: boolean; name: string | null; holder: string | null; startedByApp: boolean; canInput: boolean }
@@ -16,10 +17,14 @@ export class DeviceService {
   private watched: DeviceKind | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private inFlight = false;
+  /** Bumped by every watch(): a tick from an older watch never reschedules (no second polling loop). */
+  private gen = 0;
 
   constructor(private readonly o: {
     tools: DeviceTools; prefer?(kind: DeviceKind): string | undefined; nameOf(agentId: string): string; taskOf(agentId: string): string | undefined;
     onChange?(): void; onFrame?(f: PreviewFrame): void; bootMs?: number; frameMs?: number; drivers?: Partial<Record<DeviceKind, DeviceDriver>>;
+    /** Scales live-view frames down (default: Electron's nativeImage). */
+    shrink?: Shrink;
   }) {
     const slot = (driver: DeviceDriver): Slot => ({ driver, name: null, started: false, startedByApp: false, holder: null, outline: null, userAt: 0, userNote: false, starting: null });
     this.slots = {
@@ -96,6 +101,7 @@ export class DeviceService {
   /** Stream screenshots of one device to the Preview tab (null stops). */
   watch(kind: DeviceKind | null) {
     this.watched = kind;
+    this.gen++;
     this.inFlight = false;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
@@ -106,18 +112,21 @@ export class DeviceService {
 
   private tick() {
     const kind = this.watched;
+    const gen = this.gen;
     if (!kind) return;
     this.timer = setTimeout(async () => {
       const s = this.slots[kind];
       if (this.watched === kind && !this.inFlight && s.started) {
         const png = await s.driver.screenshot().catch(() => null);
-        const size = png ? pngSize(png) : null;
-        if (png && size && this.watched === kind) {
+        // Phone screens are large PNGs: send the live view a small JPEG.
+        const small = png ? await (this.o.shrink ?? electronShrink)(png, 900, 70).catch(() => null) : null;
+        const size = small ? { w: small.w, h: small.h } : png ? pngSize(png) : null;
+        if (png && size && this.watched === kind && gen === this.gen) {
           this.inFlight = true;
-          this.o.onFrame?.({ agentId: `device:${kind}`, data: png.toString('base64'), width: size.w, height: size.h, mime: 'image/png' });
+          this.o.onFrame?.({ agentId: `device:${kind}`, data: (small?.data ?? png).toString('base64'), width: size.w, height: size.h, mime: small?.mime ?? 'image/png' });
         }
       }
-      this.tick();
+      if (gen === this.gen) this.tick();
     }, this.o.frameMs ?? 330);
   }
 

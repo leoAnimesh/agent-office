@@ -4,11 +4,15 @@ import { employeeTool as def } from '../browser/employeeTools';
 import { LOCAL_ONLY, allowedUrl } from '../browser/rules';
 import type { DeviceService } from './deviceService';
 import { insideWorktree } from './parse';
+import { electronShrink, type Shrink } from './shrink';
+
+/** The model's image limit is about 5 MB of base64; stay well under it. */
+const MAX_SHOT = 3.5 * 1024 * 1024;
 
 const PLATFORM = z.enum(['android', 'ios']);
 const KEYS = z.enum(['back', 'home', 'enter', 'delete', 'tab']);
 
-export function deviceTools(d: { devices: DeviceService; worktreeOf(agentId: string): string | undefined }): ToolDef[] {
+export function deviceTools(d: { devices: DeviceService; worktreeOf(agentId: string): string | undefined; shrink?: Shrink }): ToolDef[] {
   const { devices } = d;
   const note = <T extends object>(agentId: string, platform: 'android' | 'ios', v: T): T & { note?: string } => {
     const n = devices.takeUserNote(agentId, platform);
@@ -54,7 +58,11 @@ export function deviceTools(d: { devices: DeviceService; worktreeOf(agentId: str
     def('device_screenshot', 'Take a screenshot of the device screen.', { platform: PLATFORM },
       async ({ platform }, agentId) => {
         const png = await (await devices.use(agentId, platform)).screenshot();
-        const image: ToolImage = { type: 'image', data: png.toString('base64'), mimeType: 'image/png', note: devices.takeUserNote(agentId, platform) };
+        // Scaled like the model would (long side 1568 px) and sent as JPEG, so a phone screenshot stays small.
+        const small = await (d.shrink ?? electronShrink)(png, 1568, 80).catch(() => null);
+        const data = small?.data ?? png;
+        if (data.length > MAX_SHOT) throw new Error('The screenshot is too large to send. Use device_snapshot to read the screen instead.');
+        const image: ToolImage = { type: 'image', data: data.toString('base64'), mimeType: small?.mime ?? 'image/png', note: devices.takeUserNote(agentId, platform) };
         return image;
       }),
     def('device_logs', 'Recent warnings and errors from the device log.', { platform: PLATFORM },
