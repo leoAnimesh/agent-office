@@ -4,11 +4,11 @@
  */
 export type Store = { getItem(k: string): string | null; setItem(k: string, v: string): void; removeItem(k: string): void };
 
-export type RememberedView = 'office' | 'tasks' | 'team' | 'history';
+export type RememberedView = 'office' | 'tasks' | 'team' | 'history' | 'preview';
 export interface ProjectUi { view: RememberedView; terminal: boolean; historyBranch?: string; mergesOnly: boolean }
 
 const LAST = 'ao.lastProject';
-const VIEWS: RememberedView[] = ['office', 'tasks', 'team', 'history'];
+const VIEWS: RememberedView[] = ['office', 'tasks', 'team', 'history', 'preview'];
 const uiKey = (projectId: string) => `ao.ui.${projectId}`;
 
 /** localStorage can be missing or throw on access (blocked storage). */

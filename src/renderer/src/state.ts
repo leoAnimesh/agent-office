@@ -1,6 +1,6 @@
 import type { LogEntry, Role, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
 
-export type View = { name: 'office' } | { name: 'tasks' } | { name: 'team' } | { name: 'settings' } | { name: 'project-settings' } | { name: 'history'; sha?: string } | { name: 'agent'; agentId: string };
+export type View = { name: 'office' } | { name: 'tasks' } | { name: 'team' } | { name: 'settings' } | { name: 'project-settings' } | { name: 'history'; sha?: string } | { name: 'preview' } | { name: 'agent'; agentId: string };
 
 export interface UiState {
   ws: WorkspaceSnapshot | null;

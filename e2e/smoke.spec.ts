@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { makeRepo } from '../test/helpers/repo';
+import { addFixtureServer } from '../test/fixtures/browser-repo';
 
 const FAKE = path.resolve('test/fake-claude/fake-claude.mjs');
 
@@ -366,6 +367,40 @@ test('history shows what the team merged, file by file', async () => {
     await expect(win.getByLabel('Branch')).toHaveValue('ao/pixel/greeting-t-101');
     await expect(win.getByLabel('Team merges only')).toBeChecked();
     await expect(win.getByRole('button', { name: 'Browse' })).toHaveCount(0);
+  } finally {
+    await app.close();
+    await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});
+
+test('the Preview tab shows an employee\'s browser tab live', async () => {
+  const repo = await makeRepo();
+  await addFixtureServer(repo);
+  const env = {
+    AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: repo,
+    FAKE_CLAUDE_MCP_CALLS: JSON.stringify([{ tool: 'start_dev_server', args: { command: 'node server.mjs' } }, { tool: 'browser_open', args: { url: '$URL' } }]),
+  };
+  let { app, userData } = await launch(env);
+  try {
+    let win = await app.firstWindow();
+    await win.getByRole('button', { name: 'Browse' }).click();
+    await win.getByRole('button', { name: /Open the office/ }).click();
+    await expect(win.getByRole('button', { name: /^Max, Boss/ })).toBeVisible();
+    await app.close();
+    const pdir = await seedTeam(userData, [{ name: 'Pixel', roleId: 'frontend' }]);
+    const pixel = (JSON.parse(await fs.readFile(path.join(pdir, 'agents.json'), 'utf8')) as { id: string; name: string }[]).find((a) => a.name === 'Pixel')!;
+    const now = new Date().toISOString();
+    await fs.writeFile(path.join(pdir, 'tasks.json'), JSON.stringify([{
+      id: 'T-101', projectId: path.basename(pdir), title: 'Check the page', brief: 'look', assigneeId: pixel.id, createdBy: 'boss', status: 'queued',
+      held: false, attempts: 0, branch: 'ao/pixel/check-t-101', dependsOn: [], createdAt: now, updatedAt: now, model: 'haiku',
+    }]));
+    ({ app, win } = await reopen(env, userData));
+    await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Preview' }).click();
+    await expect(win.getByLabel('Employee')).toHaveValue(pixel.id, { timeout: 30_000 });
+    const live = win.getByLabel(/Live view of Pixel/);
+    await expect.poll(async () => Number(await live.getAttribute('data-frames')), { timeout: 20_000 }).toBeGreaterThan(0);
+    await live.click({ position: { x: 20, y: 20 } });
   } finally {
     await app.close();
     await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
