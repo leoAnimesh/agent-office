@@ -140,3 +140,16 @@ describe('roles changed from chat', () => {
     expect((await svc.listRoles()).map((r) => r.id)).toContain('data-engineer');
   });
 });
+
+describe('history', () => {
+  it('reads the open project\'s git history, read-only', async () => {
+    await expect(svc.historyBranches()).rejects.toThrow(/No project is open/);
+    await svc.open(repo);
+    expect(await svc.historyBranches()).toEqual(['main']);
+    const [first] = await svc.historyList('main', 0, false);
+    expect(first).toMatchObject({ subject: 'init', files: 1 });
+    expect(await svc.historyCommit(first.sha)).toMatchObject({ subject: 'init', files: [{ path: 'README.md', add: 1, del: 0 }] });
+    expect(await svc.historyDiff(first.sha, 'README.md')).toContain('+hello');
+    await expect(svc.historyList('--all', 0, false)).rejects.toThrow(/Unknown branch/);
+  });
+});

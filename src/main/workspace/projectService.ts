@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { Agent, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
+import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
 import { AgentManager, type ManagerEvent, type MergeOutcome, type MessageResult } from '../agents/agentManager';
 import { bossTools, type ToolDef } from '../agents/bossTools';
 import { createClassifier } from '../agents/classifier';
@@ -18,6 +18,7 @@ import { parseOrThrow, projectPatchSchema } from '../store/validate';
 import { ApprovalBroker } from './approvalBroker';
 import { createRepo, type NewProjectInput } from './newProject';
 import { killTree } from '../claude/killTree';
+import { commitDetail, fileDiff, listBranches, listCommits } from '../git/history';
 import { loadSpawnPty } from '../terminal/pty';
 import { TerminalService, type TerminalEvent } from '../terminal/terminalService';
 
@@ -92,6 +93,13 @@ export class ProjectService extends EventEmitter {
       console.warn(`Terminal unavailable: ${this.terminalError}`);
     }
   }
+
+  // ---------- history (read-only; always the open project's repo) ----------
+
+  async historyBranches(): Promise<string[]> { return listBranches(this.mustWs().project.repoPath); }
+  async historyList(ref: string, skip: number, mergesOnly: boolean): Promise<CommitSummary[]> { return listCommits(this.mustWs().project.repoPath, ref, { skip, mergesOnly }); }
+  async historyCommit(sha: string): Promise<CommitDetail> { return commitDetail(this.mustWs().project.repoPath, sha); }
+  async historyDiff(sha: string, file: string): Promise<string> { return fileDiff(this.mustWs().project.repoPath, sha, file); }
 
   // ---------- terminal (always the open project's folder; the renderer never names a path) ----------
 

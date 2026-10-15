@@ -374,7 +374,7 @@ export class AgentManager extends EventEmitter {
       if (t.status !== 'review') return { status: 'not_ready', reason: `Task ${taskId} is ${t.status}, not waiting for review.` };
       const r = await this.d.worktrees.merge(this.d.project.baseBranch, t.branch, `Merge ${t.id}: ${t.title}`);
       if (r.status === 'merged') {
-        this.setStatus(t, 'done');
+        this.setStatus(t, 'done', { mergeCommit: r.commit });
         await this.saveTasks();
       }
       return r;

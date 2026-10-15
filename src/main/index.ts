@@ -121,6 +121,11 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   handle(IPC.moveTask, (id: unknown, beforeId: unknown) => svc.moveTask(str(id, 'task id'), beforeId === null ? null : str(beforeId, 'task id')));
   handle(IPC.reassignTask, (id: unknown, agent: unknown) => svc.reassignTask(str(id, 'task id'), str(agent, 'agent')));
   handle(IPC.mergeNow, (id: unknown) => svc.mergeNow(str(id, 'task id')));
+  handle(IPC.historyBranches, () => svc.historyBranches());
+  handle(IPC.historyList, (ref: unknown, skip: unknown, mergesOnly: unknown) =>
+    svc.historyList(str(ref, 'branch'), typeof skip === 'number' && Number.isInteger(skip) && skip >= 0 ? skip : 0, mergesOnly === true));
+  handle(IPC.historyCommit, (sha: unknown) => svc.historyCommit(str(sha, 'commit')));
+  handle(IPC.historyDiff, (sha: unknown, file: unknown) => svc.historyDiff(str(sha, 'commit'), str(file, 'path')));
   handle(IPC.terminalOpen, (cols: unknown, rows: unknown) => { const z = termSize(cols, rows); return svc.terminalOpen(z.cols, z.rows); });
   handle(IPC.terminalRestart, (cols: unknown, rows: unknown) => { const z = termSize(cols, rows); return svc.terminalRestart(z.cols, z.rows); });
   handle(IPC.terminalWrite, (data: unknown) => svc.terminalWrite(termData(data)));
