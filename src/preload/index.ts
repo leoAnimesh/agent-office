@@ -46,6 +46,7 @@ const api: AgentOfficeApi = {
     return () => { ipcRenderer.removeListener(IPC.terminalEvent, listener); };
   },
   previewList: () => ipcRenderer.invoke(IPC.previewList),
+  openProjects: () => ipcRenderer.invoke(IPC.openProjects),
   previewAvailable: () => ipcRenderer.invoke(IPC.previewAvailable),
   previewDevice: (kind, action) => ipcRenderer.invoke(IPC.previewDevice, kind, action),
   deviceSupport: () => ipcRenderer.invoke(IPC.deviceSupport),

@@ -109,8 +109,26 @@ describe('BrowserService (real headless browser)', () => {
     await later.close();
   });
 
+  it('closes pop-up windows and notes them in the console', async ({ skip }) => {
+    if (!canRun) skip();
+    const svc2 = new BrowserService();
+    const page = await svc2.pageFor('a1');
+    await page.goto(base);
+    await page.evaluate((u) => { window.open(u + '?popup'); }, base);
+    await new Promise((r) => setTimeout(r, 800));
+    expect(page.context().pages()).toHaveLength(1);
+    expect(svc2.takeConsole('a1').join('\n')).toMatch(/pop-up/i);
+    await svc2.close();
+  });
+
+  it('reports why a browser failed to start, not only that none was found', async () => {
+    const broken = new BrowserService({ launch: async () => { throw new Error('Missing X server or $DISPLAY'); } });
+    await expect(broken.pageFor('a1')).rejects.toThrow(/Missing X server/);
+    await broken.close();
+  });
+
   it('says how to get a browser when none can start', async () => {
-    const none = new BrowserService({ launch: async () => { throw new Error('no chrome'); } });
+    const none = new BrowserService({ launch: async () => { throw new BrowserMissing(); } });
     expect(await none.available()).toBe(false);
     await expect(none.pageFor('a1')).rejects.toBeInstanceOf(BrowserMissing);
     await expect(none.pageFor('a1')).rejects.toThrow(NO_BROWSER);

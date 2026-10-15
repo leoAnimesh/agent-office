@@ -62,6 +62,18 @@ describe('team browser in a project', () => {
     expect(events.some((e) => e.type === 'preview-changed')).toBe(true);
   }, 90_000);
 
+  it('revokes an employee\'s browser-tools key when its task ends', async () => {
+    await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    const pixel = (await svc.snapshot()).agents.find((x) => x.name === 'Pixel')!;
+    await tool('assign_task', { agent: 'Pixel', title: 'x', brief: 'x' });
+    await until(async () => (await svc.snapshot()).tasks.some((t) => t.status === 'review'));
+    const cfg = JSON.parse(await fs.readFile(path.join(data, 'projects', (await svc.snapshot()).project.id, `mcp-${pixel.id}.json`), 'utf8'));
+    const server = cfg.mcpServers.office;
+    const res = await fetch(server.url, { method: 'POST', headers: { ...server.headers, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
+    expect(res.status).toBe(401);
+  }, 60_000);
+
   it('leaves the browser out when the project turns it off', async () => {
     await svc.open(repo);
     await svc.updateProject({ browserTools: false });

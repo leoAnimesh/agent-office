@@ -103,6 +103,7 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   });
   handle(IPC.defaultProjectsDir, () => app.getPath('documents'));
   handle(IPC.closeProject, () => svc.close());
+  handle(IPC.openProjects, () => svc.openProjects());
   handle(IPC.updateProject, (patch: unknown) => svc.updateProject(patch));
   handle(IPC.setProjectSkills, (edit: unknown) => svc.setProjectSkills(edit));
   handle(IPC.snapshot, () => (svc.current() ? svc.snapshot() : null));
@@ -189,7 +190,7 @@ app.on('before-quit', (e) => {
   if (quitting || !service) return;
   e.preventDefault();
   quitting = true;
-  void service.close().finally(() => app.quit());
+  void service.closeAll().finally(() => app.quit());
 });
 
 app.on('window-all-closed', () => {

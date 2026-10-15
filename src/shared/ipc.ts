@@ -1,4 +1,4 @@
-import type { Agent, AppSettings, CommitDetail, CommitSummary, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot, TerminalEvent, PreviewTab, PreviewFrame, PreviewInput, NewAttachment, DeviceSupport } from './types';
+import type { Agent, AppSettings, CommitDetail, CommitSummary, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot, TerminalEvent, PreviewTab, PreviewFrame, PreviewInput, NewAttachment, DeviceSupport, OpenProjectStatus } from './types';
 
 export const IPC = {
   appStatus: 'app:status',
@@ -9,6 +9,7 @@ export const IPC = {
   createProject: 'project:create',
   defaultProjectsDir: 'project:default-dir',
   closeProject: 'project:close',
+  openProjects: 'project:running',
   updateProject: 'project:update',
   setProjectSkills: 'project:skills',
   snapshot: 'project:snapshot',
@@ -99,6 +100,8 @@ export interface AgentOfficeApi {
   terminalRestart(cols: number, rows: number): Promise<{ backlog: string }>;
   onTerminal(cb: (e: TerminalEvent) => void): () => void;
   previewList(): Promise<PreviewTab[]>;
+  /** Every project running in this window session, with what it is doing. */
+  openProjects(): Promise<OpenProjectStatus[]>;
   /** Starts the project's browser if needed; false when none can start. */
   previewAvailable(): Promise<boolean>;
   previewDevice(kind: 'android' | 'ios', action: 'start' | 'home' | 'back' | 'shutdown'): Promise<void>;

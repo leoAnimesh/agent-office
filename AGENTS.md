@@ -241,7 +241,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - `test/fake-claude/fake-claude.mjs` stands in for the CLI. Use it through `test/helpers/runner.ts` (`fakeRunner`) or `test/helpers/manager.ts` (`harness()`, `waitFor`, `finished`). It is controlled by env vars:
   - `FAKE_CLAUDE_FIXTURE`: replay a recorded stream-json file;
   - `FAKE_CLAUDE_FILE`: append a line to a file in the cwd, to create a diff (the boss, started with `--mcp-config`, never writes);
-  - `FAKE_CLAUDE_HANG`: never send a result;
+  - `FAKE_CLAUDE_HANG`: never send a result (`employee`: only employee sessions hang);
   - `FAKE_CLAUDE_CRASH`: exit 3 with stderr;
   - `FAKE_CLAUDE_FAIL`: send an error result;
   - `FAKE_CLAUDE_RESUME_FAIL`: fail when `--resume` is used;

@@ -25,7 +25,7 @@ beforeEach(async () => {
   svc.on('event', (e) => events.push(e));
 });
 afterEach(async () => {
-  await svc.close();
+  await svc.closeAll();
   await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   await fs.rm(data, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
@@ -39,6 +39,57 @@ const until = (pred: (e: WorkspaceEvent) => boolean, ms = 20000) => new Promise<
 const tool = (name: string, args: unknown = {}) => svc.tools().find((t) => t.name === name)!.run(args);
 
 describe('ProjectService', () => {
+  it('keeps a project running in the background when another one is opened', async () => {
+    fakeEnv.FAKE_CLAUDE_HANG = 'employee';
+    const a = await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    await tool('assign_task', { agent: 'Pixel', title: 'Long job', brief: 'take your time' });
+    await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.status === 'working'));
+    const other = await makeRepo();
+    try {
+      const b = await svc.open(other);
+      expect(b.project.id).not.toBe(a.project.id);
+      expect(svc.openProjects()).toEqual(expect.arrayContaining([{ id: a.project.id, working: 1, needsYou: 0 }, { id: b.project.id, working: 0, needsYou: 0 }]));
+      events.length = 0;
+      const back = await svc.open(repo);
+      expect(back.tasks.find((t) => t.title === 'Long job')).toMatchObject({ status: 'working', attempts: 1 });
+      expect(events.some((e) => e.type === 'agents' || e.type === 'tasks')).toBe(false); // nothing restarted
+      await svc.close(); // closes only the active project (A)
+      expect(svc.openProjects().map((p) => p.id)).toEqual([b.project.id]);
+      await svc.closeAll();
+      expect(svc.openProjects()).toEqual([]);
+    } finally {
+      delete fakeEnv.FAKE_CLAUDE_HANG;
+      await fs.rm(other, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    }
+  });
+
+  it('keeps the active project when opening another one fails', async () => {
+    const a = await svc.open(repo);
+    await expect(svc.open(path.join(os.tmpdir(), 'not-a-repo-' + Date.now()))).rejects.toThrow();
+    expect(svc.current()?.id).toBe(a.project.id);
+    expect((await svc.snapshot()).project.id).toBe(a.project.id);
+  });
+
+  it('merges a task approved while its project is in the background', async () => {
+    const a = await svc.open(repo);
+    await tool('hire', { role_id: 'frontend' });
+    await tool('assign_task', { agent: 'Pixel', title: 'Notes', brief: 'write notes' });
+    await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.status === 'review'));
+    await tool('request_merge', { task_id: 'T-101' });
+    const req = (await svc.snapshot()).merges[0];
+    const other = await makeRepo();
+    try {
+      await svc.open(other);
+      expect(svc.openProjects().find((p) => p.id === a.project.id)).toMatchObject({ needsYou: 1 });
+      await svc.open(repo);
+      await svc.answerMerge(req.requestId, true);
+      await until((e) => e.type === 'tasks' && e.tasks.some((t) => t.id === 'T-101' && t.status === 'done'));
+    } finally {
+      await fs.rm(other, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    }
+  });
+
   it('rejects a folder that is not a git repo', async () => {
     const plain = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-plain-'));
     await expect(svc.open(plain)).rejects.toThrow(/not a git repository/);

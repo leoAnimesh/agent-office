@@ -51,6 +51,16 @@ describe('DevServerService', () => {
     expect(svc.info('a2')).toBeNull();
   });
 
+  it('does not leave a server behind when the project closes while it is starting', async () => {
+    const port = await freePort();
+    const starting = svc.start('a1', cmd(`--ignore-port --port ${port}`));
+    await svc.close();
+    await expect(starting).rejects.toThrow(/closed/);
+    await new Promise((r) => setTimeout(r, 1000));
+    expect(await answers(`http://127.0.0.1:${port}/`)).toBe(false);
+    await expect(svc.start('a1', cmd())).rejects.toThrow(/closed/);
+  });
+
   it('kills what a launcher left behind when it exits early', async () => {
     const port = await freePort();
     await expect(svc.start('a1', cmd(`--fork-and-exit --ignore-port --port ${port}`))).rejects.toThrow(/exited/);

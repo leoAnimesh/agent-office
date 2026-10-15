@@ -13,15 +13,19 @@ const KEEP = 200;
 /** One dev server per employee, started in that employee's worktree; stopped with its task, its employee or the project. */
 export class DevServerService {
   private servers = new Map<string, Running>();
+  /** Set by close(): starts in flight give up and new ones are refused. */
+  private closed = false;
 
   constructor(private readonly opts: { cwdFor(agentId: string): string | undefined; waitMs?: number; onChange?(): void }) {}
 
   async start(agentId: string, command: string): Promise<{ url: string; port: number }> {
+    if (this.closed) throw new Error('The project is closed');
     const cwd = this.opts.cwdFor(agentId);
     if (!cwd) throw new Error('You have no working folder yet; start a task first.');
     const port = await freePort();
     const [bin, ...args] = splitCommand(command, port);
     await this.stop(agentId);
+    if (this.closed) throw new Error('The project is closed');
     const child = spawn(bin, args, {
       cwd, detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', BROWSER: 'none', CI: '1' },
@@ -43,6 +47,10 @@ export class DevServerService {
 
     const deadline = Date.now() + (this.opts.waitMs ?? 90_000);
     while (Date.now() < deadline) {
+      if (this.closed) {
+        await this.stop(agentId);
+        throw new Error('The project is closed');
+      }
       if (!run.info.running) {
         this.servers.delete(agentId);
         // A launcher (npm, a script) can exit while the server it started keeps the port: kill its whole group.
@@ -81,11 +89,18 @@ export class DevServerService {
       killTree(r.child.pid);
       // Escalate if it ignores SIGTERM, then wait for the exit so ports and folders are free.
       const timer = setTimeout(() => { if (r.child.pid) killTree(r.child.pid, process.platform, 'SIGKILL'); }, 3000);
-      await r.exited;
+      // Never hang a project close on a process that will not report its exit.
+      await Promise.race([r.exited, new Promise((res) => setTimeout(res, 10_000))]);
       clearTimeout(timer);
     }
     this.opts.onChange?.();
     return true;
+  }
+
+  /** Project closing: stop everything and refuse new servers. */
+  async close(): Promise<void> {
+    this.closed = true;
+    await this.stopAll();
   }
 
   async stopAll(): Promise<void> {

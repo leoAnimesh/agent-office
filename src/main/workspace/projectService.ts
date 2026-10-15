@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, DeviceSupport, PreviewInput, PreviewTab, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
+import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, DeviceSupport, OpenProjectStatus, PreviewInput, PreviewTab, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
 import { AgentManager, type ManagerEvent, type MergeOutcome, type MessageResult } from '../agents/agentManager';
 import { applyUserEdit } from '../agents/projectSkills';
 import { bossTools, type ToolDef } from '../agents/bossTools';
@@ -87,7 +87,11 @@ export class ProjectService extends EventEmitter {
   private readonly roles: RoleStore;
   private readonly skills: SkillStore;
   private supportCache: { at: number; value: Promise<DeviceSupport> } | null = null;
+  /** The project in view. */
   private ws: Workspace | null = null;
+  /** Every opened project, by id: they keep running when you switch (only close/quit stops them). */
+  private running = new Map<string, Workspace>();
+  private activityTimer: ReturnType<typeof setTimeout> | null = null;
   /** The open project's terminal; null when the native PTY could not load on this machine. */
   private terminals: TerminalService | null = null;
   private terminalError = '';
@@ -172,8 +176,14 @@ export class ProjectService extends EventEmitter {
 
   async open(repoPath: string, opts: OpenOptions = {}): Promise<WorkspaceSnapshot> {
     const info = await inspectRepo(repoPath);
-    await this.close();
     const id = projectIdFor(info.root);
+    // Already running (in the background or in view): just show it, nothing restarts.
+    const already = this.running.get(id);
+    if (already) {
+      this.ws = already;
+      this.activityChanged();
+      return this.snapshot();
+    }
     const existing = await this.store.getProject(id);
     const project: Project = existing ?? {
       id, name: path.basename(info.root), repoPath: info.root, baseBranch: info.branch, maxConcurrent: 4, autoMerge: false,
@@ -206,24 +216,35 @@ export class ProjectService extends EventEmitter {
       return file;
     };
 
+    // From here on the employee tool server is listening: a failure before the workspace exists must close it.
+    const abandon = async () => { await office.close(); await browser.close(); await devServers.close(); await devices.close(); };
+    let manager!: AgentManager;
+    let requeued: string[];
+    let bossAgent!: Agent;
     const createRunner = (o: ClaudeRunnerOptions) => new ClaudeRunner({ ...o, binArgs: this.d.claudeBinArgs, env: this.d.claudeEnv ? { ...process.env, ...this.d.claudeEnv } : undefined });
     const isolate = this.isolate;
+    try {
     await fs.mkdir(this.d.paths.promptDir, { recursive: true });
-    const manager = new AgentManager({
+    manager = new AgentManager({
       project, store: this.store, roles: this.roles, skills: this.skills, worktrees: new WorktreeManager(info.root),
       createRunner, claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, isolateUserSettings: isolate,
       employeeMcp,
       classify: createClassifier({ createRunner, claudeBin: this.claudeBin, cwd: this.d.paths.promptDir, isolateUserSettings: isolate }),
     });
     managerRef = manager;
-    const requeued = await manager.load();
+    requeued = await manager.load();
     if (opts.bossModel && !existing) {
       const bossRole = await this.roles.get('boss');
       if (bossRole) await this.roles.save({ ...bossRole, model: opts.bossModel });
     }
-    const bossAgent = await manager.createBoss(opts.bossName?.trim() || 'Max');
+    bossAgent = await manager.createBoss(opts.bossName?.trim() || 'Max');
     project.bossId = bossAgent.id;
     await this.store.saveProject(project);
+    } catch (err) {
+      await manager?.shutdown().catch(() => undefined);
+      await abandon();
+      throw err;
+    }
 
     const broker = new ApprovalBroker();
     const tools = bossTools({
@@ -242,8 +263,8 @@ export class ProjectService extends EventEmitter {
     } catch (err) {
       // Never leave a listening MCP server or a live manager behind a failed open.
       await host.close();
-      await office.close();
       await manager.shutdown();
+      await abandon();
       throw err;
     }
     const attachments = new AttachmentStore(this.d.paths.attachmentsDir(id));
@@ -257,7 +278,9 @@ export class ProjectService extends EventEmitter {
     boss.on('stream', (text: string | null) => this.emitWs(ws, { type: 'boss-stream', text }));
     boss.on('busy', (busy: boolean) => this.emitWs(ws, { type: 'boss-busy', busy }));
     boss.start();
+    this.running.set(id, ws);
     this.ws = ws;
+    this.activityChanged();
 
     // Re-show merge approvals that were pending when the app last stopped.
     for (const r of await this.store.getPendingMerges(id)) {
@@ -298,6 +321,15 @@ export class ProjectService extends EventEmitter {
     const ws = this.mustWs();
     const clean: ProjectPatch = parseOrThrow(projectPatchSchema, patch, 'project settings');
     Object.assign(ws.project, clean);
+    if (clean.browserTools === false) {
+      // Turned off: nobody keeps a key, a tab, a dev server or a device.
+      for (const a of ws.manager.agents()) {
+        ws.office.removeClient(a.id);
+        ws.devices.release(a.id);
+        void ws.browser.closeFor(a.id);
+        void ws.devServers.stop(a.id);
+      }
+    }
     await this.store.saveProject(ws.project);
     this.emitWs(ws, { type: 'project', project: { ...ws.project } });
     return { ...ws.project };
@@ -412,15 +444,51 @@ export class ProjectService extends EventEmitter {
     if (!this.mustWs().broker.answer(requestId, ok)) throw new Error('That merge request is no longer pending');
   }
 
+  /** Close the project in view (other projects keep running). */
   async close(): Promise<void> {
     const ws = this.ws;
     if (!ws) return;
     this.ws = null;
+    await this.closeWorkspace(ws);
+  }
+
+  /** App quit: close every running project. */
+  async closeAll(): Promise<void> {
+    this.ws = null;
+    await Promise.all([...this.running.values()].map((ws) => this.closeWorkspace(ws)));
+    if (this.activityTimer) clearTimeout(this.activityTimer);
+    this.activityTimer = null;
+  }
+
+  /** Every running project's activity, for the sidebar. */
+  openProjects(): OpenProjectStatus[] {
+    return [...this.running.values()].map((ws) => {
+      const tasks = ws.manager.tasks();
+      return {
+        id: ws.project.id,
+        working: tasks.filter((t) => t.status === 'working').length,
+        needsYou: ws.broker.pending().length + tasks.filter((t) => t.status === 'needs_help').length,
+      };
+    });
+  }
+
+  /** At most once a second, whichever project changed (background ones too). */
+  private activityChanged(): void {
+    if (this.activityTimer) return;
+    this.activityTimer = setTimeout(() => {
+      this.activityTimer = null;
+      this.emit('event', { type: 'open-projects', projects: this.openProjects() } satisfies WorkspaceEvent);
+    }, 1000);
+  }
+
+  private async closeWorkspace(ws: Workspace): Promise<void> {
+    this.running.delete(ws.project.id);
+    this.activityChanged();
     ws.broker.rejectAll();
     await this.terminals?.kill(ws.project.id);
     await ws.boss.stop();
     await ws.manager.shutdown();
-    await ws.devServers.stopAll();
+    await ws.devServers.close();
     await ws.browser.close();
     await ws.devices.close();
     await ws.office.close();
@@ -439,13 +507,15 @@ export class ProjectService extends EventEmitter {
     this.onDecision(ws, task.id, requestId, decision);
     await this.savePending(ws);
     this.emitWs(ws, { type: 'merge-request', request: ws.broker.pending().find((r) => r.requestId === requestId)! });
+    this.activityChanged();
     return awaiting;
   }
 
   private onDecision(ws: Workspace, taskId: string, requestId: string, decision: Promise<boolean>): void {
     const done = decision.then(async (ok): Promise<MergeOutcome | null> => {
-      // A closed workspace keeps its saved requests so they come back on the next open.
-      if (this.ws !== ws) return null;
+      // A closed workspace keeps its saved requests so they come back on the next open; a background one acts on the answer.
+      if (!this.running.has(ws.project.id)) return null;
+      this.activityChanged();
       await this.savePending(ws);
       this.emitWs(ws, { type: 'merge-resolved', requestId });
       if (!ok) { await ws.boss.notify(`The user declined to merge ${taskId}.`, taskId); return null; }
@@ -462,13 +532,15 @@ export class ProjectService extends EventEmitter {
   }
 
   private forward(ws: Workspace, e: ManagerEvent): void {
+    if (e.type === 'tasks-changed' || e.type === 'task-finished' || e.type === 'agents-changed') this.activityChanged();
     switch (e.type) {
       case 'agents-changed': return this.emitWs(ws, { type: 'agents', agents: ws.manager.agents() });
       case 'tasks-changed':
       case 'task-finished': return this.emitWs(ws, { type: 'tasks', tasks: ws.manager.tasks() });
       case 'agent-event': return this.emitWs(ws, { type: 'agent-event', agentId: e.agentId, event: e.event, at: new Date().toISOString() });
       case 'error': return this.emitWs(ws, { type: 'error', message: e.message });
-      case 'work-ended': void ws.devServers.stop(e.agentId); ws.devices.release(e.agentId); return undefined;
+      // The session is over: its key to the browser and device tools stops working (a new session gets a new one).
+      case 'work-ended': void ws.devServers.stop(e.agentId); ws.devices.release(e.agentId); ws.office.removeClient(e.agentId); return undefined;
       case 'fired': ws.devices.release(e.agentId); void ws.devServers.stop(e.agentId); void ws.browser.closeFor(e.agentId); ws.office.removeClient(e.agentId); return undefined;
       default: return undefined;
     }

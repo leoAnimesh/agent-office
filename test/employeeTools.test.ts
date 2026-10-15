@@ -49,6 +49,10 @@ describe('employee tools', () => {
     expect(await call('stop_dev_server', {})).toEqual({ stopped: true });
   });
 
+  it('says to open a page first when there is no tab yet', async () => {
+    expect(String(await call('browser_console', {}, 'nobody-yet'))).toMatch(/browser_open/);
+  });
+
   it('asks for a fresh snapshot when a ref is stale', async ({ skip }) => {
     if (!canRun) skip();
     await expect(call('browser_click', { ref: 'e999' })).rejects.toThrow(/browser_snapshot/);
