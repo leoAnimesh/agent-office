@@ -17,7 +17,9 @@ describe('keyToInput', () => {
   it('sends printable characters as text and named keys as keys', () => {
     expect(keyToInput(k('a'))).toEqual({ kind: 'text', text: 'a' });
     expect(keyToInput(k('Enter'))).toEqual({ kind: 'key', key: 'Enter' });
-    expect(keyToInput(k('Tab', { shiftKey: true }))).toEqual({ kind: 'key', key: 'Shift+Tab' });
+    // Tab and Shift+Tab move focus out of the live view (no keyboard trap).
+    expect(keyToInput(k('Tab'))).toBeNull();
+    expect(keyToInput(k('Tab', { shiftKey: true }))).toBeNull();
   });
   it('leaves app shortcuts and unknown keys alone', () => {
     expect(keyToInput(k('c', { metaKey: true }))).toBeNull();

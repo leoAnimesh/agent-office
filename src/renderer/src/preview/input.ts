@@ -1,6 +1,6 @@
 import type { PreviewInput, PreviewTab } from '../../../shared/types';
 
-const KEYS = new Set(['Enter', 'Tab', 'Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
+const KEYS = new Set(['Enter', 'Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
 
 /** Where a frame of frameW×frameH is drawn inside a box, keeping its shape. */
 export function fitRect(boxW: number, boxH: number, frameW: number, frameH: number) {
@@ -17,11 +17,13 @@ export function toFraction(px: number, py: number, r: { x: number; y: number; w:
   return x < 0 || x > 1 || y < 0 || y > 1 ? null : { x, y };
 }
 
-/** Typing in the live view: characters as text, a few named keys; app shortcuts (Ctrl/Cmd/Alt) stay with the app. */
+/**
+ * Typing in the live view: characters as text, a few named keys. App shortcuts (Ctrl/Cmd/Alt) stay with the app,
+ * and Tab is not sent so keyboard users can always move focus out of the view.
+ */
 export function keyToInput(e: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }): PreviewInput | null {
   if (e.ctrlKey || e.metaKey || e.altKey) return null;
   if ([...e.key].length === 1) return { kind: 'text', text: e.key };
-  if (e.key === 'Tab' && e.shiftKey) return { kind: 'key', key: 'Shift+Tab' };
   return KEYS.has(e.key) ? { kind: 'key', key: e.key } : null;
 }
 

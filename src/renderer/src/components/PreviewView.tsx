@@ -81,6 +81,7 @@ export function PreviewView({ ws, onError }: Props) {
       <canvas
         ref={canvas}
         className="preview-canvas"
+        role="application"
         tabIndex={0}
         data-frames={frames}
         aria-label={`Live view of ${tab ? nameOf(tab.agentId) : 'the employee'}'s browser tab`}
