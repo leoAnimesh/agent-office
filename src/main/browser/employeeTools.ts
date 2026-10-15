@@ -79,6 +79,7 @@ export function employeeTools(d: { browser: BrowserService; devServers: DevServe
       return image;
     }),
     employeeTool('browser_console', 'Console errors and warnings, page errors and failed requests since you last asked.', {}, async (_a, agentId) => {
+      if (!browser.has(agentId)) return 'You have no browser tab yet. Use browser_open first.';
       const lines = browser.takeConsole(agentId);
       return lines.length > 0 ? lines.join('\n') : 'Nothing new.';
     }),

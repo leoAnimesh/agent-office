@@ -51,7 +51,8 @@ export class BrowserService {
     if (!this.browser) {
       this.browser = (this.opts.launch ?? launchDefault)().catch((e) => {
         this.browser = null;
-        throw e instanceof BrowserMissing ? e : new BrowserMissing();
+        // Keep the real reason (missing libraries, sandbox…); only "nothing to launch" is BrowserMissing.
+        throw e instanceof BrowserMissing ? e : new Error(`Could not start the browser: ${e instanceof Error ? e.message : String(e)}`);
       });
     }
     return this.browser;
@@ -87,6 +88,15 @@ export class BrowserService {
           return route.fulfill({ status: 403, contentType: 'text/plain', body: 'Blocked: this page redirects outside localhost.' });
         }
         return route.fulfill({ response: res });
+      });
+    }
+    if (!old) {
+      // Pop-ups (window.open, target=_blank) would be pages nobody sees: close them and say so.
+      context.on('page', (p) => {
+        const t = this.tabsById.get(agentId);
+        if (!t || p === t.page) return;
+        t.console.push(`pop-up closed: ${p.url() || 'a new window'} (open links in the same tab)`);
+        void p.close().catch(() => undefined);
       });
     }
     const page = await context.newPage();
