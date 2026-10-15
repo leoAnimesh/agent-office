@@ -161,7 +161,7 @@ export interface CreateProjectInput extends OpenOptions { parentDir: string; nam
 export interface LogEntry { at: string; event: RunnerEvent }
 
 export interface PreviewTab { agentId: string; url: string; title: string; devServer: { url: string; running: boolean } | null }
-export interface PreviewFrame { agentId: string; data: string; width: number; height: number }
+export interface PreviewFrame { agentId: string; data: string; width: number; height: number; mime?: string }
 export type PreviewInput =
   | { kind: 'click'; x: number; y: number; button: 'left' | 'right' }
   | { kind: 'wheel'; x: number; y: number; dy: number }
