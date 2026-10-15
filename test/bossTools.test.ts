@@ -20,7 +20,7 @@ async function setup(over: { bossCanHire?: boolean } = {}) {
 describe('bossTools', () => {
   it('exposes the documented tool set', async () => {
     const { tools } = await setup();
-    expect(tools.map((t) => t.name).sort()).toEqual(['assign_task', 'cancel_task', 'get_task', 'hire', 'list_roles', 'list_tasks', 'list_team', 'message_agent', 'report_to_user', 'request_merge']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['assign_task', 'cancel_task', 'get_task', 'hire', 'list_roles', 'list_tasks', 'list_team', 'message_agent', 'report_to_user', 'request_merge', 'sync_branch']);
     for (const t of tools) expect(t.description.length).toBeGreaterThan(10);
   });
 
@@ -66,5 +66,16 @@ describe('bossTools', () => {
     expect(requestMerge).toHaveBeenCalledWith(expect.objectContaining({ id: 'T-101' }));
     expect(await call(tools, 'report_to_user', { text: 'Halfway there' })).toEqual({ ok: true });
     expect(report).toHaveBeenCalledWith('Halfway there');
+  });
+});
+
+describe('sync_branch', () => {
+  it('switches the project folder to the base branch by default and reports what happened', async () => {
+    const { tools, manager } = await setup();
+    const { git } = await import('../src/main/git/worktrees');
+    await git(h.repo, ['checkout', '-b', 'feature']);
+    expect(await call(tools, 'sync_branch')).toMatchObject({ status: 'synced', branch: 'main', from: 'feature', remote: false });
+    expect(await call(tools, 'sync_branch', { branch: 'nope' })).toMatchObject({ status: 'blocked' });
+    await manager.idle();
   });
 });

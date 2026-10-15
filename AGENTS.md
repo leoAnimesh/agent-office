@@ -86,7 +86,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
   - Refuse when the checkout is on another branch, is a detached HEAD, or has uncommitted changes to tracked files. Untracked files are fine.
   - On a conflict, run `merge --abort` and report the files.
   - Approvals are asynchronous and persisted. `request_merge` returns at once; the boss is told the result later.
-- **Boss isolation:** the boss gets `--tools Read Grep Glob` (no editing) plus `--allowedTools mcp__agentoffice`. Every agent session runs with `--setting-sources project,local`, so the user's global hooks and plugins stay out (configurable in Settings).
+- **Boss isolation:** the boss gets `--tools Read Grep Glob` (no editing) plus `--allowedTools mcp__agentoffice`. Its only way to touch the checkout is the `sync_branch` tool (switch + fast-forward pull, refused on uncommitted changes), run inside `AgentManager.run()` so it never races a merge. Every agent session runs with `--setting-sources project,local`, so the user's global hooks and plugins stay out (configurable in Settings).
 - **Names:** worktree and branch names come from `slugify(name)`. `hire()` rejects names whose slug collides with an existing employee's, because two agents must never share a worktree.
 - **Firing** is refused while the agent has open work. Otherwise the app commits leftovers, removes the worktree, and keeps the branches.
 - **Models:** `auto` is a role value, never a CLI flag. Employees launch with `launchModel(role.model, task.model)`; the boss maps `auto` to opus. Classification never runs inside `run()`.
