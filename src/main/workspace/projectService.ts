@@ -206,24 +206,35 @@ export class ProjectService extends EventEmitter {
       return file;
     };
 
+    // From here on the employee tool server is listening: a failure before the workspace exists must close it.
+    const abandon = async () => { await office.close(); await browser.close(); await devServers.close(); await devices.close(); };
+    let manager!: AgentManager;
+    let requeued: string[];
+    let bossAgent!: Agent;
     const createRunner = (o: ClaudeRunnerOptions) => new ClaudeRunner({ ...o, binArgs: this.d.claudeBinArgs, env: this.d.claudeEnv ? { ...process.env, ...this.d.claudeEnv } : undefined });
     const isolate = this.isolate;
+    try {
     await fs.mkdir(this.d.paths.promptDir, { recursive: true });
-    const manager = new AgentManager({
+    manager = new AgentManager({
       project, store: this.store, roles: this.roles, skills: this.skills, worktrees: new WorktreeManager(info.root),
       createRunner, claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, isolateUserSettings: isolate,
       employeeMcp,
       classify: createClassifier({ createRunner, claudeBin: this.claudeBin, cwd: this.d.paths.promptDir, isolateUserSettings: isolate }),
     });
     managerRef = manager;
-    const requeued = await manager.load();
+    requeued = await manager.load();
     if (opts.bossModel && !existing) {
       const bossRole = await this.roles.get('boss');
       if (bossRole) await this.roles.save({ ...bossRole, model: opts.bossModel });
     }
-    const bossAgent = await manager.createBoss(opts.bossName?.trim() || 'Max');
+    bossAgent = await manager.createBoss(opts.bossName?.trim() || 'Max');
     project.bossId = bossAgent.id;
     await this.store.saveProject(project);
+    } catch (err) {
+      await manager?.shutdown().catch(() => undefined);
+      await abandon();
+      throw err;
+    }
 
     const broker = new ApprovalBroker();
     const tools = bossTools({
@@ -242,8 +253,8 @@ export class ProjectService extends EventEmitter {
     } catch (err) {
       // Never leave a listening MCP server or a live manager behind a failed open.
       await host.close();
-      await office.close();
       await manager.shutdown();
+      await abandon();
       throw err;
     }
     const attachments = new AttachmentStore(this.d.paths.attachmentsDir(id));
@@ -420,7 +431,7 @@ export class ProjectService extends EventEmitter {
     await this.terminals?.kill(ws.project.id);
     await ws.boss.stop();
     await ws.manager.shutdown();
-    await ws.devServers.stopAll();
+    await ws.devServers.close();
     await ws.browser.close();
     await ws.devices.close();
     await ws.office.close();
