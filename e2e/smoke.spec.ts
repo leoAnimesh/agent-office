@@ -144,9 +144,7 @@ test('starts a brand-new project from scratch', async () => {
     await win.getByRole('button', { name: 'Cancel' }).click();
     await expect(win.getByRole('dialog')).toHaveCount(0);
 
-    // The sidebar collapses to an icon rail that keeps every item usable, and remembers it.
-    await win.getByRole('button', { name: 'Collapse sidebar' }).click();
-    await expect(win.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-expanded', 'false');
+    // App settings live in the sidebar; project settings in the project's own tab.
     await win.getByRole('button', { name: 'App settings' }).click();
     await expect(win.getByRole('heading', { name: 'App settings' })).toBeVisible();
     await expect(win.getByRole('navigation', { name: 'Project views' })).toHaveCount(0);
@@ -156,10 +154,6 @@ test('starts a brand-new project from scratch', async () => {
     await expect(win.getByRole('heading', { name: 'Close project' })).toBeVisible();
     await expect(win.getByLabel(/Agents working at the same time/)).toBeVisible();
     await expect(win.getByRole('heading', { name: 'App settings' })).toHaveCount(0);
-    await win.reload();
-    await expect(win.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
-    await win.getByRole('button', { name: 'Expand sidebar' }).click();
-    await expect(win.getByRole('button', { name: 'Collapse sidebar' })).toBeVisible();
   } finally {
     await app.close();
     await fs.rm(parent, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });

@@ -11,7 +11,6 @@ import { ProjectSettingsView } from './components/ProjectSettingsView';
 import { Sidebar } from './components/Sidebar';
 import { TaskBoard } from './components/TaskBoard';
 import { TeamView } from './components/TeamView';
-import { readCollapsed, writeCollapsed } from './layout/sidebarPref';
 import { lookFor } from './sprites/sprite';
 import { initialState, reducer, type View } from './state';
 
@@ -21,8 +20,6 @@ export function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [state, dispatch] = useReducer(reducer, initialState);
   const [newProject, setNewProject] = useState(false);
-  const [collapsed, setCollapsed] = useState(() => readCollapsed(localStore()));
-  const toggleSidebar = () => { writeCollapsed(localStore(), !collapsed); setCollapsed(!collapsed); };
   const onError = useCallback((m: string) => dispatch({ type: 'error', message: clean(m) }), []);
   const viewAgentId = state.view.name === 'agent' ? state.view.agentId : null;
   const onLogs = useCallback((entries: LogEntry[]) => { if (viewAgentId) dispatch({ type: 'logs-loaded', agentId: viewAgentId, entries }); }, [viewAgentId]);
@@ -62,8 +59,8 @@ export function App() {
   })();
 
   return (
-    <div className={collapsed ? 'app side-collapsed' : 'app'}>
-      <Sidebar current={ws.project} view={state.view} collapsed={collapsed} onToggle={toggleSidebar} onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} onNewProject={() => setNewProject(true)} onNavigate={go} onError={onError} />
+    <div className="app">
+      <Sidebar current={ws.project} view={state.view} onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} onNewProject={() => setNewProject(true)} onNavigate={go} onError={onError} />
       {newProject && (
         <div className="overlay" role="dialog" aria-modal="true" aria-label="New project">
           <Onboarding status={status} initialMode="create" onCancel={() => setNewProject(false)} onOpened={(snap) => { setNewProject(false); dispatch({ type: 'snapshot', ws: snap }); }} />
@@ -92,9 +89,4 @@ export function App() {
       </div>
     </div>
   );
-}
-
-/** localStorage can be missing or throw on access (blocked storage); the sidebar works without it. */
-function localStore(): Storage | null {
-  try { return window.localStorage; } catch { return null; }
 }
