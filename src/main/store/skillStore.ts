@@ -59,7 +59,20 @@ export class SkillStore {
     await fs.writeFile(path.join(this.dir, `${skill.id}.md`), `---\nname: ${skill.name.replace(/\n/g, ' ')}\ndescription: ${skill.description.replace(/\n/g, ' ')}\n${tags}---\n${skill.body.trim()}\n`);
   }
 
-  seed(fromDir: string): Promise<number> {
-    return copyMissingFiles(fromDir, this.dir);
+  /**
+   * Copies built-in skills that are missing. Copies made before skills had tags get the built-in's `tags:` line
+   * added (their text is left as the user may have edited it), so the boss sees tags for every built-in skill.
+   */
+  async seed(fromDir: string): Promise<number> {
+    const copied = await copyMissingFiles(fromDir, this.dir);
+    for (const file of (await fs.readdir(fromDir)).filter((f) => f.endsWith('.md'))) {
+      const id = file.slice(0, -3);
+      const [mine, builtIn] = await Promise.all([this.get(id), fs.readFile(path.join(fromDir, file), 'utf8').then((raw) => parseSkill(id, raw))]);
+      if (!mine || mine.tags.length > 0 || builtIn.tags.length === 0) continue;
+      const raw = (await fs.readFile(path.join(this.dir, file), 'utf8')).replace(/\r\n/g, '\n');
+      // Only a file with front-matter can take a tags line; one without it is left alone.
+      if (raw.startsWith('---\n')) await fs.writeFile(path.join(this.dir, file), raw.replace(/\n---\n/, `\ntags: ${builtIn.tags.join(', ')}\n---\n`));
+    }
+    return copied;
   }
 }
