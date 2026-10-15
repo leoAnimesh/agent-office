@@ -6,7 +6,7 @@ const role: Role = { id: 'frontend', name: 'Frontend Engineer', blurb: '', syste
 
 describe('renderPrompt', () => {
   it('includes identity, role prompt, skills and rules in order', () => {
-    const out = renderPrompt(role, [{ id: 'react-patterns', name: 'React patterns', description: 'd', body: 'Use hooks.' }], {
+    const out = renderPrompt(role, [{ id: 'react-patterns', name: 'React patterns', description: 'd', body: 'Use hooks.', tags: [] }], {
       agentName: 'Pixel', bossName: 'Max', branch: 'ao/pixel/x', projectName: 'demo', kind: 'employee',
     });
     expect(out).toContain('You are Pixel, the Frontend Engineer on the "demo" team. Your boss is Max.');

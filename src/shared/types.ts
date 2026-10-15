@@ -16,7 +16,7 @@ export interface Role {
   look: Look;
 }
 
-export interface Skill { id: string; name: string; description: string; body: string }
+export interface Skill { id: string; name: string; description: string; body: string; tags: string[] }
 
 export interface Agent {
   id: string;

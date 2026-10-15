@@ -1,6 +1,7 @@
 ---
 name: Git hygiene
 description: Commits and branches
+tags: git
 ---
 - Commit in small logical steps with imperative messages.
 - Never rewrite history on shared branches.

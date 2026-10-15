@@ -1,6 +1,7 @@
 ---
 name: Testing basics
 description: How to test changes
+tags: testing
 ---
 - Find and run the project's existing test command first.
 - Add a test that fails without your change.
