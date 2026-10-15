@@ -185,6 +185,8 @@ export class ProjectService extends EventEmitter {
       requestMerge: (task) => this.requestMerge(ws, task),
       report: (text) => { void ws.boss.report(text); },
       rolesChanged: () => this.emitWs(ws, { type: 'roles-changed' }),
+      skills: this.skills,
+      saveProject: async () => { await this.store.saveProject(project); this.emitWs(ws, { type: 'project', project: { ...project } }); },
     });
     const host = new McpHost(tools);
     await host.start();

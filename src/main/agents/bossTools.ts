@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { ALL_TOOLS } from '../../shared/tools';
-import type { Project, Role, Task } from '../../shared/types';
+import { MAX_PROJECT_SKILLS, type Project, type Role, type Task } from '../../shared/types';
 import { slugify } from '../git/worktrees';
 import { parseOrThrow, roleSchema } from '../store/validate';
 import type { RoleStore } from '../store/roleStore';
+import type { SkillStore } from '../store/skillStore';
+import { applyBossPicks } from './projectSkills';
 import type { AgentManager } from './agentManager';
 
 const MODEL = z.enum(['auto', 'opus', 'sonnet', 'haiku']);
@@ -38,6 +40,9 @@ export interface BossToolDeps {
   /** Merge now (auto-merge) or ask the user; returns what the boss should be told. */
   requestMerge(task: Task): Promise<unknown>;
   report(text: string): void;
+  skills: SkillStore;
+  /** Persist `project` and tell the app it changed. */
+  saveProject(): Promise<void>;
   /** Roles were created or changed (the app reloads its role list). */
   rolesChanged?(): void;
 }
@@ -145,7 +150,35 @@ export function bossTools(d: BossToolDeps): ToolDef[] {
       async ({ agent, title, brief, depends_on }) => {
         const t = await manager.createTask({ assignee: agent, title, brief, dependsOn: depends_on, createdBy: 'boss' });
         const now = manager.getTask(t.id) ?? t;
-        return { task_id: now.id, branch: now.branch, status: now.status };
+        return {
+          task_id: now.id, branch: now.branch, status: now.status,
+          ...(d.project.skills === undefined ? { reminder: 'No project skills chosen yet; employees work without skills. Call list_skills and set_project_skills.' } : {}),
+        };
+      },
+    ),
+
+    tool('list_skills', 'List the skill library: what each skill covers, and whether it is in this project, added by the user, or removed by the user (you cannot add those back).', {}, async () => {
+      const inProject = new Map((d.project.skills ?? []).map((s) => [s.id, s.addedBy]));
+      const excluded = new Set(d.project.skillsExcluded ?? []);
+      return (await d.skills.list()).map((s) => ({
+        id: s.id, name: s.name, description: s.description, tags: s.tags,
+        in_project: inProject.has(s.id), ...(inProject.has(s.id) ? { added_by: inProject.get(s.id) } : {}), excluded: excluded.has(s.id),
+      }));
+    }),
+
+    tool(
+      'set_project_skills',
+      `Choose the skills every employee on this project gets (at most ${MAX_PROJECT_SKILLS}, including ones the user added). Replaces your earlier picks; skills the user added stay, skills the user removed are skipped. Give a one-line reason for each.`,
+      { skills: z.array(z.object({ id: z.string(), reason: z.string() })).max(MAX_PROJECT_SKILLS) },
+      async ({ skills }) => {
+        const known = new Set((await d.skills.list()).map((s) => s.id));
+        const r = applyBossPicks(d.project, skills, known);
+        d.project.skills = r.skills;
+        await d.saveProject();
+        return {
+          skills: r.skills.map((s) => ({ id: s.id, reason: s.reason, added_by: s.addedBy })),
+          kept_user_skills: r.kept, skipped: r.skipped, note: 'Employees get these from their next task.',
+        };
       },
     ),
 
