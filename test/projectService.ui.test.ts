@@ -69,15 +69,11 @@ describe('ProjectService (UI features)', () => {
     expect((await svc.snapshot()).project.maxConcurrent).toBe(2);
   });
 
-  it('saves roles and skills after validating them', async () => {
+  it('lists roles and skills for the screens (they are changed only through the boss)', async () => {
     await svc.open(repo);
-    const fe = (await svc.listRoles()).find((r) => r.id === 'frontend')!;
-    await svc.saveRole({ ...fe, model: 'opus' });
-    expect((await svc.listRoles()).find((r) => r.id === 'frontend')!.model).toBe('opus');
-    await expect(svc.saveRole({ ...fe, id: '../evil' })).rejects.toThrow(/Invalid role/);
-    const skill = await svc.saveSkill({ id: 'house-style', name: 'House style', description: 'How we write code', body: '- Use tabs.' });
-    expect(skill.id).toBe('house-style');
-    expect((await svc.listSkills()).map((s) => s.id)).toContain('house-style');
+    expect((await svc.listRoles()).map((r) => r.id)).toContain('frontend');
+    expect((await svc.listSkills()).map((s) => s.id)).toContain('git-hygiene');
+    expect('saveRole' in svc).toBe(false);
   });
 
   it('streams agent events with timestamps, serves their log, and guards worktree paths', async () => {

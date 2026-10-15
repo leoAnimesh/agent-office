@@ -14,7 +14,7 @@ import type { DataPaths } from '../store/paths';
 import { ProjectStore } from '../store/projectStore';
 import { RoleStore } from '../store/roleStore';
 import { SkillStore } from '../store/skillStore';
-import { parseOrThrow, projectPatchSchema, roleSchema, skillSchema } from '../store/validate';
+import { parseOrThrow, projectPatchSchema } from '../store/validate';
 import { ApprovalBroker } from './approvalBroker';
 import { createRepo, type NewProjectInput } from './newProject';
 import { killTree } from '../claude/killTree';
@@ -234,19 +234,7 @@ export class ProjectService extends EventEmitter {
     return { ...ws.project };
   }
 
-  async saveRole(role: unknown): Promise<Role> {
-    const clean = parseOrThrow(roleSchema, role, 'role');
-    await this.roles.save(clean);
-    return clean;
-  }
-
   listSkills(): Promise<Skill[]> { return this.skills.list(); }
-
-  async saveSkill(skill: unknown): Promise<Skill> {
-    const clean = parseOrThrow(skillSchema, skill, 'skill');
-    await this.skills.save(clean);
-    return clean;
-  }
 
   fire(agentId: string): Promise<void> { return this.mustWs().manager.fire(agentId); }
   messageAgent(ref: string, text: string): Promise<MessageResult> { return this.mustWs().manager.messageAgent(ref, text); }

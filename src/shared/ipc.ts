@@ -13,9 +13,7 @@ export const IPC = {
   snapshot: 'project:snapshot',
   sendToBoss: 'boss:send',
   listRoles: 'team:roles',
-  saveRole: 'team:save-role',
   listSkills: 'team:skills',
-  saveSkill: 'team:save-skill',
   hire: 'team:hire',
   fireAgent: 'team:fire',
   agentLog: 'agent:log',
@@ -51,9 +49,7 @@ export interface AgentOfficeApi {
   snapshot(): Promise<WorkspaceSnapshot | null>;
   sendToBoss(text: string): Promise<void>;
   listRoles(): Promise<Role[]>;
-  saveRole(role: Role): Promise<Role>;
   listSkills(): Promise<Skill[]>;
-  saveSkill(skill: Skill): Promise<Skill>;
   hire(roleId: string, name?: string): Promise<Agent>;
   fireAgent(agentId: string): Promise<void>;
   agentLog(agentId: string): Promise<LogEntry[]>;

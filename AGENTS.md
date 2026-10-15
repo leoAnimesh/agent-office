@@ -108,6 +108,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - Model and agent text is rendered only as React text. Never use `dangerouslySetInnerHTML`.
 - The MCP host listens only on `127.0.0.1`, uses a random bearer token compared in constant time, and caps the body size. Its `mcp.json` is mode 0600.
 - `worktreeFor()` only opens paths inside `<repo>/.agentoffice/wt/`.
+- Roles are app-wide and only the boss changes them (`create_role` / `update_role`, no approval step). Every change is posted to the chat in full (including new instructions), the boss role is protected, `permissionMode` stays `acceptEdits`, and models and tools are fixed enums. A prompt-injected boss could still rewrite a role's instructions for every project: it is visible, not blocked.
 - The terminal is the user's own shell: it always starts in the open project's folder (decided in main, never sent by the renderer), takes validated sizes and ≤ 64 KB writes, and has no channel from the MCP host or agents. `@lydell/node-pty` is pinned exactly (it is a beta) and unpacked from the asar (`asarUnpack`).
 - The `AO_*` dev hooks and `ELECTRON_RENDERER_URL` are read only by `testOverrides.ts`, and **only when not packaged**. Packaged builds also turn on Electron fuses (no `RUN_AS_NODE`, no `NODE_OPTIONS`, no inspect, app loaded only from the asar).
 
@@ -157,4 +158,6 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - The IPC sender guard accepts any `file://` frame and prefix-matches the dev URL.
 - Validation messages show internal key names.
 - There's no back-off when a crashing boss is restarted.
+- With the role editor gone, the app cannot change a role's skills (roles made in chat start with none), permission mode or sprite look, delete a role, or change the boss's model after onboarding. Two role names that both slug to `role` (e.g. non-Latin names) collide.
+- Terminal: a shell that fails to start shows the error without a Restart button; reattaching (window reload) can draw one batch of output twice; the backlog can start mid escape sequence.
 - Only the Claude Code CLI is supported. Codex would plug in behind the `AgentRunner` interface (`src/main/claude/runner.ts`).

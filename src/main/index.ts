@@ -106,9 +106,7 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   handle(IPC.snapshot, () => (svc.current() ? svc.snapshot() : null));
   handle(IPC.sendToBoss, (text: unknown) => svc.sendToBoss(str(text, 'message')));
   handle(IPC.listRoles, () => svc.listRoles());
-  handle(IPC.saveRole, (role: unknown) => svc.saveRole(role));
   handle(IPC.listSkills, () => svc.listSkills());
-  handle(IPC.saveSkill, (skill: unknown) => svc.saveSkill(skill));
   handle(IPC.hire, (roleId: unknown, name: unknown) => svc.hire(str(roleId, 'role'), typeof name === 'string' && name.trim() ? name.slice(0, 40) : undefined));
   handle(IPC.fireAgent, (id: unknown) => svc.fire(str(id, 'agent id')));
   handle(IPC.agentLog, (id: unknown) => svc.agentLog(str(id, 'agent id')));
