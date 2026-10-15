@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import crossSpawn from 'cross-spawn';
 import type { RunnerEvent } from '../../shared/types';
-import { buildClaudeArgs, userMessageLine, type ClaudeLaunch } from './args';
+import { buildClaudeArgs, userMessageLine, type ClaudeLaunch, type UserMessage } from './args';
 import { killTree } from './killTree';
 import { LineSplitter, parseLine } from './streamParser';
 
@@ -10,7 +10,7 @@ export interface AgentRunner {
   readonly running: boolean;
   readonly lastStderr: string;
   start(): void;
-  send(text: string): void;
+  send(msg: UserMessage): void;
   endInput(): void;
   stop(): void;
   on(event: 'event', listener: (ev: RunnerEvent) => void): this;
@@ -79,9 +79,9 @@ export class ClaudeRunner extends EventEmitter implements AgentRunner {
     });
   }
 
-  send(text: string): void {
+  send(msg: UserMessage): void {
     if (!this.child || !this.child.stdin.writable) throw new Error('runner is not running');
-    this.child.stdin.write(userMessageLine(text));
+    this.child.stdin.write(userMessageLine(msg));
   }
 
   endInput(): void {
