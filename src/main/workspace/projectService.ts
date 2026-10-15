@@ -267,6 +267,8 @@ export class ProjectService extends EventEmitter {
 
   /** A message from the user, with optional attachments (checked here: they come from the renderer). */
   async sendToBoss(text: string, attachments?: unknown): Promise<void> {
+    // Refused, not cut: a shortened brief would reach the boss without the user knowing.
+    if (text.length > 100_000) throw new Error('The message is too long (at most 100,000 characters)');
     const files = attachments === undefined ? [] : parseOrThrow(attachmentsSchema, attachments, 'attachments');
     return this.mustWs().boss.send(text, files);
   }

@@ -67,6 +67,7 @@ describe('chat attachments', () => {
     await expect(svc.sendToBoss('x', 'nope')).rejects.toThrow();
     await expect(svc.sendToBoss('x', Array.from({ length: 6 }, () => ({ name: 'a.txt', mime: 'text/plain', data: new Uint8Array([1]) })))).rejects.toThrow(/5/);
     await expect(svc.sendToBoss('', [])).rejects.toThrow(/empty/);
+    await expect(svc.sendToBoss('x'.repeat(100_001))).rejects.toThrow(/too long/);
     await expect(svc.readAttachment('../../settings')).rejects.toThrow();
     expect((await svc.snapshot()).chat.filter((e) => e.kind === 'user')).toHaveLength(0);
   });

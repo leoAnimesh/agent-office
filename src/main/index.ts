@@ -107,7 +107,7 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   handle(IPC.setProjectSkills, (edit: unknown) => svc.setProjectSkills(edit));
   handle(IPC.snapshot, () => (svc.current() ? svc.snapshot() : null));
   // Text may be empty when the message is only attachments; BossSession refuses a message with neither.
-  handle(IPC.sendToBoss, (text: unknown, attachments: unknown) => svc.sendToBoss(typeof text === 'string' ? text.slice(0, 100_000) : '', attachments));
+  handle(IPC.sendToBoss, (text: unknown, attachments: unknown) => svc.sendToBoss(typeof text === 'string' ? text : '', attachments));
   handle(IPC.readAttachment, (id: unknown) => svc.readAttachment(str(id, 'attachment id')));
   handle(IPC.listRoles, () => svc.listRoles());
   handle(IPC.listSkills, () => svc.listSkills());

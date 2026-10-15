@@ -59,7 +59,7 @@ export const ChatComposer = memo(function ChatComposer({ onSend, dropped, onDrop
         </ul>
       )}
       {problem && <p className="small attach-problem" role="alert">{problem}</p>}
-      <textarea id="boss-msg" className="input" rows={3} value={draft} placeholder="Describe what the team should build…"
+      <textarea id="boss-msg" className="input" rows={3} maxLength={100_000} value={draft} placeholder="Describe what the team should build…"
         onChange={(e) => setDraft(e.target.value)}
         onPaste={(e) => { const list = filesFromPaste(Array.from(e.clipboardData.types), Array.from(e.clipboardData.files)); if (list.length > 0) { e.preventDefault(); void add(list); } }}
         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
