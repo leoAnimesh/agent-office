@@ -102,6 +102,13 @@ export function bossTools(d: BossToolDeps): ToolDef[] {
       return { status: 'cancelled' };
     }),
 
+    tool(
+      'sync_branch',
+      "Switch the user's project folder to a branch (default: the project's main branch) and pull it from origin, fast-forward only. Refuses if tracked files have uncommitted changes or the pull would need a merge. Use it when the user asks to pull, update or switch branches; merging finished work needs the folder back on the main branch.",
+      { branch: z.string().min(1).max(200).optional() },
+      async ({ branch }) => manager.syncBranch(branch ?? d.project.baseBranch),
+    ),
+
     tool('report_to_user', 'Post a short, highlighted progress update for the user.', { text: z.string().min(1) }, async ({ text }) => {
       d.report(text);
       return { ok: true };

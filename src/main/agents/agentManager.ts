@@ -5,7 +5,7 @@ import path from 'node:path';
 import { AUTO_MODEL, type Agent, type Project, type Role, type RunnerEvent, type Task, type TaskStatus } from '../../shared/types';
 import { waitForExit, type AgentRunner, type ClaudeRunnerOptions } from '../claude/runner';
 import { reduceStatus } from '../claude/status';
-import { WorktreeManager, git, slugify, type MergeResult } from '../git/worktrees';
+import { WorktreeManager, git, slugify, type MergeResult, type SyncResult } from '../git/worktrees';
 import type { ProjectStore } from '../store/projectStore';
 import { nextTaskId } from '../store/projectStore';
 import type { RoleStore } from '../store/roleStore';
@@ -206,6 +206,11 @@ export class AgentManager extends EventEmitter {
       await this.saveAgents();
       this.live.get(agent.id)?.runner.stop();
     });
+  }
+
+  /** Switch the project folder to a branch and pull it fast-forward; serialized with merges, which use the same checkout. */
+  syncBranch(branch: string): Promise<SyncResult> {
+    return this.run(async () => { this.assertOpen(); return this.d.worktrees.syncBranch(branch); });
   }
 
   /** Hands a queued task that has not started yet to another employee (their own branch, their role's pinned model). */
