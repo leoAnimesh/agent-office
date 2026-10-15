@@ -10,8 +10,14 @@
   "permissionMode": "default",
   "allowedTools": [
     "Read",
+    "Edit",
+    "Write",
+    "Bash",
     "Grep",
-    "Glob"
+    "Glob",
+    "WebFetch",
+    "WebSearch",
+    "NotebookEdit"
   ],
   "look": {
     "hair": "#14151F",

@@ -14,7 +14,10 @@
     "Write",
     "Bash",
     "Grep",
-    "Glob"
+    "Glob",
+    "WebFetch",
+    "WebSearch",
+    "NotebookEdit"
   ],
   "look": {
     "hair": "#6B6F80",
