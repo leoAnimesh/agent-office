@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { act, useState } from 'react';
+import { act, useState, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 
-const renders = vi.hoisted(() => ({ n: 0 }));
+const renders = vi.hoisted(() => ({ n: 0, entries: 0 }));
+// Tool entries call describeToolCall on every render of the entry: a precise count of message re-renders.
+vi.mock('./describe', () => ({ describeToolCall: () => { renders.entries++; return 'did a thing'; } }));
 vi.mock('react-markdown', () => ({ default: ({ children }: { children: string }) => { renders.n++; return <p>{children}</p>; } }));
 const { Markdown } = await import('./Markdown');
 
@@ -25,5 +27,46 @@ describe('Markdown', () => {
     for (let i = 0; i < 10; i++) await act(async () => { bump(); });
     expect(renders.n).toBe(first);
     await act(async () => { root.unmount(); });
+  });
+});
+describe('BossChat', () => {
+  const look = { hair: '#000000', shirt: '#000000', skin: '#000000' };
+  const tools = Array.from({ length: 200 }, (_, i) => ({ kind: 'tool' as const, at: 't', tool: 'list_team', input: { i } }));
+  const mount = async (el: ReactElement) => {
+    (window as unknown as { agentOffice: unknown }).agentOffice = { sendToBoss: async () => undefined, answerMerge: async () => undefined, openExternal: async () => undefined };
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    await act(async () => { root.render(el); });
+    return { host, root, done: async () => { await act(async () => { root.unmount(); }); host.remove(); } };
+  };
+
+  it('typing does not re-render the conversation', async () => {
+    const { BossChat } = await import('../components/BossChat');
+    const m = await mount(<BossChat chat={tools} merges={[]} boss={undefined} bossLook={look} bossModel="opus" stream={null} busy={false} onError={() => undefined} />);
+    const before = renders.entries;
+    const box = m.host.querySelector('textarea')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+    for (const ch of 'hello there, team') {
+      await act(async () => { setValue.call(box, box.value + ch); box.dispatchEvent(new Event('input', { bubbles: true })); });
+    }
+    expect(box.value).toBe('hello there, team');
+    expect(renders.entries).toBe(before);
+    await m.done();
+  });
+
+  it('streaming re-renders only the streaming bubble', async () => {
+    const { BossChat } = await import('../components/BossChat');
+    const props = { chat: tools, merges: [], boss: undefined, bossLook: look, bossModel: 'opus', busy: true, onError: () => undefined };
+    const m = await mount(<BossChat {...props} stream={null} />);
+    const before = renders.entries;
+    let text = '';
+    for (let i = 0; i < 20; i++) {
+      text += 'word ';
+      await act(async () => { m.root.render(<BossChat {...props} stream={text} />); await new Promise((r) => setTimeout(r, 20)); });
+    }
+    expect(m.host.textContent).toContain('word word');
+    expect(renders.entries).toBe(before);
+    await m.done();
   });
 });

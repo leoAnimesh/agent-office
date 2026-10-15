@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { AppStatus, LogEntry, WorkspaceSnapshot } from '../../shared/types';
 import { AgentDetailView } from './components/AgentDetailView';
 import { BossChat } from './components/BossChat';
@@ -104,6 +104,10 @@ export function App() {
   }, [projectId, viewName]);
   useEffect(() => { if (projectId) writeProjectUi(localStore(), projectId, { terminal: termOpen }); }, [termOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A stable look for the chat header, so the memoized chat is not re-rendered by every agent event.
+  const bossAgent = state.ws?.agents.find((a) => a.kind === 'boss');
+  const bossLook = useMemo(() => (bossAgent ? lookFor(bossAgent, state.roles) : lookFor({ roleId: 'boss' }, state.roles)), [bossAgent?.id, bossAgent?.roleId, state.roles]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!status) return <main className="boot"><p>Looking for Claude Code…</p></main>;
   if (reopening) return <main className="boot"><p>Reopening {reopening.split(/[\\/]/).filter(Boolean).pop()}…</p></main>;
   if (!status.claude) return <NoClaude onFound={setStatus} />;
@@ -153,7 +157,7 @@ export function App() {
           <div className="view">{view}</div>
           {withChat && (
             <aside className="chat-panel">
-              <BossChat chat={ws.chat} merges={ws.merges} boss={boss} bossLook={boss ? lookFor(boss, state.roles) : lookFor({ roleId: 'boss' }, state.roles)} bossModel={bossRole?.model ?? 'opus'} stream={state.bossStream} busy={state.bossBusy} onError={onError} />
+              <BossChat chat={ws.chat} merges={ws.merges} boss={boss} bossLook={bossLook} bossModel={bossRole?.model ?? 'opus'} stream={state.bossStream} busy={state.bossBusy} onError={onError} />
             </aside>
           )}
         </div>
