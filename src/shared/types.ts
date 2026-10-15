@@ -115,6 +115,7 @@ export interface WorkspaceSnapshot {
 }
 
 export type WorkspaceEvent =
+  | { type: 'roles-changed' }
   | { type: 'agents'; agents: Agent[] }
   | { type: 'tasks'; tasks: Task[] }
   | { type: 'chat'; entry: ChatEntry }

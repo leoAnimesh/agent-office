@@ -15,8 +15,9 @@ async function setup(over: Partial<Project> = {}) {
   const project = { ...env.project, ...over };
   const requestMerge = vi.fn(async () => ({ status: 'awaiting_user_approval' }));
   const report = vi.fn();
-  const tools = bossTools({ manager: env.manager, roles: env.roles, project, requestMerge, report });
-  return { ...env, tools, requestMerge, report };
+  const rolesChanged = vi.fn();
+  const tools = bossTools({ manager: env.manager, roles: env.roles, project, requestMerge, report, rolesChanged });
+  return { ...env, tools, requestMerge, report, rolesChanged };
 }
 
 describe('bossTools', () => {
@@ -96,5 +97,18 @@ describe('sync_branch', () => {
     expect(await call(tools, 'sync_branch')).toMatchObject({ status: 'synced', branch: 'main', from: 'feature', remote: false });
     expect(await call(tools, 'sync_branch', { branch: 'nope' })).toMatchObject({ status: 'blocked' });
     await manager.idle();
+  });
+});
+
+describe('role changes are visible', () => {
+  it('tells the app and posts what changed, including the new instructions', async () => {
+    const { tools, report, rolesChanged } = await setup();
+    await call(tools, 'create_role', { name: 'Data Engineer', description: 'Pipelines', system_prompt: 'You build data pipelines.' });
+    expect(rolesChanged).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenLastCalledWith(expect.stringMatching(/Created role \*\*Data Engineer\*\*[\s\S]*auto[\s\S]*You build data pipelines\./));
+    await call(tools, 'update_role', { role_id: 'frontend', model: 'opus', system_prompt: 'Ship it.' });
+    expect(rolesChanged).toHaveBeenCalledTimes(2);
+    expect(report).toHaveBeenLastCalledWith(expect.stringMatching(/Changed role \*\*Frontend Engineer\*\*[\s\S]*model: sonnet → opus|model: auto → opus/));
+    expect(report.mock.lastCall![0]).toContain('Ship it.');
   });
 });

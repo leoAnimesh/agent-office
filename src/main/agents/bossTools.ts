@@ -18,6 +18,10 @@ const LOOKS: Role['look'][] = [
   { hair: '#8A90B0', shirt: '#C9935C', skin: '#E8C4A0' },
   { hair: '#2A2D42', shirt: '#4BA3E3', skin: '#9A6B4F' },
 ];
+/** Role edits from chat are shown to the user in full, so a prompt change never happens out of sight. */
+const quote = (text: string) => text.trim().split(/\r?\n/).map((l) => `> ${l}`).join('\n');
+const toolList = (t: string[]) => (ALL_TOOLS.every((x) => t.includes(x)) && t.length === ALL_TOOLS.length ? 'all' : t.join(', '));
+
 const lookForId = (id: string) => LOOKS[[...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % LOOKS.length];
 
 export interface ToolDef {
@@ -34,6 +38,8 @@ export interface BossToolDeps {
   /** Merge now (auto-merge) or ask the user; returns what the boss should be told. */
   requestMerge(task: Task): Promise<unknown>;
   report(text: string): void;
+  /** Roles were created or changed (the app reloads its role list). */
+  rolesChanged?(): void;
 }
 
 function tool<S extends z.ZodRawShape>(name: string, description: string, input: S, run: (args: z.infer<z.ZodObject<S>>) => Promise<unknown>): ToolDef {
@@ -92,6 +98,8 @@ export function bossTools(d: BossToolDeps): ToolDef[] {
           permissionMode: 'acceptEdits', allowedTools: a.tools ?? [...ALL_TOOLS], look: lookForId(id),
         };
         await d.roles.save(parseOrThrow(roleSchema, role, 'role') as Role);
+        d.rolesChanged?.();
+        d.report(`Created role **${role.name}** (model ${role.model}, tools: ${toolList(role.allowedTools)}). ${role.blurb}\n\nInstructions:\n${quote(role.systemPrompt)}`);
         return { role_id: id, name: role.name, model: role.model, tools: role.allowedTools };
       },
     ),
@@ -110,6 +118,16 @@ export function bossTools(d: BossToolDeps): ToolDef[] {
           model: a.model ?? role.model, allowedTools: a.tools ?? role.allowedTools,
         };
         await d.roles.save(parseOrThrow(roleSchema, next, 'role') as Role);
+        d.rolesChanged?.();
+        const changes = [
+          next.name !== role.name && `name: ${role.name} → ${next.name}`,
+          next.blurb !== role.blurb && 'description updated',
+          next.model !== role.model && `model: ${role.model} → ${next.model}`,
+          toolList(next.allowedTools) !== toolList(role.allowedTools) && `tools: ${toolList(next.allowedTools)}`,
+          next.systemPrompt !== role.systemPrompt && 'instructions updated',
+        ].filter(Boolean);
+        const prompt = next.systemPrompt !== role.systemPrompt ? `\n\nNew instructions:\n${quote(next.systemPrompt)}` : '';
+        d.report(`Changed role **${next.name}**: ${changes.join('; ') || 'no changes'}.${prompt}`);
         return { role_id: next.id, name: next.name, model: next.model, tools: next.allowedTools };
       },
     ),

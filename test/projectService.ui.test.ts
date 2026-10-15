@@ -135,3 +135,12 @@ describe('ProjectService terminal', () => {
     expect(svc.terminalSessions()).toBe(0);
   });
 });
+
+describe('roles changed from chat', () => {
+  it('tells the renderer so it reloads the role list', async () => {
+    await svc.open(repo);
+    await svc.tools().find((t) => t.name === 'create_role')!.run({ name: 'Data Engineer', description: 'Pipelines', system_prompt: 'Build pipelines.' });
+    expect(events).toContainEqual({ type: 'roles-changed' });
+    expect((await svc.listRoles()).map((r) => r.id)).toContain('data-engineer');
+  });
+});

@@ -56,7 +56,11 @@ export function App() {
     window.agentOffice.getStatus().then(setStatus, () => setStatus({ platform: 'unknown', claude: null }));
     window.agentOffice.snapshot().then((ws) => { if (ws) dispatch({ type: 'snapshot', ws }); }, () => undefined);
     refreshRoles();
-    return window.agentOffice.onEvent((event) => dispatch({ type: 'event', event }));
+    return window.agentOffice.onEvent((event) => {
+      // The boss created or changed a role: reload names and looks so new hires show properly.
+      if (event.type === 'roles-changed') refreshRoles();
+      else dispatch({ type: 'event', event });
+    });
   }, [refreshRoles]);
 
   // Opening a project can change the boss role (model picked during onboarding): reload roles.
