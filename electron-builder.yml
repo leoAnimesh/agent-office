@@ -6,6 +6,9 @@ directories:
 files:
   - out/**
   - package.json
+asarUnpack:
+  # The terminal's native PTY (and its prebuilt per-OS binaries) must live outside the asar to load and exec.
+  - "**/node_modules/@lydell/node-pty*/**"
 extraResources:
   - from: resources
     to: resources

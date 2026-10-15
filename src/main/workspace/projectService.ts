@@ -89,6 +89,7 @@ export class ProjectService extends EventEmitter {
       this.terminals.on('event', (e: TerminalEvent) => this.emit('terminal', e));
     } catch (e) {
       this.terminalError = e instanceof Error ? e.message : String(e);
+      console.warn(`Terminal unavailable: ${this.terminalError}`);
     }
   }
 
