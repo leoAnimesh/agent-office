@@ -17,6 +17,9 @@ import { SkillStore } from '../store/skillStore';
 import { parseOrThrow, projectPatchSchema, roleSchema, skillSchema } from '../store/validate';
 import { ApprovalBroker } from './approvalBroker';
 import { createRepo, type NewProjectInput } from './newProject';
+import { killTree } from '../claude/killTree';
+import { loadSpawnPty } from '../terminal/pty';
+import { TerminalService, type TerminalEvent } from '../terminal/terminalService';
 
 export interface ProjectServiceDeps {
   paths: DataPaths;
@@ -63,6 +66,9 @@ export class ProjectService extends EventEmitter {
   private readonly roles: RoleStore;
   private readonly skills: SkillStore;
   private ws: Workspace | null = null;
+  /** The open project's terminal; null when the native PTY could not load on this machine. */
+  private terminals: TerminalService | null = null;
+  private terminalError = '';
   private claudeBin: string;
   private isolate: boolean;
 
@@ -78,6 +84,40 @@ export class ProjectService extends EventEmitter {
   async init(): Promise<void> {
     await this.roles.seed(path.join(this.d.resourcesDir, 'roles'));
     await this.skills.seed(path.join(this.d.resourcesDir, 'skills'));
+    try {
+      this.terminals = new TerminalService({ spawn: await loadSpawnPty(), killTree: (pid) => killTree(pid) });
+      this.terminals.on('event', (e: TerminalEvent) => this.emit('terminal', e));
+    } catch (e) {
+      this.terminalError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  // ---------- terminal (always the open project's folder; the renderer never names a path) ----------
+
+  async terminalOpen(cols: number, rows: number): Promise<{ backlog: string }> {
+    const { ws, t } = this.mustTerminal();
+    return t.open(ws.project.id, ws.project.repoPath, cols, rows);
+  }
+
+  async terminalRestart(cols: number, rows: number): Promise<{ backlog: string }> {
+    const { ws, t } = this.mustTerminal();
+    return t.restart(ws.project.id, ws.project.repoPath, cols, rows);
+  }
+
+  terminalWrite(data: string): void {
+    if (this.ws) this.terminals?.write(this.ws.project.id, data);
+  }
+
+  terminalResize(cols: number, rows: number): void {
+    if (this.ws) this.terminals?.resize(this.ws.project.id, cols, rows);
+  }
+
+  terminalSessions(): number { return this.terminals?.size ?? 0; }
+
+  private mustTerminal(): { ws: Workspace; t: TerminalService } {
+    if (!this.ws) throw new Error('Open a project first');
+    if (!this.terminals) throw new Error(`Terminal unavailable: ${this.terminalError}`);
+    return { ws: this.ws, t: this.terminals };
   }
 
   listProjects(): Promise<Project[]> { return this.store.listProjects(); }
@@ -266,6 +306,7 @@ export class ProjectService extends EventEmitter {
     if (!ws) return;
     this.ws = null;
     ws.broker.rejectAll();
+    await this.terminals?.kill(ws.project.id);
     await ws.boss.stop();
     await ws.manager.shutdown();
     await ws.host.close();

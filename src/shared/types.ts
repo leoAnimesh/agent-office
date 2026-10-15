@@ -126,6 +126,11 @@ export type WorkspaceEvent =
   | { type: 'merge-resolved'; requestId: string }
   | { type: 'error'; message: string };
 
+/** Output from, or the exit of, the open project's terminal. */
+export type TerminalEvent =
+  | { type: 'data'; projectId: string; data: string }
+  | { type: 'exit'; projectId: string; exitCode: number };
+
 export interface AppSettings { claudePath: string | null; isolateUserSettings: boolean; autoModelMigrated?: boolean; allToolsMigrated?: boolean }
 export interface ProjectPatch { maxConcurrent?: number; autoMerge?: boolean}
 export interface OpenOptions { bossName?: string; bossModel?: string }

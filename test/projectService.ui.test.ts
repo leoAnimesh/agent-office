@@ -111,3 +111,27 @@ describe('ProjectService (UI features)', () => {
     expect(isInside(path.join('/a', 'b', '..', 'x'), path.join('/a', 'b'))).toBe(false);
   });
 });
+
+describe('ProjectService terminal', () => {
+  const waitOut = async (out: () => string, text: string) => {
+    const end = Date.now() + 15000;
+    while (!out().includes(text)) {
+      if (Date.now() > end) throw new Error(`no "${text}" in terminal output:\n${out()}`);
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  };
+
+  it('runs a shell in the open project folder and ends it when the project closes', async () => {
+    let out = '';
+    svc.on('terminal', (e: { type: string; data?: string }) => { if (e.type === 'data') out += e.data; });
+    await expect(svc.terminalOpen(80, 24)).rejects.toThrow(/Open a project first/);
+    await svc.open(repo);
+    await svc.terminalOpen(100, 30);
+    svc.terminalWrite('echo ao-svc-term\r');
+    await waitOut(() => out, 'ao-svc-term');
+    svc.terminalWrite('pwd\r');
+    await waitOut(() => out, path.basename(repo));
+    await svc.close();
+    expect(svc.terminalSessions()).toBe(0);
+  });
+});

@@ -13,6 +13,7 @@ import { SettingsStore } from './store/settingsStore';
 import { migrateRolesAllTools, migrateRolesToAuto } from './store/migrations';
 import { RoleStore } from './store/roleStore';
 import { ProjectService } from './workspace/projectService';
+import { termData, termSize } from './terminal/ipcArgs';
 
 let win: BrowserWindow | null = null;
 let service: ProjectService | null = null;
@@ -122,6 +123,10 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   handle(IPC.moveTask, (id: unknown, beforeId: unknown) => svc.moveTask(str(id, 'task id'), beforeId === null ? null : str(beforeId, 'task id')));
   handle(IPC.reassignTask, (id: unknown, agent: unknown) => svc.reassignTask(str(id, 'task id'), str(agent, 'agent')));
   handle(IPC.mergeNow, (id: unknown) => svc.mergeNow(str(id, 'task id')));
+  handle(IPC.terminalOpen, (cols: unknown, rows: unknown) => { const z = termSize(cols, rows); return svc.terminalOpen(z.cols, z.rows); });
+  handle(IPC.terminalRestart, (cols: unknown, rows: unknown) => { const z = termSize(cols, rows); return svc.terminalRestart(z.cols, z.rows); });
+  handle(IPC.terminalWrite, (data: unknown) => svc.terminalWrite(termData(data)));
+  handle(IPC.terminalResize, (cols: unknown, rows: unknown) => { const z = termSize(cols, rows); svc.terminalResize(z.cols, z.rows); });
   handle(IPC.answerMerge, (requestId: unknown, ok: unknown) => svc.answerMerge(str(requestId, 'request id'), ok === true));
   handle(IPC.getSettings, () => settings.get());
   handle(IPC.saveSettings, async (patch: unknown) => {
@@ -149,6 +154,7 @@ app.whenReady().then(async () => {
   await migrateRolesToAuto(new RoleStore(paths.rolesDir), settings).catch((e) => console.error('role migration failed', e));
   await migrateRolesAllTools(new RoleStore(paths.rolesDir), settings).catch((e) => console.error('tool migration failed', e));
   service.on('event', (e) => win?.webContents.send(IPC.event, e));
+  service.on('terminal', (e) => win?.webContents.send(IPC.terminalEvent, e));
   registerIpc(service, settings, status);
   createWindow();
   app.on('activate', () => {

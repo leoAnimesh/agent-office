@@ -1,4 +1,4 @@
-import type { Agent, AppSettings, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot } from './types';
+import type { Agent, AppSettings, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot, TerminalEvent } from './types';
 
 export const IPC = {
   appStatus: 'app:status',
@@ -31,6 +31,11 @@ export const IPC = {
   getSettings: 'settings:get',
   saveSettings: 'settings:save',
   event: 'workspace:event',
+  terminalOpen: 'terminal:open',
+  terminalWrite: 'terminal:write',
+  terminalResize: 'terminal:resize',
+  terminalRestart: 'terminal:restart',
+  terminalEvent: 'terminal:event',
 } as const;
 
 export interface AgentOfficeApi {
@@ -67,4 +72,10 @@ export interface AgentOfficeApi {
   getSettings(): Promise<AppSettings>;
   saveSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
   onEvent(cb: (e: WorkspaceEvent) => void): () => void;
+  /** The open project's terminal: start it (or get its recent output back), type into it, resize, restart. */
+  terminalOpen(cols: number, rows: number): Promise<{ backlog: string }>;
+  terminalWrite(data: string): Promise<void>;
+  terminalResize(cols: number, rows: number): Promise<void>;
+  terminalRestart(cols: number, rows: number): Promise<{ backlog: string }>;
+  onTerminal(cb: (e: TerminalEvent) => void): () => void;
 }

@@ -32,6 +32,15 @@ const api: AgentOfficeApi = {
   reassignTask: (id, agent) => ipcRenderer.invoke(IPC.reassignTask, id, agent),
   mergeNow: (id) => ipcRenderer.invoke(IPC.mergeNow, id),
   answerMerge: (requestId, ok) => ipcRenderer.invoke(IPC.answerMerge, requestId, ok),
+  terminalOpen: (cols, rows) => ipcRenderer.invoke(IPC.terminalOpen, cols, rows),
+  terminalWrite: (data) => ipcRenderer.invoke(IPC.terminalWrite, data),
+  terminalResize: (cols, rows) => ipcRenderer.invoke(IPC.terminalResize, cols, rows),
+  terminalRestart: (cols, rows) => ipcRenderer.invoke(IPC.terminalRestart, cols, rows),
+  onTerminal: (cb) => {
+    const listener = (_e: unknown, ev: Parameters<typeof cb>[0]) => cb(ev);
+    ipcRenderer.on(IPC.terminalEvent, listener);
+    return () => { ipcRenderer.removeListener(IPC.terminalEvent, listener); };
+  },
   onEvent: (cb) => {
     const listener = (_e: IpcRendererEvent, event: WorkspaceEvent) => cb(event);
     ipcRenderer.on(IPC.event, listener);
