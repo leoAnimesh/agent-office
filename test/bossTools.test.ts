@@ -1,3 +1,5 @@
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bossTools, type ToolDef } from '../src/main/agents/bossTools';
 import { finished, harness, type Harness } from './helpers/manager';
@@ -110,5 +112,26 @@ describe('role changes are visible', () => {
     expect(rolesChanged).toHaveBeenCalledTimes(2);
     expect(report).toHaveBeenLastCalledWith(expect.stringMatching(/Changed role \*\*Frontend Engineer\*\*[\s\S]*model: sonnet → opus|model: auto → opus/));
     expect(report.mock.lastCall![0]).toContain('Ship it.');
+  });
+});
+
+describe('project skills in employee prompts', () => {
+  it('gives employees the project skills, not the role skills, and picks up changes on the next task', async () => {
+    const { manager, project } = await h.make();
+    await manager.hire('frontend');
+    const promptOf = async () => fs.readFile(path.join(h.paths.promptDir, `${manager.findAgent('Pixel')!.id}.md`), 'utf8');
+
+    let done = finished(manager, 'T-101');
+    await manager.createTask({ assignee: 'Pixel', title: 'a', brief: 'a', createdBy: 'user' });
+    await done;
+    expect(await promptOf()).not.toContain('## Skills'); // unchosen: none, even though the role lists four
+
+    project.skills = [{ id: 'docker', reason: 'x', addedBy: 'boss' }, { id: 'missing-skill', reason: 'x', addedBy: 'user' }];
+    done = finished(manager, 'T-102');
+    await manager.createTask({ assignee: 'Pixel', title: 'b', brief: 'b', createdBy: 'user' });
+    await done;
+    const text = await promptOf();
+    expect(text).toContain('### Docker');
+    expect(text).not.toContain('### React patterns');
   });
 });

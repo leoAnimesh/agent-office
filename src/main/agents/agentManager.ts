@@ -12,6 +12,7 @@ import type { RoleStore } from '../store/roleStore';
 import type { SkillStore } from '../store/skillStore';
 import { launchModel, type TaskClassifier } from './classifier';
 import { renderPrompt, taskMessage } from './prompt';
+import { projectSkillIds } from './projectSkills';
 import { assertTransition, byQueueOrder, runnableTasks } from './taskRules';
 
 export interface AgentManagerDeps {
@@ -465,7 +466,8 @@ export class AgentManager extends EventEmitter {
 
   private async writePrompt(agent: Agent, role: Role, branch: string): Promise<string> {
     const boss = this.agentList.find((a) => a.kind === 'boss');
-    const skills = await this.d.skills.getMany(role.skills);
+    // Employees get the project's skills (picked by the boss and the user), whatever their role.
+    const skills = await this.d.skills.getMany(projectSkillIds(this.d.project));
     const promptFile = path.join(this.d.promptDir, `${agent.id}.md`);
     await fs.mkdir(this.d.promptDir, { recursive: true });
     await fs.writeFile(promptFile, renderPrompt(role, skills, {

@@ -46,3 +46,26 @@ describe('taskMessage', () => {
     expect(msg).toContain('Make a toggle.');
   });
 });
+
+describe('renderPrompt (boss project skills)', () => {
+  const boss = { ...role, name: 'Boss', systemPrompt: 'Lead.' };
+  const ctx = { agentName: 'Max', bossName: 'Max', branch: 'main', projectName: 'demo', kind: 'boss' as const };
+
+  it('asks the boss to pick skills while none are chosen', () => {
+    const out = renderPrompt(boss, [], { ...ctx, projectSkills: { chosen: false, names: [] } });
+    expect(out).toContain('## Project skills');
+    expect(out).toContain('No skills are chosen for this project yet.');
+    expect(out).toContain('`list_skills`');
+    expect(out).toContain('Pick project skills with `set_project_skills` before the first task');
+  });
+
+  it('lists the chosen skills', () => {
+    const out = renderPrompt(boss, [], { ...ctx, projectSkills: { chosen: true, names: ['Docker', 'Vue'] } });
+    expect(out).toContain('Employees on this project get these skills: Docker, Vue.');
+    expect(out).not.toContain('No skills are chosen');
+  });
+
+  it('says so when the chosen set is empty', () => {
+    expect(renderPrompt(boss, [], { ...ctx, projectSkills: { chosen: true, names: [] } })).toContain('Employees on this project get no skills.');
+  });
+});

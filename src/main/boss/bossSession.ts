@@ -126,10 +126,12 @@ export class BossSession extends EventEmitter {
     const role = await this.d.roles.get(boss.roleId);
     if (!role) throw new Error(`Role ${boss.roleId} is missing`);
     const skills = await this.d.skills.getMany(role.skills);
+    const chosen = await this.d.skills.getMany((this.d.project.skills ?? []).map((s) => s.id));
     const promptFile = path.join(this.d.promptDir, `${boss.id}.md`);
     await fs.mkdir(this.d.promptDir, { recursive: true });
     await fs.writeFile(promptFile, renderPrompt(role, skills, {
       agentName: boss.name, bossName: boss.name, branch: this.d.project.baseBranch, projectName: this.d.project.name, kind: 'boss',
+      projectSkills: { chosen: this.d.project.skills !== undefined, names: chosen.map((s) => s.name) },
     }));
     const runner = this.d.createRunner({
       bin: this.d.claudeBin,
