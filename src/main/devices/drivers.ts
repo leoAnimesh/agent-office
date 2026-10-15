@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ANDROID_KEYS, adbText, androidOutline, androidUrl, iosOutline, parseAdbDevices, parseAvds, parseSimulators, pngSize, type DeviceKey, type Outline } from './parse';
+import { ANDROID_KEYS, adbText, shQuote, androidOutline, androidUrl, iosOutline, parseAdbDevices, parseAvds, parseSimulators, pngSize, type DeviceKey, type Outline } from './parse';
 import { runTool, startTool, type DeviceTools, type ToolCmd } from './tools';
 
 export type DeviceKind = 'android' | 'ios';
@@ -121,7 +121,7 @@ export class AndroidDriver implements DeviceDriver {
   async press(key: DeviceKey) { await this.shell('input', 'keyevent', ANDROID_KEYS[key]); }
   async install(file: string) { await ok(runTool(this.adb, [...this.s(), 'install', '-r', file], { timeoutMs: 180_000 }), 'Install'); }
   async launch(appId: string) { await this.shell('monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'); }
-  async openUrl(url: string) { await this.shell('am', 'start', '-a', 'android.intent.action.VIEW', '-d', androidUrl(url)); }
+  async openUrl(url: string) { await this.shell('am', 'start', '-a', 'android.intent.action.VIEW', '-d', shQuote(androidUrl(url))); }
   async screenshot(): Promise<Buffer> {
     const r = await ok(runTool(this.adb, [...this.s(), 'exec-out', 'screencap', '-p'], SHOT), 'Screenshot');
     this.size = pngSize(r.stdout) ?? this.size;

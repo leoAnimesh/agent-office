@@ -72,6 +72,11 @@ export function adbText(text: string): string {
   return text.replace(/[\\()<>|;&*~"'`$?[\]{}!#]/g, (c) => `\\${c}`).replace(/ /g, '%s');
 }
 
+/** One argument for the device's shell (adb shell joins its arguments into one command line): single-quoted. */
+export function shQuote(s: string): string {
+  return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
 export const ANDROID_KEYS: Record<DeviceKey, string> = { back: 'KEYCODE_BACK', home: 'KEYCODE_HOME', enter: 'KEYCODE_ENTER', delete: 'KEYCODE_DEL', tab: 'KEYCODE_TAB' };
 
 /** The emulator reaches the host computer at 10.0.2.2, not localhost. */

@@ -51,14 +51,14 @@ describe('AndroidDriver', () => {
     await d.type('a&b c');
     await d.swipe('up');
     await d.press('back');
-    await d.openUrl('http://localhost:5173/');
+    await d.openUrl('http://localhost:5173/?a=1&b=2;x');
     const shell = (await after(from)).filter((c) => c.includes('shell')).map((c) => c.slice(c.indexOf('shell') + 1).join(' '));
     expect(shell).toEqual([
       'input tap 2 4',
       'input text a\\&b%sc',
       expect.stringMatching(/^input swipe \d+ \d+ \d+ \d+ 250$/),
       'input keyevent KEYCODE_BACK',
-      'am start -a android.intent.action.VIEW -d http://10.0.2.2:5173/',
+      "am start -a android.intent.action.VIEW -d 'http://10.0.2.2:5173/?a=1&b=2;x'",
     ]);
     expect((await d.screenshot()).subarray(1, 4).toString()).toBe('PNG');
     expect(await d.screenSize()).toEqual({ w: 4, h: 8 });
