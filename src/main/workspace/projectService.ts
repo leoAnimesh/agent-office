@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, DeviceSupport, PreviewInput, PreviewTab, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
+import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, DeviceSupport, OpenProjectStatus, PreviewInput, PreviewTab, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
 import { AgentManager, type ManagerEvent, type MergeOutcome, type MessageResult } from '../agents/agentManager';
 import { applyUserEdit } from '../agents/projectSkills';
 import { bossTools, type ToolDef } from '../agents/bossTools';
@@ -87,7 +87,11 @@ export class ProjectService extends EventEmitter {
   private readonly roles: RoleStore;
   private readonly skills: SkillStore;
   private supportCache: { at: number; value: Promise<DeviceSupport> } | null = null;
+  /** The project in view. */
   private ws: Workspace | null = null;
+  /** Every opened project, by id: they keep running when you switch (only close/quit stops them). */
+  private running = new Map<string, Workspace>();
+  private activityTimer: ReturnType<typeof setTimeout> | null = null;
   /** The open project's terminal; null when the native PTY could not load on this machine. */
   private terminals: TerminalService | null = null;
   private terminalError = '';
@@ -172,8 +176,14 @@ export class ProjectService extends EventEmitter {
 
   async open(repoPath: string, opts: OpenOptions = {}): Promise<WorkspaceSnapshot> {
     const info = await inspectRepo(repoPath);
-    await this.close();
     const id = projectIdFor(info.root);
+    // Already running (in the background or in view): just show it, nothing restarts.
+    const already = this.running.get(id);
+    if (already) {
+      this.ws = already;
+      this.activityChanged();
+      return this.snapshot();
+    }
     const existing = await this.store.getProject(id);
     const project: Project = existing ?? {
       id, name: path.basename(info.root), repoPath: info.root, baseBranch: info.branch, maxConcurrent: 4, autoMerge: false,
@@ -268,7 +278,9 @@ export class ProjectService extends EventEmitter {
     boss.on('stream', (text: string | null) => this.emitWs(ws, { type: 'boss-stream', text }));
     boss.on('busy', (busy: boolean) => this.emitWs(ws, { type: 'boss-busy', busy }));
     boss.start();
+    this.running.set(id, ws);
     this.ws = ws;
+    this.activityChanged();
 
     // Re-show merge approvals that were pending when the app last stopped.
     for (const r of await this.store.getPendingMerges(id)) {
@@ -423,10 +435,46 @@ export class ProjectService extends EventEmitter {
     if (!this.mustWs().broker.answer(requestId, ok)) throw new Error('That merge request is no longer pending');
   }
 
+  /** Close the project in view (other projects keep running). */
   async close(): Promise<void> {
     const ws = this.ws;
     if (!ws) return;
     this.ws = null;
+    await this.closeWorkspace(ws);
+  }
+
+  /** App quit: close every running project. */
+  async closeAll(): Promise<void> {
+    this.ws = null;
+    await Promise.all([...this.running.values()].map((ws) => this.closeWorkspace(ws)));
+    if (this.activityTimer) clearTimeout(this.activityTimer);
+    this.activityTimer = null;
+  }
+
+  /** Every running project's activity, for the sidebar. */
+  openProjects(): OpenProjectStatus[] {
+    return [...this.running.values()].map((ws) => {
+      const tasks = ws.manager.tasks();
+      return {
+        id: ws.project.id,
+        working: tasks.filter((t) => t.status === 'working').length,
+        needsYou: ws.broker.pending().length + tasks.filter((t) => t.status === 'needs_help').length,
+      };
+    });
+  }
+
+  /** At most once a second, whichever project changed (background ones too). */
+  private activityChanged(): void {
+    if (this.activityTimer) return;
+    this.activityTimer = setTimeout(() => {
+      this.activityTimer = null;
+      this.emit('event', { type: 'open-projects', projects: this.openProjects() } satisfies WorkspaceEvent);
+    }, 1000);
+  }
+
+  private async closeWorkspace(ws: Workspace): Promise<void> {
+    this.running.delete(ws.project.id);
+    this.activityChanged();
     ws.broker.rejectAll();
     await this.terminals?.kill(ws.project.id);
     await ws.boss.stop();
@@ -450,13 +498,15 @@ export class ProjectService extends EventEmitter {
     this.onDecision(ws, task.id, requestId, decision);
     await this.savePending(ws);
     this.emitWs(ws, { type: 'merge-request', request: ws.broker.pending().find((r) => r.requestId === requestId)! });
+    this.activityChanged();
     return awaiting;
   }
 
   private onDecision(ws: Workspace, taskId: string, requestId: string, decision: Promise<boolean>): void {
     const done = decision.then(async (ok): Promise<MergeOutcome | null> => {
-      // A closed workspace keeps its saved requests so they come back on the next open.
-      if (this.ws !== ws) return null;
+      // A closed workspace keeps its saved requests so they come back on the next open; a background one acts on the answer.
+      if (!this.running.has(ws.project.id)) return null;
+      this.activityChanged();
       await this.savePending(ws);
       this.emitWs(ws, { type: 'merge-resolved', requestId });
       if (!ok) { await ws.boss.notify(`The user declined to merge ${taskId}.`, taskId); return null; }
@@ -473,6 +523,7 @@ export class ProjectService extends EventEmitter {
   }
 
   private forward(ws: Workspace, e: ManagerEvent): void {
+    if (e.type === 'tasks-changed' || e.type === 'task-finished' || e.type === 'agents-changed') this.activityChanged();
     switch (e.type) {
       case 'agents-changed': return this.emitWs(ws, { type: 'agents', agents: ws.manager.agents() });
       case 'tasks-changed':

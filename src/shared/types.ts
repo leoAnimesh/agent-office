@@ -141,6 +141,7 @@ export interface WorkspaceSnapshot {
 export type WorkspaceEvent =
   | { type: 'roles-changed' }
   | { type: 'preview-changed' }
+  | { type: 'open-projects'; projects: OpenProjectStatus[] }
   | { type: 'agents'; agents: Agent[] }
   | { type: 'tasks'; tasks: Task[] }
   | { type: 'chat'; entry: ChatEntry }
@@ -180,3 +181,6 @@ export type PreviewInput =
 
 /** Shown when no browser can start for the team (the app cannot download one in packaged builds). */
 export const NO_BROWSER = 'No browser found. Install Google Chrome or Microsoft Edge, then try again.';
+
+/** A running project's activity, for the sidebar (projects keep running in the background). */
+export interface OpenProjectStatus { id: string; working: number; needsYou: number }

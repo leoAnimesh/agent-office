@@ -57,7 +57,8 @@ async function handle(line) {
     process.stderr.write('boom: simulated crash\n');
     process.exit(3);
   }
-  if (env.FAKE_CLAUDE_HANG === '1') return;
+  // 'employee': only employee sessions hang (the boss and the task classifier still answer).
+  if (env.FAKE_CLAUDE_HANG === '1' || (env.FAKE_CLAUDE_HANG === 'employee' && argv.includes('--permission-mode') && !isBoss)) return;
   const fail = env.FAKE_CLAUDE_FAIL === '1';
   const mcpText = env.FAKE_CLAUDE_MCP_CALLS && !isBoss && flag('--mcp-config') ? await mcpCalls().catch((e) => `mcp failed: ${e.message}`) : '';
   if (!fail && argv.includes('--include-partial-messages')) {

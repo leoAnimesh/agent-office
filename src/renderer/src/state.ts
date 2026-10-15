@@ -65,6 +65,7 @@ function applyEvent(s: UiState, e: WorkspaceEvent): UiState {
     case 'merge-request': return { ...s, ws: { ...s.ws, merges: [...s.ws.merges.filter((m) => m.requestId !== e.request.requestId), e.request] } };
     case 'merge-resolved': return { ...s, ws: { ...s.ws, merges: s.ws.merges.filter((m) => m.requestId !== e.requestId) } };
     case 'roles-changed': return s; // handled by App, which reloads the role list
-    case 'preview-changed': return s; // handled by the Preview tab, which lists tabs again
+    case 'preview-changed': return s;
+    case 'open-projects': return s; // handled by the sidebar // handled by the Preview tab, which lists tabs again
   }
 }
