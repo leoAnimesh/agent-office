@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bossTools, type ToolDef } from '../src/main/agents/bossTools';
 import { finished, harness, type Harness } from './helpers/manager';
+import { ALL_TOOLS } from '../src/shared/tools';
+import type { Project } from '../src/shared/types';
 
 let h: Harness;
 beforeEach(async () => { h = await harness(); });
@@ -8,7 +10,7 @@ afterEach(async () => { await h.cleanup(); });
 
 const call = (tools: ToolDef[], name: string, args: unknown = {}) => tools.find((t) => t.name === name)!.run(args);
 
-async function setup(over: { bossCanHire?: boolean } = {}) {
+async function setup(over: Partial<Project> = {}) {
   const env = await h.make();
   const project = { ...env.project, ...over };
   const requestMerge = vi.fn(async () => ({ status: 'awaiting_user_approval' }));
@@ -20,7 +22,7 @@ async function setup(over: { bossCanHire?: boolean } = {}) {
 describe('bossTools', () => {
   it('exposes the documented tool set', async () => {
     const { tools } = await setup();
-    expect(tools.map((t) => t.name).sort()).toEqual(['assign_task', 'cancel_task', 'get_task', 'hire', 'list_roles', 'list_tasks', 'list_team', 'message_agent', 'report_to_user', 'request_merge', 'sync_branch']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['assign_task', 'cancel_task', 'create_role', 'get_task', 'hire', 'list_roles', 'list_tasks', 'list_team', 'message_agent', 'report_to_user', 'request_merge', 'sync_branch', 'update_role']);
     for (const t of tools) expect(t.description.length).toBeGreaterThan(10);
   });
 
@@ -44,9 +46,26 @@ describe('bossTools', () => {
     expect(await call(tools, 'list_tasks', { status: 'review' })).toHaveLength(1);
   });
 
-  it('refuses to hire when hiring is turned off', async () => {
-    const { tools } = await setup({ bossCanHire: false });
-    await expect(call(tools, 'hire', { role_id: 'frontend' })).rejects.toThrow(/Hiring is turned off/);
+  it('creates a role from chat with every tool and auto model by default, then hires from it', async () => {
+    const { tools, roles } = await setup();
+    const made = await call(tools, 'create_role', { name: 'Data Engineer', description: 'Pipelines, SQL', system_prompt: 'You build data pipelines.' });
+    expect(made).toMatchObject({ role_id: 'data-engineer', name: 'Data Engineer', model: 'auto' });
+    const role = (await roles.get('data-engineer'))!;
+    expect(role).toMatchObject({ blurb: 'Pipelines, SQL', systemPrompt: 'You build data pipelines.', model: 'auto', permissionMode: 'acceptEdits' });
+    expect(role.allowedTools).toEqual(ALL_TOOLS);
+    expect(role.look.shirt).toMatch(/^#[0-9A-F]{6}$/);
+    expect(await call(tools, 'hire', { role_id: 'data-engineer' })).toEqual({ name: 'Pixel', role: 'Data Engineer' });
+    await expect(call(tools, 'create_role', { name: 'Data Engineer', description: 'x', system_prompt: 'x' })).rejects.toThrow(/already exists/);
+  });
+
+  it('changes a role from chat, and never the boss role', async () => {
+    const { tools, roles } = await setup();
+    expect(await call(tools, 'update_role', { role_id: 'frontend', model: 'opus', tools: ['Read', 'Edit'], system_prompt: 'Be careful.' })).toMatchObject({ role_id: 'frontend', model: 'opus' });
+    expect(await roles.get('frontend')).toMatchObject({ model: 'opus', allowedTools: ['Read', 'Edit'], systemPrompt: 'Be careful.', name: 'Frontend Engineer' });
+    await expect(call(tools, 'update_role', { role_id: 'boss', model: 'haiku' })).rejects.toThrow(/boss/);
+    await expect(call(tools, 'update_role', { role_id: 'nope', model: 'haiku' })).rejects.toThrow(/Unknown role/);
+    await expect(call(tools, 'update_role', { role_id: 'frontend', tools: ['Teleport'] })).rejects.toThrow();
+    await expect(call(tools, 'update_role', { role_id: 'frontend', model: 'gpt-5' })).rejects.toThrow();
   });
 
   it('validates input from the model', async () => {

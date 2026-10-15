@@ -25,7 +25,6 @@ export function Onboarding({ status, onOpened, onCancel, initialMode = 'open' }:
   const [brief, setBrief] = useState('');
   const [bossName, setBossName] = useState('Max');
   const [bossModel, setBossModel] = useState('opus');
-  const [canHire, setCanHire] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +33,7 @@ export function Onboarding({ status, onOpened, onCancel, initialMode = 'open' }:
     window.agentOffice.defaultProjectsDir().then((d) => setLocation((cur) => cur || d), () => undefined);
   }, []);
 
-  const boss = () => ({ bossName: bossName.trim() || 'Max', bossModel, bossCanHire: canHire });
+  const boss = () => ({ bossName: bossName.trim() || 'Max', bossModel });
   const run = async (fn: () => Promise<WorkspaceSnapshot>) => {
     setBusy(true);
     setError(null);
@@ -128,7 +127,6 @@ export function Onboarding({ status, onOpened, onCancel, initialMode = 'open' }:
                 <div className="field"><label htmlFor="ob-name">Name</label><input id="ob-name" className="input" value={bossName} maxLength={40} onChange={(e) => setBossName(e.target.value)} /></div>
                 <div className="field"><label htmlFor="ob-model">Model</label><select id="ob-model" className="input" value={bossModel} onChange={(e) => setBossModel(e.target.value)}>{MODELS.map((m) => <option key={m}>{m}</option>)}</select></div>
               </div>
-              <label className="row small"><input type="checkbox" checked={canHire} onChange={(e) => setCanHire(e.target.checked)} style={{ width: 18, height: 18, accentColor: 'var(--teal)' }} /> Let the boss hire employees on its own</label>
             </div>
           </div>
 

@@ -1,7 +1,24 @@
 import { z } from 'zod';
-import type { Project, Task } from '../../shared/types';
+import { ALL_TOOLS } from '../../shared/tools';
+import type { Project, Role, Task } from '../../shared/types';
+import { slugify } from '../git/worktrees';
+import { parseOrThrow, roleSchema } from '../store/validate';
 import type { RoleStore } from '../store/roleStore';
 import type { AgentManager } from './agentManager';
+
+const MODEL = z.enum(['auto', 'opus', 'sonnet', 'haiku']);
+const TOOL = z.enum(ALL_TOOLS as [string, ...string[]]);
+
+/** Sprite colours for roles made from chat, picked from the role id so a role always looks the same. */
+const LOOKS: Role['look'][] = [
+  { hair: '#1F1B2E', shirt: '#5B6CD6', skin: '#B9825C' },
+  { hair: '#E2583E', shirt: '#2F9E8F', skin: '#F1C9A5' },
+  { hair: '#D9B44A', shirt: '#8E5BD0', skin: '#F3D9BF' },
+  { hair: '#6B4224', shirt: '#E2584A', skin: '#C98E66' },
+  { hair: '#8A90B0', shirt: '#C9935C', skin: '#E8C4A0' },
+  { hair: '#2A2D42', shirt: '#4BA3E3', skin: '#9A6B4F' },
+];
+const lookForId = (id: string) => LOOKS[[...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % LOOKS.length];
 
 export interface ToolDef {
   name: string;
@@ -59,12 +76,45 @@ export function bossTools(d: BossToolDeps): ToolDef[] {
         }));
     }),
 
-    tool('list_roles', 'List the role templates you can hire from.', {}, async () =>
-      (await d.roles.list()).filter((r) => r.id !== 'boss').map((r) => ({ id: r.id, name: r.name, blurb: r.blurb })),
+    tool('list_roles', 'List the role templates you can hire from, with their model and tools.', {}, async () =>
+      (await d.roles.list()).filter((r) => r.id !== 'boss').map((r) => ({ id: r.id, name: r.name, blurb: r.blurb, model: r.model, tools: r.allowedTools })),
+    ),
+
+    tool(
+      'create_role',
+      'Create a new role template when the user asks for one, then hire from it. Defaults: model "auto" (picked per task) and every tool.',
+      { name: z.string().trim().min(1).max(60), description: z.string().max(120), system_prompt: z.string().min(1).max(20_000), model: MODEL.optional(), tools: z.array(TOOL).min(1).optional() },
+      async (a) => {
+        const id = slugify(a.name, 'role');
+        if (id === 'boss' || (await d.roles.get(id))) throw new Error(`A role "${id}" already exists. Use update_role to change it.`);
+        const role: Role = {
+          id, name: a.name, blurb: a.description, systemPrompt: a.system_prompt, skills: [], model: a.model ?? 'auto',
+          permissionMode: 'acceptEdits', allowedTools: a.tools ?? [...ALL_TOOLS], look: lookForId(id),
+        };
+        await d.roles.save(parseOrThrow(roleSchema, role, 'role') as Role);
+        return { role_id: id, name: role.name, model: role.model, tools: role.allowedTools };
+      },
+    ),
+
+    tool(
+      'update_role',
+      'Change a role template when the user asks (name, description, prompt, model, tools). Employees pick it up from their next task. The boss role cannot be changed.',
+      { role_id: z.string(), name: z.string().trim().min(1).max(60).optional(), description: z.string().max(120).optional(), system_prompt: z.string().min(1).max(20_000).optional(), model: MODEL.optional(), tools: z.array(TOOL).min(1).optional() },
+      async (a) => {
+        if (a.role_id === 'boss') throw new Error('The boss role cannot be changed from chat.');
+        const role = await d.roles.get(a.role_id);
+        if (!role) throw new Error(`Unknown role: ${a.role_id}`);
+        const next: Role = {
+          ...role,
+          name: a.name ?? role.name, blurb: a.description ?? role.blurb, systemPrompt: a.system_prompt ?? role.systemPrompt,
+          model: a.model ?? role.model, allowedTools: a.tools ?? role.allowedTools,
+        };
+        await d.roles.save(parseOrThrow(roleSchema, next, 'role') as Role);
+        return { role_id: next.id, name: next.name, model: next.model, tools: next.allowedTools };
+      },
     ),
 
     tool('hire', 'Hire a new employee from a role template. Optionally give them a name.', { role_id: z.string(), name: z.string().optional() }, async ({ role_id, name }) => {
-      if (!d.project.bossCanHire) throw new Error('Hiring is turned off for this project. Ask the user to hire someone.');
       const a = await manager.hire(role_id, name);
       const role = await d.roles.get(a.roleId);
       return { name: a.name, role: role?.name ?? a.roleId };

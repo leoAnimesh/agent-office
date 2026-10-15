@@ -4,7 +4,7 @@ import type { Agent, WorkspaceSnapshot } from '../../shared/types';
 
 const agent = (id: string, name: string): Agent => ({ id, projectId: 'p', name, roleId: 'frontend', kind: 'employee', status: 'idle', bubble: 'Idle' });
 const ws: WorkspaceSnapshot = {
-  project: { id: 'p', name: 'demo', repoPath: '/r', baseBranch: 'main', maxConcurrent: 4, bossCanHire: true, autoMerge: false },
+  project: { id: 'p', name: 'demo', repoPath: '/r', baseBranch: 'main', maxConcurrent: 4, autoMerge: false },
   agents: [agent('a', 'Pixel')], tasks: [], chat: [], merges: [],
 };
 const opened: UiState = reducer(initialState, { type: 'snapshot', ws });

@@ -25,7 +25,7 @@ export function renderPrompt(role: Role, skills: Skill[], ctx: PromptContext): s
       [
         '## How you work',
         '- You cannot edit files. Delegate all implementation to employees with `assign_task`.',
-        '- Start by calling `list_team` and `list_roles`. If nobody fits, `hire` someone (if hiring is allowed).',
+        '- Start by calling `list_team` and `list_roles`. If nobody fits, `hire` someone; if no role fits, `create_role` first. The user manages the team and roles through you, so use `create_role`/`update_role` when they ask for a new kind of employee or a change to one.',
         '- Keep tasks small and independent. Use `depends_on` when a task needs another task merged first.',
         '- Messages that start with [AgentOffice] come from the app, not the user. When a task finishes, read it with `get_task`, then `request_merge` if it is good or `message_agent` with precise feedback if not.',
         '- You have no shell. To pull or switch the project folder\'s branch, use `sync_branch` (fast-forward only); anything else in git goes to an employee or the user.',

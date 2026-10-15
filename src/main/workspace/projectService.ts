@@ -106,7 +106,7 @@ export class ProjectService extends EventEmitter {
     const id = projectIdFor(info.root);
     const existing = await this.store.getProject(id);
     const project: Project = existing ?? {
-      id, name: path.basename(info.root), repoPath: info.root, baseBranch: info.branch, maxConcurrent: 4, bossCanHire: opts.bossCanHire ?? true, autoMerge: false,
+      id, name: path.basename(info.root), repoPath: info.root, baseBranch: info.branch, maxConcurrent: 4, autoMerge: false,
     };
     project.repoPath = info.root;
     await this.store.saveProject(project);

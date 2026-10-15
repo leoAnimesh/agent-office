@@ -26,7 +26,7 @@ async function makeManager(maxConcurrent = 4, store?: ProjectStore): Promise<Age
   const skills = new SkillStore(paths.skillsDir);
   await roles.seed(path.resolve('resources/roles'));
   await skills.seed(path.resolve('resources/skills'));
-  project = { id: 'p1', name: 'demo', repoPath: repo, baseBranch: 'main', maxConcurrent, bossCanHire: true, autoMerge: false };
+  project = { id: 'p1', name: 'demo', repoPath: repo, baseBranch: 'main', maxConcurrent, autoMerge: false };
   const m = new AgentManager({
     project, store: store ?? new ProjectStore(paths), roles, skills, worktrees: new WorktreeManager(repo),
     createRunner: (o) => new ClaudeRunner({ ...o, bin: process.execPath, binArgs: [FAKE_CLAUDE], env: { ...process.env, ...fakeEnv } }),

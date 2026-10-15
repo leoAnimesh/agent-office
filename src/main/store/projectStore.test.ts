@@ -14,7 +14,7 @@ beforeEach(async () => {
 });
 afterEach(async () => { await fs.rm(root, { recursive: true, force: true }); });
 
-const project: Project = { id: 'p1', name: 'demo', repoPath: '/tmp/demo', baseBranch: 'main', maxConcurrent: 4, bossCanHire: true, autoMerge: false };
+const project: Project = { id: 'p1', name: 'demo', repoPath: '/tmp/demo', baseBranch: 'main', maxConcurrent: 4, autoMerge: false };
 
 describe('ProjectStore', () => {
   it('lists nothing before any project exists', async () => {

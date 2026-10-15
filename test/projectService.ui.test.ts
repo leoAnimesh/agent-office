@@ -39,9 +39,8 @@ const until = (pred: (e: WorkspaceEvent) => boolean, ms = 20000) => new Promise<
 
 describe('ProjectService (UI features)', () => {
   it('applies open options to a new project and its boss', async () => {
-    const snap = await svc.open(repo, { bossName: 'Ada', bossModel: 'sonnet', bossCanHire: false });
+    const snap = await svc.open(repo, { bossName: 'Ada', bossModel: 'sonnet' });
     expect(snap.agents.find((a) => a.kind === 'boss')!.name).toBe('Ada');
-    expect(snap.project.bossCanHire).toBe(false);
     expect((await svc.listRoles()).find((r) => r.id === 'boss')!.model).toBe('sonnet');
   });
 

@@ -44,7 +44,7 @@ src/main/        Electron main (Node). Plain TS modules with injected deps, unit
 src/preload/     contextBridge → window.agentOffice (AgentOfficeApi)
 src/renderer/    React app: state.ts (reducer + view routing), components/, sprites/, office/, agent/,
                  tasks/, team/, chat/ (pure helpers next to their views), styles/ (tokens, app, office)
-resources/       built-in roles/*.json and skills/*.md, copied into app data on first launch (user-editable after)
+resources/       built-in roles/*.json and skills/*.md, copied into app data on first launch (roles are then changed through the boss: `create_role` / `update_role`)
 test/            integration tests, fake-claude/, fixtures/, helpers/ (repo, runner, manager harness), real/
 e2e/             Playwright smoke test of the built app
 docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
@@ -153,7 +153,6 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 
 - Accessibility polish: the streaming log uses `aria-live`, log timestamps are about 3.9:1 contrast, focus doesn't move to the fire confirmation, and the colour inputs are labelled only "hair", "shirt" and "skin".
 - The IPC sender guard accepts any `file://` frame and prefix-matches the dev URL.
-- `saveRole` can overwrite a built-in role id if the renderer's role list hasn't loaded yet.
 - Validation messages show internal key names.
 - There's no back-off when a crashing boss is restarted.
 - Only the Claude Code CLI is supported. Codex would plug in behind the `AgentRunner` interface (`src/main/claude/runner.ts`).

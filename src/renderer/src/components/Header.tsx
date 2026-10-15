@@ -25,7 +25,6 @@ export function Header({ project, claude, view, openTasks, onNavigate }: { proje
           </div>
           <div className="mono small muted">{project.repoPath}</div>
         </div>
-        <button type="button" className="btn primary" onClick={() => onNavigate({ name: 'team' })}>+ Hire agent</button>
       </header>
       <nav className="tabs" aria-label="Project views">
         {TABS.map((t) => (

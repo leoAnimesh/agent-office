@@ -41,7 +41,7 @@ export async function harness(): Promise<Harness> {
       const store = new ProjectStore(paths);
       await roles.seed(path.resolve('resources/roles'));
       await skills.seed(path.resolve('resources/skills'));
-      const project: Project = { id: 'p1', name: 'demo', repoPath: repo, baseBranch: 'main', maxConcurrent: opts.maxConcurrent ?? 4, bossCanHire: true, autoMerge: opts.autoMerge ?? false };
+      const project: Project = { id: 'p1', name: 'demo', repoPath: repo, baseBranch: 'main', maxConcurrent: opts.maxConcurrent ?? 4, autoMerge: opts.autoMerge ?? false };
       const manager = new AgentManager({
         project, store, roles, skills, worktrees: new WorktreeManager(repo),
         createRunner: (o) => new ClaudeRunner({ ...o, bin: process.execPath, binArgs: [FAKE_CLAUDE], env: { ...process.env, ...fakeEnv } }),

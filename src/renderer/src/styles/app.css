@@ -62,11 +62,8 @@
 .log-line { display: grid; grid-template-columns: 72px 64px minmax(0, 1fr); gap: 12px; overflow-wrap: anywhere; }
 .log-time { color: var(--faint); }
 .tone-tool { color: var(--teal); } .tone-result { color: var(--green); } .tone-text { color: var(--text); } .tone-bad { color: var(--red-soft); } .tone-meta { color: var(--muted); }
-.team-layout { display: flex; flex-wrap: wrap; gap: 24px; }
 .team-col { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
-.role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.role-card { text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--panel-2); border: 2px solid var(--line); border-radius: 8px; min-height: 60px; color: var(--text); }
-.role-card[aria-pressed='true'] { border-color: var(--amber); background: #262939; }
+.team-only { max-width: 760px; }
 .team-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; min-width: 0; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
 .editor { flex: 999 1 460px; min-width: 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
