@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { McpHost } from '../src/main/mcp/mcpHost';
+import { BossSession } from '../src/main/boss/bossSession';
 import { projectIdFor } from '../src/main/workspace/projectService';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
@@ -151,5 +152,31 @@ describe('history', () => {
     expect(await svc.historyCommit(first.sha)).toMatchObject({ subject: 'init', files: [{ path: 'README.md', add: 1, del: 0 }] });
     expect(await svc.historyDiff(first.sha, 'README.md')).toContain('+hello');
     await expect(svc.historyList('--all', 0, false)).rejects.toThrow(/Unknown branch/);
+  });
+});
+
+describe('project skills edited by the user', () => {
+  it('lets the user add and remove project skills, and tells the boss', async () => {
+    await svc.open(repo);
+    const notify = vi.spyOn(BossSession.prototype, 'notify').mockResolvedValue(undefined);
+    const snap = await svc.setProjectSkills({ add: ['docker', 'vue'] });
+    expect(snap.project.skills).toEqual([
+      { id: 'docker', reason: 'Added by you', addedBy: 'user' },
+      { id: 'vue', reason: 'Added by you', addedBy: 'user' },
+    ]);
+    const after = await svc.setProjectSkills({ remove: ['vue'] });
+    expect(after.project).toMatchObject({ skillsExcluded: ['vue'] });
+    expect(events.some((e) => e.type === 'project' && e.project.skills?.length === 1)).toBe(true);
+    expect(notify).toHaveBeenLastCalledWith('The user changed the project skills: −vue. Respect these; you cannot re-add skills the user removed.');
+    notify.mockRestore();
+  });
+
+  it('refuses bad project skill edits before changing anything', async () => {
+    await svc.open(repo);
+    await expect(svc.setProjectSkills({ add: 'docker' })).rejects.toThrow();
+    await expect(svc.setProjectSkills({ add: ['../etc'] })).rejects.toThrow();
+    await expect(svc.setProjectSkills({ add: Array.from({ length: 23 }, (_, i) => `s${i}`) })).rejects.toThrow();
+    await expect(svc.setProjectSkills({ add: ['no-such-skill'] })).rejects.toThrow(/Unknown skills/);
+    expect((await svc.snapshot()).project.skills).toBeUndefined();
   });
 });

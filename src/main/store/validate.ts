@@ -23,6 +23,11 @@ export const skillSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
 }).strict();
 
+export const projectSkillsEditSchema = z.object({
+  add: z.array(id).max(22).optional(),
+  remove: z.array(id).max(22).optional(),
+}).strict();
+
 export const projectPatchSchema = z.object({
   maxConcurrent: z.number().int().min(1).max(8).optional(),
   autoMerge: z.boolean().optional(),
