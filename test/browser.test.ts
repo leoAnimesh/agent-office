@@ -98,6 +98,17 @@ describe('BrowserService (real headless browser)', () => {
     await early.close();
   });
 
+  it('starts streaming a tab that is created after it was asked for', async ({ skip }) => {
+    if (!canRun) skip();
+    const frames: string[] = [];
+    const later = new BrowserService({ onFrame: (f) => { frames.push(f.agentId); later.ack(); } });
+    await later.watch('a1'); // the employee has a dev server but no tab yet
+    const page = await later.pageFor('a1');
+    await page.goto(base);
+    await expect.poll(() => frames.length, { timeout: 3000 }).toBeGreaterThan(0);
+    await later.close();
+  });
+
   it('says how to get a browser when none can start', async () => {
     const none = new BrowserService({ launch: async () => { throw new Error('no chrome'); } });
     expect(await none.available()).toBe(false);

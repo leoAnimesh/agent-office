@@ -162,3 +162,6 @@ export type PreviewInput =
   | { kind: 'wheel'; x: number; y: number; dy: number }
   | { kind: 'key'; key: string }
   | { kind: 'text'; text: string };
+
+/** Shown when no browser can start for the team (the app cannot download one in packaged builds). */
+export const NO_BROWSER = 'No browser found. Install Google Chrome or Microsoft Edge, then try again.';

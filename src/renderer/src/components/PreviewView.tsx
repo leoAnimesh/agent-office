@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PreviewTab, WorkspaceSnapshot } from '../../../shared/types';
-import { fitRect, keyToInput, statusLine, toFraction } from '../preview/input';
+import { emptyState, fitRect, keyToInput, statusLine, toFraction } from '../preview/input';
 
 interface Props { ws: WorkspaceSnapshot; onError: (m: string) => void }
 
@@ -9,6 +9,7 @@ export function PreviewView({ ws, onError }: Props) {
   const [tabs, setTabs] = useState<PreviewTab[]>([]);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [frames, setFrames] = useState(0);
+  const [browserOk, setBrowserOk] = useState<boolean | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const frameSize = useRef({ w: 1280, h: 800 });
   const fail = (e: unknown) => onError(String(e));
@@ -18,6 +19,9 @@ export function PreviewView({ ws, onError }: Props) {
     setTabs(list);
     setAgentId((cur) => (cur && list.some((t) => t.agentId === cur) ? cur : list[0]?.agentId ?? null));
   }, fail);
+  // With no tabs yet, check that a browser can start at all, so a missing one is reported here.
+  const noTabs = tabs.length === 0;
+  useEffect(() => { if (noTabs) window.agentOffice.previewAvailable().then(setBrowserOk, () => setBrowserOk(false)); }, [noTabs]);
   useEffect(() => {
     void refresh();
     return window.agentOffice.onEvent((e) => { if (e.type === 'preview-changed') void refresh(); });
@@ -57,10 +61,12 @@ export function PreviewView({ ws, onError }: Props) {
   const send = (ev: Parameters<typeof window.agentOffice.previewInput>[1]) => { if (agentId) void window.agentOffice.previewInput(agentId, ev).catch(fail); };
   const tab = tabs.find((t) => t.agentId === agentId);
 
+  const empty = emptyState(browserOk);
   if (tabs.length === 0) {
     return (
       <div className="preview preview-empty">
-        <p className="muted">An employee's browser tab appears here when it starts testing.</p>
+        <p className="muted" role={empty.install ? 'alert' : undefined}>{empty.text}</p>
+        {empty.install && <button type="button" className="btn small" onClick={() => void window.agentOffice.openExternal('https://www.google.com/chrome/').catch(fail)}>Get Google Chrome</button>}
       </div>
     );
   }

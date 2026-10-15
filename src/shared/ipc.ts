@@ -40,6 +40,7 @@ export const IPC = {
   terminalRestart: 'terminal:restart',
   terminalEvent: 'terminal:event',
   previewList: 'preview:list',
+  previewAvailable: 'preview:available',
   previewWatch: 'preview:watch',
   previewAck: 'preview:ack',
   previewInput: 'preview:input',
@@ -93,6 +94,8 @@ export interface AgentOfficeApi {
   terminalRestart(cols: number, rows: number): Promise<{ backlog: string }>;
   onTerminal(cb: (e: TerminalEvent) => void): () => void;
   previewList(): Promise<PreviewTab[]>;
+  /** Starts the project's browser if needed; false when none can start. */
+  previewAvailable(): Promise<boolean>;
   previewWatch(agentId: string | null): Promise<void>;
   previewAck(): Promise<void>;
   previewInput(agentId: string, event: PreviewInput): Promise<void>;

@@ -133,6 +133,7 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   handle(IPC.terminalWrite, (data: unknown) => svc.terminalWrite(termData(data)));
   handle(IPC.terminalResize, (cols: unknown, rows: unknown) => { const z = termSize(cols, rows); svc.terminalResize(z.cols, z.rows); });
   handle(IPC.previewList, () => svc.previewList());
+  handle(IPC.previewAvailable, () => svc.previewAvailable());
   handle(IPC.previewWatch, (agentId: unknown) => svc.previewWatch(agentId === null ? null : str(agentId, 'agent id')));
   handle(IPC.previewAck, () => svc.previewAck());
   handle(IPC.previewInput, (agentId: unknown, ev: unknown) => svc.previewInput(str(agentId, 'agent id'), checkPreviewInput(ev)));

@@ -287,6 +287,7 @@ export class ProjectService extends EventEmitter {
     return this.snapshot();
   }
 
+  previewAvailable(): Promise<boolean> { return this.mustWs().browser.available(); }
   async previewWatch(agentId: string | null): Promise<void> { await this.mustWs().browser.watch(agentId); }
   previewAck(): void { this.ws?.browser.ack(); }
   async previewInput(agentId: string, e: PreviewInput): Promise<void> { await this.mustWs().browser.input(agentId, e); }

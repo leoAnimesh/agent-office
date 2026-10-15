@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitRect, keyToInput, statusLine, toFraction } from './input';
+import { emptyState, fitRect, keyToInput, statusLine, toFraction } from './input';
 
 const k = (key: string, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) =>
   ({ key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
@@ -35,5 +35,13 @@ describe('statusLine', () => {
       .toBe('Pixel · http://127.0.0.1:5174/ · dev server running');
     expect(statusLine({ agentId: 'a', url: 'about:blank', title: '', devServer: null }, 'Pixel')).toBe('Pixel · about:blank · no dev server');
     expect(statusLine({ agentId: 'a', url: '', title: '', devServer: { url: 'http://127.0.0.1:6000/', running: true } }, 'Pixel')).toBe('Pixel · no page open · dev server running at http://127.0.0.1:6000/');
+  });
+});
+
+describe('emptyState', () => {
+  it('tells the user to install a browser when none can start, otherwise waits for a tab', () => {
+    expect(emptyState(false)).toEqual({ text: 'No browser found. Install Google Chrome or Microsoft Edge, then try again.', install: true });
+    expect(emptyState(true)).toEqual({ text: "An employee's browser tab appears here when it starts testing.", install: false });
+    expect(emptyState(null)).toEqual({ text: "An employee's browser tab appears here when it starts testing.", install: false });
   });
 });

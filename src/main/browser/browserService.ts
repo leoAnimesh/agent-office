@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs';
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright-core';
-import type { PreviewFrame as Frame, PreviewInput } from '../../shared/types';
+import { NO_BROWSER, type PreviewFrame as Frame, type PreviewInput } from '../../shared/types';
+
+export { NO_BROWSER };
 import { allowedUrl } from './rules';
 
 export type { Frame, PreviewInput };
 
-export const NO_BROWSER = 'No browser found. Install Google Chrome or Microsoft Edge, then try again.';
 export class BrowserMissing extends Error { constructor() { super(NO_BROWSER); } }
 
 export interface TabInfo { agentId: string; url: string; title: string }
@@ -33,6 +34,8 @@ export class BrowserService {
   private creating = new Map<string, Promise<Tab>>();
   private cast: { agentId: string; cdp: CDPSession } | null = null;
   private inFlight = false;
+  /** The tab the Preview tab asked to watch, even if it does not exist yet. */
+  private wanted: string | null = null;
   /** watch() calls run one at a time, so a restart never overlaps another start or stop. */
   private watchChain: Promise<void> = Promise.resolve();
   private closed = false;
@@ -101,6 +104,8 @@ export class BrowserService {
       this.opts.onChange?.();
     });
     this.tabsById.set(agentId, tab);
+    // The Preview tab may already be waiting for this employee's tab (it had a dev server first).
+    if (this.wanted === agentId && this.cast?.agentId !== agentId) this.restart(agentId, true);
     this.opts.onChange?.();
     return tab;
   }
@@ -139,13 +144,14 @@ export class BrowserService {
   }
 
   /** Stream one tab to the Preview tab (null stops). */
-  /** Restart the screencast of a tab only if it is still the watched one when the queued call runs. */
-  private restart(agentId: string): void {
-    const next = this.watchChain.then(() => (this.cast?.agentId === agentId ? this.switchWatch(agentId) : undefined));
+  /** Restart the screencast of a tab only if it is still the watched (or, for a new tab, the wanted) one when the queued call runs. */
+  private restart(agentId: string, created = false): void {
+    const next = this.watchChain.then(() => ((created ? this.wanted : this.cast?.agentId) === agentId ? this.switchWatch(agentId) : undefined));
     this.watchChain = next.catch(() => undefined);
   }
 
   watch(agentId: string | null): Promise<void> {
+    this.wanted = agentId;
     const next = this.watchChain.then(() => this.switchWatch(agentId));
     this.watchChain = next.catch(() => undefined);
     return next;

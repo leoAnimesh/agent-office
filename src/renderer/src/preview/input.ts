@@ -1,4 +1,4 @@
-import type { PreviewInput, PreviewTab } from '../../../shared/types';
+import { NO_BROWSER, type PreviewInput, type PreviewTab } from '../../../shared/types';
 
 const KEYS = new Set(['Enter', 'Escape', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
 
@@ -32,4 +32,9 @@ export function statusLine(t: PreviewTab, name: string): string {
   // A dev server without a tab: say where it runs, since there is no page to show.
   if (!t.url) return `${name} · no page open · ${t.devServer?.running ? `dev server running at ${t.devServer.url}` : dev}`;
   return `${name} · ${t.url} · ${dev}`;
+}
+
+/** What the Preview tab says when no employee has a tab: a missing browser is said plainly, with an install link. */
+export function emptyState(browserAvailable: boolean | null): { text: string; install: boolean } {
+  return browserAvailable === false ? { text: NO_BROWSER, install: true } : { text: "An employee's browser tab appears here when it starts testing.", install: false };
 }
