@@ -4,6 +4,7 @@ import { Avatar } from '../sprites/Avatar';
 import { STATUS_COLORS, clip, lookFor } from '../sprites/sprite';
 import { teamCard, teamSummary } from '../team/cards';
 import { MenuButton } from './MenuButton';
+import { ProjectSkillsPanel } from './ProjectSkillsPanel';
 
 interface Props { ws: WorkspaceSnapshot; roles: Role[]; onOpenAgent: (id: string) => void; onError: (m: string) => void }
 
@@ -102,6 +103,7 @@ export function TeamView({ ws, roles, onOpenAgent, onError }: Props) {
       </div>
       <section aria-label="Current team" className="team-sections">
         {boss && bossRow(boss)}
+        <ProjectSkillsPanel project={ws.project} onError={onError} />
         {employees.length > 0
           ? <div className="team-grid">{employees.map((a) => card(a))}</div>
           : <p className="small muted">No one is hired yet. Ask the boss to hire someone for the work you have in mind.</p>}

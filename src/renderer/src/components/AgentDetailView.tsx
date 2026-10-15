@@ -47,7 +47,7 @@ export function AgentDetailView({ ws, roles, agentId, logs, onBack, onLogs, onEr
             <div><dt>Worktree</dt><dd>{agent.worktreePath ? `.agentoffice/wt/${agent.worktreePath.split(/[\\/]/).pop()}` : '—'}</dd></div>
             <div><dt>Branch</dt><dd>{task?.branch ?? '—'}</dd></div>
           </dl>
-          {role && role.skills.length > 0 && <div className="row">{role.skills.map((s) => <span key={s} className="chip">{s}</span>)}</div>}
+          {!isBoss && (ws.project.skills ?? []).length > 0 && <div className="row" aria-label="Project skills">{ws.project.skills!.map((s) => <span key={s.id} className="chip" title={s.reason}>{s.id}</span>)}</div>}
           {!isBoss && (
             <div className="row">
               {task?.status === 'working' && <button type="button" className="btn" onClick={act(() => window.agentOffice.pauseTask(task.id))}>Pause</button>}
