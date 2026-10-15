@@ -14,7 +14,8 @@ export interface UiState {
 }
 
 export type UiAction =
-  | { type: 'snapshot'; ws: WorkspaceSnapshot }
+  /** `view`: the tab to open on (remembered per project); the office when not given. */
+  | { type: 'snapshot'; ws: WorkspaceSnapshot; view?: View }
   | { type: 'closed' }
   | { type: 'event'; event: WorkspaceEvent }
   | { type: 'error'; message: string }
@@ -28,7 +29,7 @@ const LOG_CAP = 300;
 
 export function reducer(s: UiState, a: UiAction): UiState {
   switch (a.type) {
-    case 'snapshot': return { ...s, ws: a.ws, logs: {}, view: { name: 'office' }, bossStream: null, bossBusy: false };
+    case 'snapshot': return { ...s, ws: a.ws, logs: {}, view: a.view ?? { name: 'office' }, bossStream: null, bossBusy: false };
     case 'closed': return { ...s, ws: null, logs: {}, view: { name: 'office' }, bossStream: null, bossBusy: false };
     case 'error': return { ...s, errors: [...s.errors, a.message].slice(-5) };
     case 'dismiss-error': return { ...s, errors: s.errors.filter((_, i) => i !== a.index) };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import type { AppStatus, LogEntry } from '../../shared/types';
+import type { AppStatus, LogEntry, WorkspaceSnapshot } from '../../shared/types';
 import { AgentDetailView } from './components/AgentDetailView';
 import { BossChat } from './components/BossChat';
 import { Header } from './components/Header';
@@ -15,6 +15,7 @@ import { HistoryView } from './components/HistoryView';
 import { TerminalPanel } from './components/TerminalPanel';
 import { clampHeight, keyResize, readHeight, writeHeight } from './terminal/dock';
 import { lookFor } from './sprites/sprite';
+import { localStore, readLastProject, readProjectUi, writeLastProject, writeProjectUi } from './memory';
 import { initialState, reducer, type View } from './state';
 
 const clean = (m: string) => m.replace(/^Error: (Error invoking remote method '[^']+': )?(Error: )?/, '');
@@ -59,26 +60,54 @@ export function App() {
   const viewAgentId = state.view.name === 'agent' ? state.view.agentId : null;
   const onLogs = useCallback((entries: LogEntry[]) => { if (viewAgentId) dispatch({ type: 'logs-loaded', agentId: viewAgentId, entries }); }, [viewAgentId]);
   const refreshRoles = useCallback(() => { window.agentOffice.listRoles().then((roles) => dispatch({ type: 'roles', roles }), () => undefined); }, []);
+  // A project opens where the user left it: same tab, terminal open or closed as before.
+  const opened = useCallback((snap: WorkspaceSnapshot) => {
+    const ui = readProjectUi(localStore(), snap.project.id);
+    writeLastProject(localStore(), snap.project.repoPath);
+    if (ui.terminal) setTermMounted(true);
+    setTermOpen(ui.terminal);
+    dispatch({ type: 'snapshot', ws: snap, view: { name: ui.view } });
+  }, []);
+  // On launch, reopen the project that was open last time (once, and only when Claude Code was found).
+  const [noSnapshot, setNoSnapshot] = useState(false);
+  const [reopening, setReopening] = useState<string | null>(null);
+  const triedReopen = useRef(false);
 
   useEffect(() => {
     window.agentOffice.getStatus().then(setStatus, () => setStatus({ platform: 'unknown', claude: null }));
-    window.agentOffice.snapshot().then((ws) => { if (ws) dispatch({ type: 'snapshot', ws }); }, () => undefined);
+    window.agentOffice.snapshot().then((ws) => { if (ws) opened(ws); else setNoSnapshot(true); }, () => setNoSnapshot(true));
     refreshRoles();
     return window.agentOffice.onEvent((event) => {
       // The boss created or changed a role: reload names and looks so new hires show properly.
       if (event.type === 'roles-changed') refreshRoles();
       else dispatch({ type: 'event', event });
     });
-  }, [refreshRoles]);
+  }, [refreshRoles, opened]);
+
+  useEffect(() => {
+    if (!status?.claude || !noSnapshot || triedReopen.current) return;
+    triedReopen.current = true;
+    const last = readLastProject(localStore());
+    if (!last) return;
+    setReopening(last);
+    // A folder that moved or was deleted is forgotten quietly; the project list is still there.
+    window.agentOffice.openProject(last).then(opened, () => writeLastProject(localStore(), null)).finally(() => setReopening(null));
+  }, [status, noSnapshot, opened]);
 
   // Opening a project can change the boss role (model picked during onboarding): reload roles.
   const projectId = state.ws?.project.id;
   useEffect(() => { if (projectId) refreshRoles(); }, [projectId, refreshRoles]);
+  const viewName = state.view.name;
+  useEffect(() => {
+    if (projectId && (viewName === 'office' || viewName === 'tasks' || viewName === 'team' || viewName === 'history')) writeProjectUi(localStore(), projectId, { view: viewName });
+  }, [projectId, viewName]);
+  useEffect(() => { if (projectId) writeProjectUi(localStore(), projectId, { terminal: termOpen }); }, [termOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!status) return <main className="boot"><p>Looking for Claude Code…</p></main>;
+  if (reopening) return <main className="boot"><p>Reopening {reopening.split(/[\\/]/).filter(Boolean).pop()}…</p></main>;
   if (!status.claude) return <NoClaude onFound={setStatus} />;
   const ws = state.ws;
-  if (!ws) return <Onboarding status={status} onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} />;
+  if (!ws) return <Onboarding status={status} onOpened={opened} />;
 
   const go = (view: View) => dispatch({ type: 'navigate', view });
   const boss = ws.agents.find((a) => a.kind === 'boss');
@@ -94,16 +123,16 @@ export function App() {
       case 'tasks': return <TaskBoard ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onViewCommit={(sha) => go({ name: 'history', sha })} onNewTask={() => { go({ name: 'office' }); setTimeout(() => document.getElementById('boss-msg')?.focus(), 0); }} onError={onError} />;
       case 'settings': return <AppSettingsView onStatus={setStatus} onError={onError} />;
       case 'history': return <HistoryView key={state.view.sha ?? ''} ws={ws} sha={state.view.sha} onError={onError} />;
-      case 'project-settings': return <ProjectSettingsView ws={ws} onClosed={() => dispatch({ type: 'closed' })} onError={onError} />;
+      case 'project-settings': return <ProjectSettingsView ws={ws} onClosed={() => { writeLastProject(localStore(), null); dispatch({ type: 'closed' }); }} onError={onError} />;
     }
   })();
 
   return (
     <div className="app">
-      <Sidebar current={ws.project} view={state.view} onOpened={(snap) => dispatch({ type: 'snapshot', ws: snap })} onNewProject={() => setNewProject(true)} onNavigate={go} onError={onError} />
+      <Sidebar current={ws.project} view={state.view} onOpened={opened} onNewProject={() => setNewProject(true)} onNavigate={go} onError={onError} />
       {newProject && (
         <div className="overlay" role="dialog" aria-modal="true" aria-label="New project">
-          <Onboarding status={status} initialMode="create" onCancel={() => setNewProject(false)} onOpened={(snap) => { setNewProject(false); dispatch({ type: 'snapshot', ws: snap }); }} />
+          <Onboarding status={status} initialMode="create" onCancel={() => setNewProject(false)} onOpened={(snap) => { setNewProject(false); opened(snap); }} />
         </div>
       )}
       <div className="main">
@@ -140,7 +169,3 @@ export function App() {
   );
 }
 
-/** localStorage can be missing or throw on access (blocked storage); the dock works without it. */
-function localStore(): Storage | null {
-  try { return window.localStorage; } catch { return null; }
-}
