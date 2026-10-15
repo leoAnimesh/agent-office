@@ -10,7 +10,7 @@ export class BrowserMissing extends Error { constructor() { super(NO_BROWSER); }
 
 export interface TabInfo { agentId: string; url: string; title: string }
 
-interface Tab { context: BrowserContext; page: Page; console: string[]; userAt: number; userNote: boolean }
+interface Tab { context: BrowserContext; page: Page; console: string[]; userAt: number; userNote: boolean; origin: string }
 
 const VIEWPORT = { width: 1280, height: 800 };
 const CONSOLE_KEEP = 50;
@@ -87,16 +87,17 @@ export class BrowserService {
       });
     }
     const page = await context.newPage();
-    const tab: Tab = { context, page, console: old?.console ?? [], userAt: 0, userNote: false };
+    const tab: Tab = { context, page, console: old?.console ?? [], userAt: 0, userNote: false, origin: 'null' };
     const keep = (line: string) => { tab.console.push(line); if (tab.console.length > CONSOLE_KEEP) tab.console.shift(); };
     page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') keep(`${m.type()}: ${m.text()}`); });
     page.on('pageerror', (e) => keep(`page error: ${e.message}`));
     page.on('requestfailed', (r) => keep(`request failed: ${r.method()} ${r.url()} (${r.failure()?.errorText ?? 'failed'})`));
     page.on('framenavigated', (f) => {
       if (f !== page.mainFrame()) return;
-      // A navigation can move the page to a new renderer process, which silently ends a screencast that was
-      // starting at that moment: restart it for the watched tab.
-      if (this.cast?.agentId === agentId) void this.watch(agentId);
+      // Moving to another origin can move the page to a new renderer process, which silently ends a screencast
+      // that was starting at that moment: restart it for the watched tab. Same-origin changes (SPA routes) don't.
+      const origin = (() => { try { return new URL(f.url()).origin; } catch { return 'null'; } })();
+      if (origin !== tab.origin) { tab.origin = origin; this.restart(agentId); }
       this.opts.onChange?.();
     });
     this.tabsById.set(agentId, tab);
@@ -138,6 +139,12 @@ export class BrowserService {
   }
 
   /** Stream one tab to the Preview tab (null stops). */
+  /** Restart the screencast of a tab only if it is still the watched one when the queued call runs. */
+  private restart(agentId: string): void {
+    const next = this.watchChain.then(() => (this.cast?.agentId === agentId ? this.switchWatch(agentId) : undefined));
+    this.watchChain = next.catch(() => undefined);
+  }
+
   watch(agentId: string | null): Promise<void> {
     const next = this.watchChain.then(() => this.switchWatch(agentId));
     this.watchChain = next.catch(() => undefined);
