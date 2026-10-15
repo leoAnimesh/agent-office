@@ -26,11 +26,19 @@ const toolList = (t: string[]) => (ALL_TOOLS.every((x) => t.includes(x)) && t.le
 
 const lookForId = (id: string) => LOOKS[[...id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % LOOKS.length];
 
+/** Who is calling a tool: set by the MCP host from the caller's token (employee tools need it). */
+export interface ToolContext { agentId?: string }
+
+/** A tool result shown to the model as an image (e.g. a screenshot), with an optional text note. */
+export interface ToolImage { type: 'image'; data: string; mimeType: string; note?: string }
+export const isToolImage = (v: unknown): v is ToolImage =>
+  typeof v === 'object' && v !== null && (v as ToolImage).type === 'image' && typeof (v as ToolImage).data === 'string';
+
 export interface ToolDef {
   name: string;
   description: string;
   input: z.ZodRawShape;
-  run(args: unknown): Promise<unknown>;
+  run(args: unknown, ctx?: ToolContext): Promise<unknown>;
 }
 
 export interface BossToolDeps {

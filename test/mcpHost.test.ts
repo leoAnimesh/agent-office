@@ -67,3 +67,50 @@ describe('McpHost', () => {
     await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   });
 });
+describe('McpHost clients', () => {
+  const whoTools: ToolDef[] = [
+    { name: 'whoami', description: 'Say which agent is calling', input: {}, run: async (_a, ctx) => ({ agent: ctx?.agentId ?? null }) },
+    { name: 'pic', description: 'Return a tiny image', input: {}, run: async () => ({ type: 'image', data: 'iVBORw0KGgo=', mimeType: 'image/png', note: 'tiny' }) },
+  ];
+  let h: McpHost;
+  beforeEach(async () => { h = new McpHost(whoTools, 'office'); await h.start(); });
+  afterEach(async () => { await h.close(); });
+  const connectTo = async (token: string) => {
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(new StreamableHTTPClientTransport(new URL(h.url), { requestInit: { headers: { Authorization: `Bearer ${token}` } } }));
+    return client;
+  };
+
+  it('tells tools which agent is calling, from its own token', async () => {
+    const a = await connectTo(h.addClient('agent-a'));
+    const b = await connectTo(h.addClient('agent-b'));
+    expect(JSON.parse(((await a.callTool({ name: 'whoami', arguments: {} })).content as { text: string }[])[0].text)).toEqual({ agent: 'agent-a' });
+    expect(JSON.parse(((await b.callTool({ name: 'whoami', arguments: {} })).content as { text: string }[])[0].text)).toEqual({ agent: 'agent-b' });
+    await a.close(); await b.close();
+  });
+
+  it('refuses revoked and replaced tokens', async () => {
+    const old = h.addClient('agent-a');
+    const fresh = h.addClient('agent-a');
+    await expect(connectTo(old)).rejects.toThrow();
+    h.removeClient('agent-a');
+    await expect(connectTo(fresh)).rejects.toThrow();
+  });
+
+  it('returns image results as MCP image content', async () => {
+    const c = await connectTo(h.addClient('agent-a'));
+    const r = await c.callTool({ name: 'pic', arguments: {} });
+    expect(r.content).toEqual([{ type: 'image', data: 'iVBORw0KGgo=', mimeType: 'image/png' }, { type: 'text', text: 'tiny' }]);
+    await c.close();
+  });
+
+  it('writes a private per-client config', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-mcpc-'));
+    const token = h.addClient('agent-a');
+    const file = path.join(dir, 'mcp-agent-a.json');
+    await h.writeClientConfig('agent-a', token, file);
+    expect(JSON.parse(await fs.readFile(file, 'utf8'))).toEqual({ mcpServers: { office: { type: 'http', url: h.url, headers: { Authorization: `Bearer ${token}` } } } });
+    if (process.platform !== 'win32') expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
+    await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  });
+});
