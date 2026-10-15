@@ -213,7 +213,10 @@ export class ProjectService extends EventEmitter {
     await manager.pump();
     if (requeued.length > 0) {
       const list = requeued.join(', ');
-      void boss.notify(`The app restarted while ${list} ${requeued.length === 1 ? 'was' : 'were'} running. ${requeued.length === 1 ? 'It has' : 'They have'} been restarted.`);
+      // Work is not lost: the worktree keeps the files and the agent resumes its saved conversation with a
+      // "continue from where you left off" message. Say so, or the boss tells the user it started over.
+      const one = requeued.length === 1;
+      void boss.notify(`The app restarted while ${list} ${one ? 'was' : 'were'} running. ${one ? 'Its' : 'Their'} work was kept (files and the agent's conversation), and ${one ? 'it has' : 'they have'} picked up where ${one ? 'it' : 'they'} left off.`);
     }
     return this.snapshot();
   }
