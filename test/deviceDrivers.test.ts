@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
 import { AndroidDriver, IosDriver } from '../src/main/devices/drivers';
 import { resolveDeviceTools } from '../src/main/devices/tools';
 import { fakeDevices } from './helpers/fakeDevices';
@@ -19,6 +20,16 @@ describe('AndroidDriver', () => {
     expect(await d.running()).toBe(true);
     await d.stop();
     expect(await d.running()).toBe(false);
+  });
+
+  it('fails fast with a plain reason when the emulator cannot start', async () => {
+    process.env.FAKE_EMULATOR_PANIC = '1';
+    try {
+      const d = new AndroidDriver(tools(), { bootMs: 60_000 });
+      const started = Date.now();
+      await expect(d.start()).rejects.toThrow(/system image is not installed[\s\S]*PANIC: Cannot find AVD system path/);
+      expect(Date.now() - started).toBeLessThan(10_000);
+    } finally { delete process.env.FAKE_EMULATOR_PANIC; }
   });
 
   it('attaches to a running emulator and leaves it running on stop', async () => {
@@ -74,6 +85,8 @@ describe('IosDriver', () => {
       ['idb', 'ui', 'key', '40', '--udid', 'SIM-1'],
       ['xcrun', 'simctl', 'openurl', 'SIM-1', 'http://localhost:3000/'],
     ]);
+    expect((await d.screenshot()).subarray(1, 4).toString()).toBe('PNG');
+    expect(fs.existsSync('-')).toBe(false);
     await d.stop();
     expect((await fake.calls()).at(-1)).toEqual(['xcrun', 'simctl', 'shutdown', 'SIM-1']);
   });

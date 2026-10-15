@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { ANDROID_KEYS, adbText, androidOutline, androidUrl, iosOutline, parseAdbDevices, parseAvds, parseSimulators, pngSize, type DeviceKey, type Outline } from './parse';
 import { runTool, startTool, type DeviceTools, type ToolCmd } from './tools';
 
@@ -26,6 +30,10 @@ export interface DeviceDriver {
 
 const SHOT = { maxBytes: 10 * 1024 * 1024 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Plain-English help for emulator failures people commonly hit. */
+const emulatorHint = (out: string) => (/Cannot find AVD system path|not a valid directory/.test(out)
+  ? 'This emulator\'s Android system image is not installed. Open Android Studio → Device Manager and repair or recreate the device (it downloads the image). '
+  : '');
 const need = <T>(v: T | undefined, what: string): T => { if (!v) throw new Error(what); return v; };
 const ok = async (p: Promise<{ code: number | null; stdout: Buffer; stderr: string }>, what: string) => {
   const r = await p;
@@ -65,6 +73,12 @@ export class AndroidDriver implements DeviceDriver {
     this.serial = `emulator-${port}`;
     const deadline = Date.now() + (this.o.bootMs ?? 180_000);
     while (Date.now() < deadline) {
+      if (this.proc.hasExited()) {
+        const out = this.proc.output();
+        this.proc = null;
+        this.serial = null;
+        throw new Error(`${emulatorHint(out)}The emulator stopped while starting. Its output:\n${out}`);
+      }
       const listed = parseAdbDevices((await runTool(this.adb, ['devices'])).stdout.toString()).includes(this.serial);
       if (listed && (await runTool(this.adb, [...this.s(), 'shell', 'getprop', 'sys.boot_completed'])).stdout.toString().trim() === '1') {
         return { kind: 'android', id: this.serial, name: avd, startedByApp: true };
@@ -172,7 +186,16 @@ export class IosDriver implements DeviceDriver {
   async install(file: string) { await this.simctl('install', this.id(), file); }
   async launch(appId: string) { await this.simctl('launch', this.id(), appId); }
   async openUrl(url: string) { await this.simctl('openurl', this.id(), url); }
-  async screenshot(): Promise<Buffer> { return (await ok(runTool(this.xcrun, ['simctl', 'io', this.id(), 'screenshot', '--type=png', '-'], SHOT), 'Screenshot')).stdout; }
+  /** Through a temp file: recent simctl versions treat '-' as a file name, not standard output. */
+  async screenshot(): Promise<Buffer> {
+    const file = path.join(os.tmpdir(), `ao-sim-${randomUUID()}.png`);
+    try {
+      await ok(runTool(this.xcrun, ['simctl', 'io', this.id(), 'screenshot', '--type=png', file], SHOT), 'Screenshot');
+      return await fs.readFile(file);
+    } finally {
+      await fs.rm(file, { force: true });
+    }
+  }
   async logs() {
     const r = await runTool(this.xcrun, ['simctl', 'spawn', this.id(), 'log', 'show', '--last', '2m', '--style', 'compact', '--predicate', 'messageType >= 16']);
     return r.stdout.toString().split('\n').slice(-200).join('\n') || 'No errors.';

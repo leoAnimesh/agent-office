@@ -37,12 +37,15 @@ export function startTool(t: ToolCmd, args: string[]) {
   const keep = (c: Buffer) => { lines.push(...c.toString('utf8').split(/\r?\n/).filter(Boolean)); lines.splice(0, Math.max(0, lines.length - 40)); };
   child.stdout?.on('data', keep);
   child.stderr?.on('data', keep);
-  const exited = new Promise<void>((resolve) => { child.once('exit', () => resolve()); child.once('error', () => resolve()); });
+  // 'close' (not 'exit'): all output has been read by then, so an early crash can be reported with it.
+  let done = false;
+  const exited = new Promise<void>((resolve) => { child.once('close', () => { done = true; resolve(); }); child.once('error', (e) => { lines.push(e.message); done = true; resolve(); }); });
   return {
     pid: child.pid,
     exited,
+    hasExited: () => done,
     output: () => lines.join('\n'),
-    async kill() { if (child.pid && child.exitCode === null) { killTree(child.pid); const t = setTimeout(() => child.pid && killTree(child.pid, process.platform, 'SIGKILL'), 5000); await exited; clearTimeout(t); } },
+    async kill() { if (child.pid && !done) { killTree(child.pid); const t = setTimeout(() => child.pid && killTree(child.pid, process.platform, 'SIGKILL'), 5000); await exited; clearTimeout(t); } },
   };
 }
 

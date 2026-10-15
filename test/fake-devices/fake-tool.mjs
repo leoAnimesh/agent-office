@@ -21,6 +21,7 @@ const XML = "<?xml version='1.0' ?><hierarchy><node text=\"Continue\" class=\"an
 if (tool === 'emulator') {
   if (args[0] === '-list-avds') { out('Medium_Phone\n'); process.exit(0); }
   if (args[0] === '-avd') {
+    if (process.env.FAKE_EMULATOR_PANIC === '1') { process.stdout.write('PANIC: Cannot find AVD system path. Please define ANDROID_SDK_ROOT\n'); process.exit(1); }
     fs.writeFileSync(file('android-booted'), args[args.indexOf('-port') + 1] ?? '5554');
     setInterval(() => { if (!has('android-booted')) process.exit(0); }, 100);
   }
@@ -39,7 +40,8 @@ if (tool === 'emulator') {
   if (a[0] === 'list') out(JSON.stringify({ devices: { 'com.apple.CoreSimulator.SimRuntime.iOS-26-0': [{ udid: 'SIM-1', name: 'iPhone 17', state: has('ios-booted') ? 'Booted' : 'Shutdown', isAvailable: true }] } }));
   else if (a[0] === 'boot') fs.writeFileSync(file('ios-booted'), a[1]);
   else if (a[0] === 'shutdown') fs.rmSync(file('ios-booted'), { force: true });
-  else if (a[0] === 'io') process.stdout.write(PNG);
+  // Like recent simctl: '-' is not stdout, it writes a file named '-'. Only real paths work.
+  else if (a[0] === 'io') fs.writeFileSync(a.at(-1), PNG);
   else if (a[0] === 'spawn') out('Error: boom\n');
 } else if (tool === 'idb') {
   if (args[0] === 'ui' && args[1] === 'describe-all') out(JSON.stringify([
