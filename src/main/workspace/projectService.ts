@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, PreviewInput, PreviewTab, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
+import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, DeviceSupport, PreviewInput, PreviewTab, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
 import { AgentManager, type ManagerEvent, type MergeOutcome, type MessageResult } from '../agents/agentManager';
 import { applyUserEdit } from '../agents/projectSkills';
 import { bossTools, type ToolDef } from '../agents/bossTools';
@@ -17,7 +17,10 @@ import { employeeTools } from '../browser/employeeTools';
 import { previewRows } from '../browser/previewRows';
 import { DeviceService } from '../devices/deviceService';
 import { deviceTools } from '../devices/deviceTools';
-import { resolveDeviceTools, type DeviceToolsOverride } from '../devices/tools';
+import { detectDevices, resolveDeviceTools, type DeviceToolsOverride } from '../devices/tools';
+import type { DeviceKind } from '../devices/drivers';
+
+const deviceKindOf = (t: string | null): DeviceKind | null => (t === 'device:android' ? 'android' : t === 'device:ios' ? 'ios' : null);
 import { AttachmentStore } from '../boss/attachments';
 import type { DataPaths } from '../store/paths';
 import { ProjectStore } from '../store/projectStore';
@@ -83,6 +86,7 @@ export class ProjectService extends EventEmitter {
   private readonly store: ProjectStore;
   private readonly roles: RoleStore;
   private readonly skills: SkillStore;
+  private supportCache: { at: number; value: Promise<DeviceSupport> } | null = null;
   private ws: Workspace | null = null;
   /** The open project's terminal; null when the native PTY could not load on this machine. */
   private terminals: TerminalService | null = null;
@@ -314,16 +318,41 @@ export class ProjectService extends EventEmitter {
   }
 
   previewAvailable(): Promise<boolean> { return this.mustWs().browser.available(); }
-  async previewWatch(agentId: string | null): Promise<void> { await this.mustWs().browser.watch(agentId); }
-  previewAck(): void { this.ws?.browser.ack(); }
-  async previewInput(agentId: string, e: PreviewInput): Promise<void> { await this.mustWs().browser.input(agentId, e); }
+  /** Watch a browser tab (an employee id) or a device ('device:android' / 'device:ios'); null stops. */
+  async previewWatch(target: string | null): Promise<void> {
+    const ws = this.mustWs();
+    const kind = deviceKindOf(target);
+    ws.devices.watch(kind);
+    await ws.browser.watch(kind ? null : target);
+  }
+  previewAck(): void { this.ws?.browser.ack(); this.ws?.devices.ack(); }
+  async previewInput(target: string, e: PreviewInput): Promise<void> {
+    const ws = this.mustWs();
+    const kind = deviceKindOf(target);
+    if (kind) await ws.devices.input(kind, e); else await ws.browser.input(target, e);
+  }
+  async previewDevice(kind: DeviceKind, action: 'start' | 'home' | 'back' | 'shutdown'): Promise<void> {
+    const ws = this.mustWs();
+    if (action === 'start') return ws.devices.startByUser(kind);
+    if (action === 'shutdown') return ws.devices.shutdownByUser(kind);
+    await ws.devices.input(kind, { kind: 'key', key: action === 'home' ? 'Home' : 'Escape' });
+  }
+  /** What mobile tooling is installed (cached for a minute; works without an open project). */
+  async deviceSupport(): Promise<DeviceSupport> {
+    if (!this.supportCache || Date.now() - this.supportCache.at > 60_000) {
+      this.supportCache = { at: Date.now(), value: detectDevices(resolveDeviceTools(process.env, process.platform, this.d.deviceTools)) };
+    }
+    return this.supportCache.value;
+  }
   async previewReload(agentId: string): Promise<void> { await this.mustWs().browser.reload(agentId); }
   async previewStopDevServer(agentId: string): Promise<void> { await this.mustWs().devServers.stop(agentId); }
 
   /** Employees' browser tabs and their dev servers, for the Preview tab. */
   async previewList(): Promise<PreviewTab[]> {
     const ws = this.mustWs();
-    return previewRows(await ws.browser.tabs(), ws.devServers.all());
+    const support = await this.deviceSupport();
+    const devices = (await ws.devices.states()).filter((s) => s.running || support[s.kind].ok).map((s): PreviewTab => ({ agentId: `device:${s.kind}`, url: '', title: '', devServer: null, device: s }));
+    return [...previewRows(await ws.browser.tabs(), ws.devServers.all()), ...devices];
   }
 
   listSkills(): Promise<Skill[]> { return this.skills.list(); }

@@ -163,7 +163,14 @@ export interface OpenOptions { bossName?: string; bossModel?: string }
 export interface CreateProjectInput extends OpenOptions { parentDir: string; name: string; brief?: string }
 export interface LogEntry { at: string; event: RunnerEvent }
 
-export interface PreviewTab { agentId: string; url: string; title: string; devServer: { url: string; running: boolean } | null }
+/** A device shown in the Preview tab (rows with agentId 'device:android' / 'device:ios'). */
+export interface PreviewDevice { kind: 'android' | 'ios'; running: boolean; name: string | null; holder: string | null; startedByApp: boolean; canInput: boolean }
+export interface PreviewTab { agentId: string; url: string; title: string; devServer: { url: string; running: boolean } | null; device?: PreviewDevice }
+/** What mobile tooling this machine has. */
+export interface DeviceSupport {
+  android: { ok: boolean; avds: string[]; reason?: string };
+  ios: { ok: boolean; devices: { udid: string; name: string; runtime: string; state: string }[]; idb: boolean; reason?: string };
+}
 export interface PreviewFrame { agentId: string; data: string; width: number; height: number; mime?: string }
 export type PreviewInput =
   | { kind: 'click'; x: number; y: number; button: 'left' | 'right' }

@@ -55,7 +55,7 @@ describe('team browser in a project', () => {
     const t = (await svc.snapshot()).tasks[0];
     expect(t.resultSummary).toContain('browser_open');
     expect(t.resultSummary).toContain('Fixture app');
-    expect(await svc.previewList()).toEqual([expect.objectContaining({ agentId: pixel.id, title: 'Fixture app', devServer: null })]);
+    expect((await svc.previewList()).filter((r) => !r.device)).toEqual([expect.objectContaining({ agentId: pixel.id, title: 'Fixture app', devServer: null })]);
     const argv = (await launches()).find((l) => l.argv.includes('--permission-mode') && !l.argv.includes('mcp__agentoffice'))!.argv;
     expect(argv).toContain('--mcp-config');
     expect(argv.join(' ')).toContain('mcp__office');

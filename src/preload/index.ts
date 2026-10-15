@@ -47,6 +47,8 @@ const api: AgentOfficeApi = {
   },
   previewList: () => ipcRenderer.invoke(IPC.previewList),
   previewAvailable: () => ipcRenderer.invoke(IPC.previewAvailable),
+  previewDevice: (kind, action) => ipcRenderer.invoke(IPC.previewDevice, kind, action),
+  deviceSupport: () => ipcRenderer.invoke(IPC.deviceSupport),
   previewWatch: (agentId) => ipcRenderer.invoke(IPC.previewWatch, agentId),
   previewAck: () => ipcRenderer.invoke(IPC.previewAck),
   previewInput: (agentId, event) => ipcRenderer.invoke(IPC.previewInput, agentId, event),

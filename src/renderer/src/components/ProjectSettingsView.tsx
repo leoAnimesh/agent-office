@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { WorkspaceSnapshot } from '../../../shared/types';
+import { useEffect, useState } from 'react';
+import type { DeviceSupport, WorkspaceSnapshot } from '../../../shared/types';
 
 interface Props { ws: WorkspaceSnapshot; onClosed: () => void; onError: (m: string) => void }
 
@@ -8,11 +8,15 @@ export function ProjectSettingsView({ ws, onClosed, onError }: Props) {
   const [max, setMax] = useState(String(ws.project.maxConcurrent));
   const [autoMerge, setAutoMerge] = useState(ws.project.autoMerge);
   const [browserTools, setBrowserTools] = useState(ws.project.browserTools !== false);
+  const [androidDevice, setAndroidDevice] = useState(ws.project.androidDevice ?? '');
+  const [iosDevice, setIosDevice] = useState(ws.project.iosDevice ?? '');
+  const [support, setSupport] = useState<DeviceSupport | null>(null);
+  useEffect(() => { window.agentOffice.deviceSupport().then(setSupport, () => undefined); }, []);
   const [note, setNote] = useState<string | null>(null);
 
   const save = async () => {
     try {
-      await window.agentOffice.updateProject({ maxConcurrent: Number(max), autoMerge, browserTools });
+      await window.agentOffice.updateProject({ maxConcurrent: Number(max), autoMerge, browserTools, androidDevice, iosDevice });
       setNote('Project settings saved.');
     } catch (e) { onError(String(e)); }
   };
@@ -30,7 +34,25 @@ export function ProjectSettingsView({ ws, onClosed, onError }: Props) {
           <input id="set-max" className="input" type="number" min={1} max={8} value={max} onChange={(e) => setMax(e.target.value)} style={{ maxWidth: 120 }} />
         </div>
         <label className="row"><input type="checkbox" checked={autoMerge} onChange={(e) => setAutoMerge(e.target.checked)} style={{ width: 18, height: 18 }} /> Merge finished work without asking me</label>
-        <label className="row"><input type="checkbox" checked={browserTools} onChange={(e) => setBrowserTools(e.target.checked)} style={{ width: 18, height: 18 }} /> Employees can use a browser to check their work</label>
+        <label className="row"><input type="checkbox" checked={browserTools} onChange={(e) => setBrowserTools(e.target.checked)} style={{ width: 18, height: 18 }} /> Employees can use a browser and mobile devices to check their work</label>
+        {support?.android.ok && (
+          <div className="field">
+            <label htmlFor="set-android">Android device</label>
+            <select id="set-android" className="input" value={androidDevice} onChange={(e) => setAndroidDevice(e.target.value)} style={{ maxWidth: 320 }}>
+              <option value="">Automatic</option>
+              {support.android.avds.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+        )}
+        {support?.ios.ok && (
+          <div className="field">
+            <label htmlFor="set-ios">iOS device</label>
+            <select id="set-ios" className="input" value={iosDevice} onChange={(e) => setIosDevice(e.target.value)} style={{ maxWidth: 320 }}>
+              <option value="">Automatic</option>
+              {support.ios.devices.map((d) => <option key={d.udid} value={d.udid}>{d.name} ({d.runtime})</option>)}
+            </select>
+          </div>
+        )}
         <div className="row"><button type="button" className="btn primary" onClick={() => void save()}>Save project settings</button></div>
       </section>
       <section className="panel-box" aria-labelledby="set-close">

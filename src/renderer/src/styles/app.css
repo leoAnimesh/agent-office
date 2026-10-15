@@ -268,7 +268,7 @@
 .view:has(> .preview) { overflow: hidden; display: flex; flex-direction: column; }
 .preview { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
 .preview-bar { flex-wrap: wrap; gap: 8px 10px; align-items: center; }
-.preview-bar select { max-width: 220px; }
+.preview-bar select { max-width: 320px; }
 .preview-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 200px; }
 .preview-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .preview-canvas { flex: 1; min-height: 240px; width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }

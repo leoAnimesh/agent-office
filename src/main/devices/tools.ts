@@ -3,16 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import spawn from 'cross-spawn';
 import { killTree } from '../claude/killTree';
+import type { DeviceSupport } from '../../shared/types';
 import { parseAvds, parseSimulators } from './parse';
 
 export interface ToolCmd { bin: string; pre: string[] }
 export interface DeviceTools { platform: NodeJS.Platform; adb?: ToolCmd; emulator?: ToolCmd; xcrun?: ToolCmd; idb?: ToolCmd }
 export interface DeviceToolsOverride { adb?: string[]; emulator?: string[]; xcrun?: string[]; idb?: string[]; platform?: string }
 export interface RunResult { code: number | null; stdout: Buffer; stderr: string }
-export interface DeviceSupport {
-  android: { ok: boolean; avds: string[]; reason?: string };
-  ios: { ok: boolean; devices: { udid: string; name: string; runtime: string; state: string }[]; idb: boolean; reason?: string };
-}
+export type { DeviceSupport };
 
 /** Runs a platform tool (argv array, no shell) with a timeout and an output cap. */
 export function runTool(t: ToolCmd, args: string[], o: { timeoutMs?: number; maxBytes?: number } = {}): Promise<RunResult> {
