@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, PreviewTab, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
+import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, PreviewInput, PreviewTab, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
 import { AgentManager, type ManagerEvent, type MergeOutcome, type MessageResult } from '../agents/agentManager';
 import { applyUserEdit } from '../agents/projectSkills';
 import { bossTools, type ToolDef } from '../agents/bossTools';
@@ -285,6 +285,12 @@ export class ProjectService extends EventEmitter {
     if (change) void ws.boss.notify(`The user changed the project skills: ${change}. Respect these; you cannot re-add skills the user removed.`).catch(() => undefined);
     return this.snapshot();
   }
+
+  async previewWatch(agentId: string | null): Promise<void> { await this.mustWs().browser.watch(agentId); }
+  previewAck(): void { this.ws?.browser.ack(); }
+  async previewInput(agentId: string, e: PreviewInput): Promise<void> { await this.mustWs().browser.input(agentId, e); }
+  async previewReload(agentId: string): Promise<void> { await this.mustWs().browser.reload(agentId); }
+  async previewStopDevServer(agentId: string): Promise<void> { await this.mustWs().devServers.stop(agentId); }
 
   /** Employees' browser tabs and their dev servers, for the Preview tab. */
   async previewList(): Promise<PreviewTab[]> {

@@ -1,17 +1,14 @@
 import { existsSync } from 'node:fs';
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright-core';
+import type { PreviewFrame as Frame, PreviewInput } from '../../shared/types';
 import { allowedUrl } from './rules';
+
+export type { Frame, PreviewInput };
 
 export const NO_BROWSER = 'No browser found. Install Google Chrome or Microsoft Edge, then try again.';
 export class BrowserMissing extends Error { constructor() { super(NO_BROWSER); } }
 
 export interface TabInfo { agentId: string; url: string; title: string }
-export interface Frame { agentId: string; data: string; width: number; height: number }
-export type PreviewInput =
-  | { kind: 'click'; x: number; y: number; button: 'left' | 'right' }
-  | { kind: 'wheel'; x: number; y: number; dy: number }
-  | { kind: 'key'; key: string }
-  | { kind: 'text'; text: string };
 
 interface Tab { context: BrowserContext; page: Page; console: string[]; userAt: number; userNote: boolean }
 
