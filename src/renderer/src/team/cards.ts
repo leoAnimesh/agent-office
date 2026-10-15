@@ -21,3 +21,15 @@ export function teamCard(agent: Agent, tasks: Task[], role: Role | undefined): T
     done: mine.filter((t) => t.status === 'done').length,
   };
 }
+
+/** The live numbers on the boss's row: employees busy, and tasks stuck, waiting for review, queued and merged. */
+export function teamSummary(agents: Agent[], tasks: Task[]): { working: number; needsHelp: number; review: number; queued: number; merged: number } {
+  const count = (s: Task['status'][]) => tasks.filter((t) => s.includes(t.status)).length;
+  return {
+    working: agents.filter((a) => a.kind === 'employee' && (a.status === 'working' || a.status === 'thinking')).length,
+    needsHelp: count(['needs_help', 'failed']),
+    review: count(['review']),
+    queued: count(['queued']),
+    merged: count(['done']),
+  };
+}

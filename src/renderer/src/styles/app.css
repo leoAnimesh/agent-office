@@ -232,7 +232,6 @@
 .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
 .team-card { position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; background: var(--card); border: 1px solid #33374a; border-radius: 10px; box-shadow: 0 2px 0 #0e0f16; cursor: pointer; }
 .team-card:hover { border-color: var(--line-2); }
-.team-card.wide { background: var(--panel-2); }
 .team-card-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .team-card-id { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .team-open { all: unset; cursor: pointer; font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 4px; }
@@ -245,10 +244,11 @@
 .team-task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team-foot { display: flex; gap: 12px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line); }
 .team-task .chip { flex: none; white-space: nowrap; }
-/* The boss: one row across the top */
-.team-card.wide { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
-.team-card.wide .team-card-top { display: contents; }
-.team-card.wide .team-card-id { flex: 0 1 180px; }
-.team-card.wide .team-card-menu { order: 10; align-self: center; }
-.team-card.wide .team-task { flex: 2 1 240px; }
-.team-card.wide .team-foot { margin: 0 0 0 auto; padding: 0; border: 0; }
+/* The boss row: identity on the left, the live team numbers in the middle */
+.boss-card { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; padding: 14px 16px; background: var(--panel-2); border: 1px solid #33374a; border-radius: 10px; box-shadow: 0 2px 0 #0e0f16; cursor: pointer; }
+.boss-card:hover { border-color: var(--line-2); }
+.boss-id { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.boss-stats { flex: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.boss-stat { min-width: 84px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.boss-stat-n { font-family: var(--font-pixel); font-size: 22px; line-height: 1; }
+.boss-stat.zero .boss-stat-n { color: var(--muted); }

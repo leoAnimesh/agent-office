@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, Role, Task } from '../../../shared/types';
-import { teamCard } from './cards';
+import { teamCard, teamSummary } from './cards';
 
 const agent = (over: Partial<Agent> = {}): Agent => ({ id: 'a', projectId: 'p', name: 'Fern', roleId: 'frontend', kind: 'employee', status: 'idle', bubble: 'Idle', ...over });
 const role = { id: 'frontend', model: 'auto' } as Role;
@@ -25,5 +25,13 @@ describe('teamCard', () => {
     expect(teamCard(agent(), [], role)).toMatchObject({ status: 'idle', label: 'Idle', task: null, model: 'auto', done: 0 });
     expect(teamCard(agent({ kind: 'boss', roleId: 'boss' }), [], { id: 'boss', model: 'opus' } as Role)).toMatchObject({ model: 'opus' });
     expect(teamCard(agent(), [], undefined).model).toBe('');
+  });
+});
+
+describe('teamSummary', () => {
+  it('counts what the team is doing right now', () => {
+    const agents = [agent({ id: 'a', status: 'working' }), agent({ id: 'b', status: 'thinking' }), agent({ id: 'c' }), agent({ id: 'boss', kind: 'boss', status: 'working' })];
+    const tasks = [task({ status: 'needs_help' }), task({ status: 'failed' }), task({ status: 'review' }), task({ status: 'queued' }), task({ status: 'queued' }), task({ status: 'done' }), task({ status: 'cancelled' })];
+    expect(teamSummary(agents, tasks)).toEqual({ working: 2, needsHelp: 2, review: 1, queued: 2, merged: 1 });
   });
 });
