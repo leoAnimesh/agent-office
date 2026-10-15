@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitWithin, outputType } from './prepare';
+import { filesFromPaste, fitWithin, outputType } from './prepare';
 
 describe('fitWithin', () => {
   it('scales the long side down to the limit and keeps the shape', () => {
@@ -16,5 +16,15 @@ describe('outputType', () => {
     expect(outputType('image/gif', 1_000)).toBe('image/gif');
     expect(outputType('image/webp', 1_000)).toBe('image/jpeg');
     expect(outputType('image/jpeg', 1_000)).toBe('image/jpeg');
+  });
+});
+
+describe('filesFromPaste', () => {
+  const png = { name: 'image.png' } as File;
+  it('takes pasted files only when there is no text with them', () => {
+    expect(filesFromPaste(['Files'], [png])).toEqual([png]);
+    // Office / Pages copies carry text plus a picture of it: keep the text.
+    expect(filesFromPaste(['text/plain', 'text/html', 'Files'], [png])).toEqual([]);
+    expect(filesFromPaste(['text/plain'], [])).toEqual([]);
   });
 });

@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { canSend, checkAttachments, formatSize } from '../../../shared/attachments';
 import type { NewAttachment } from '../../../shared/types';
-import { prepareFile, type Pending } from './prepare';
+import { filesFromPaste, prepareFile, type Pending } from './prepare';
 
 interface Props { onSend: (text: string, files: NewAttachment[]) => Promise<boolean>; dropped: File[] | null; onDroppedTaken: () => void }
 
@@ -61,7 +61,7 @@ export const ChatComposer = memo(function ChatComposer({ onSend, dropped, onDrop
       {problem && <p className="small attach-problem" role="alert">{problem}</p>}
       <textarea id="boss-msg" className="input" rows={3} value={draft} placeholder="Describe what the team should build…"
         onChange={(e) => setDraft(e.target.value)}
-        onPaste={(e) => { const list = Array.from(e.clipboardData.files); if (list.length > 0) { e.preventDefault(); void add(list); } }}
+        onPaste={(e) => { const list = filesFromPaste(Array.from(e.clipboardData.types), Array.from(e.clipboardData.files)); if (list.length > 0) { e.preventDefault(); void add(list); } }}
         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
       <div className="row">
         <button type="button" className="btn small" onClick={() => picker.current?.click()}>📎 Attach</button>

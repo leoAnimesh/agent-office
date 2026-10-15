@@ -44,3 +44,8 @@ export async function prepareFile(f: File): Promise<Pending> {
   const finalName = mime === 'image/jpeg' ? name.replace(/\.(png|webp)$/i, '.jpg') : name;
   return { key, name: finalName, mime, size: data.byteLength, data, preview: dataUrl(data, mime) };
 }
+
+/** Files to attach from a paste. A paste that also carries text (e.g. from Word or Pages, which add a picture of it) stays text. */
+export function filesFromPaste(types: readonly string[], files: File[]): File[] {
+  return types.includes('text/plain') ? [] : files;
+}
