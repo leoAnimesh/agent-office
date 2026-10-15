@@ -9,6 +9,8 @@ files:
 asarUnpack:
   # The terminal's native PTY (and its prebuilt per-OS binaries) must live outside the asar to load and exec.
   - "**/node_modules/@lydell/node-pty*/**"
+  # playwright-core reads its own scripts from disk and spawns the browser; keep it outside the asar.
+  - "**/node_modules/playwright-core/**"
 extraResources:
   - from: resources
     to: resources
