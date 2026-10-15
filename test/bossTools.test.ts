@@ -1,3 +1,5 @@
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bossTools, type ToolDef } from '../src/main/agents/bossTools';
 import { finished, harness, type Harness } from './helpers/manager';
@@ -12,18 +14,19 @@ const call = (tools: ToolDef[], name: string, args: unknown = {}) => tools.find(
 
 async function setup(over: Partial<Project> = {}) {
   const env = await h.make();
-  const project = { ...env.project, ...over };
+  const project = Object.assign(env.project, over);
   const requestMerge = vi.fn(async () => ({ status: 'awaiting_user_approval' }));
   const report = vi.fn();
   const rolesChanged = vi.fn();
-  const tools = bossTools({ manager: env.manager, roles: env.roles, project, requestMerge, report, rolesChanged });
-  return { ...env, tools, requestMerge, report, rolesChanged };
+  const saveProject = vi.fn(async () => undefined);
+  const tools = bossTools({ manager: env.manager, roles: env.roles, skills: env.skills, project, requestMerge, report, rolesChanged, saveProject });
+  return { ...env, project, tools, requestMerge, report, rolesChanged, saveProject };
 }
 
 describe('bossTools', () => {
   it('exposes the documented tool set', async () => {
     const { tools } = await setup();
-    expect(tools.map((t) => t.name).sort()).toEqual(['assign_task', 'cancel_task', 'create_role', 'get_task', 'hire', 'list_roles', 'list_tasks', 'list_team', 'message_agent', 'report_to_user', 'request_merge', 'sync_branch', 'update_role']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['assign_task', 'cancel_task', 'create_role', 'get_task', 'hire', 'list_roles', 'list_skills', 'list_tasks', 'list_team', 'message_agent', 'report_to_user', 'request_merge', 'set_project_skills', 'sync_branch', 'update_role']);
     for (const t of tools) expect(t.description.length).toBeGreaterThan(10);
   });
 
@@ -110,5 +113,66 @@ describe('role changes are visible', () => {
     expect(rolesChanged).toHaveBeenCalledTimes(2);
     expect(report).toHaveBeenLastCalledWith(expect.stringMatching(/Changed role \*\*Frontend Engineer\*\*[\s\S]*model: sonnet → opus|model: auto → opus/));
     expect(report.mock.lastCall![0]).toContain('Ship it.');
+  });
+});
+
+describe('project skills in employee prompts', () => {
+  it('gives employees the project skills, not the role skills, and picks up changes on the next task', async () => {
+    const { manager, project } = await h.make();
+    await manager.hire('frontend');
+    const promptOf = async () => fs.readFile(path.join(h.paths.promptDir, `${manager.findAgent('Pixel')!.id}.md`), 'utf8');
+
+    let done = finished(manager, 'T-101');
+    await manager.createTask({ assignee: 'Pixel', title: 'a', brief: 'a', createdBy: 'user' });
+    await done;
+    expect(await promptOf()).not.toContain('## Skills'); // unchosen: none, even though the role lists four
+
+    project.skills = [{ id: 'docker', reason: 'x', addedBy: 'boss' }, { id: 'missing-skill', reason: 'x', addedBy: 'user' }];
+    done = finished(manager, 'T-102');
+    await manager.createTask({ assignee: 'Pixel', title: 'b', brief: 'b', createdBy: 'user' });
+    await done;
+    const text = await promptOf();
+    expect(text).toContain('### Docker');
+    expect(text).not.toContain('### React patterns');
+  });
+});
+
+describe('project skills tools', () => {
+  it('lists the library with project flags', async () => {
+    const { tools } = await setup({ skills: [{ id: 'docker', reason: 'x', addedBy: 'user' }], skillsExcluded: ['vue'] });
+    const list = (await call(tools, 'list_skills')) as Record<string, unknown>[];
+    expect(list).toHaveLength(22);
+    expect(list.find((s) => s.id === 'docker')).toMatchObject({ name: 'Docker', in_project: true, added_by: 'user', excluded: false, tags: ['ops', 'docker'] });
+    expect(list.find((s) => s.id === 'vue')).toMatchObject({ in_project: false, excluded: true });
+    expect(list.find((s) => s.id === 'vue')).not.toHaveProperty('added_by');
+  });
+
+  it('sets the project skills, keeps user ones, reports skips, and saves', async () => {
+    const { tools, project, saveProject } = await setup({ skills: [{ id: 'docker', reason: 'mine', addedBy: 'user' }], skillsExcluded: ['vue'] });
+    const r = await call(tools, 'set_project_skills', { skills: [{ id: 'typescript', reason: 'TS repo' }, { id: 'vue', reason: 'x' }] });
+    expect(r).toEqual({
+      skills: [{ id: 'docker', reason: 'mine', added_by: 'user' }, { id: 'typescript', reason: 'TS repo', added_by: 'boss' }],
+      kept_user_skills: ['docker'],
+      skipped: [{ id: 'vue', why: 'removed by the user' }],
+      note: 'Employees get these from their next task.',
+    });
+    expect(project.skills!.map((s) => s.id)).toEqual(['docker', 'typescript']);
+    expect(saveProject).toHaveBeenCalledOnce();
+  });
+
+  it('refuses unknown ids and too many, leaving the set unchanged', async () => {
+    const { tools, project, saveProject } = await setup();
+    await expect(call(tools, 'set_project_skills', { skills: [{ id: 'nope', reason: 'x' }] })).rejects.toThrow(/Unknown skills: nope/);
+    await expect(call(tools, 'set_project_skills', { skills: Array.from({ length: 13 }, () => ({ id: 'docker', reason: 'x' })) })).rejects.toThrow();
+    expect(project.skills).toBeUndefined();
+    expect(saveProject).not.toHaveBeenCalled();
+  });
+
+  it('reminds the boss on assign_task only while skills are unchosen', async () => {
+    const { tools, project } = await setup();
+    await call(tools, 'hire', { role_id: 'frontend' });
+    expect(await call(tools, 'assign_task', { agent: 'Pixel', title: 'a', brief: 'a' })).toMatchObject({ reminder: expect.stringContaining('set_project_skills') });
+    project.skills = [];
+    expect(await call(tools, 'assign_task', { agent: 'Pixel', title: 'b', brief: 'b' })).not.toHaveProperty('reminder');
   });
 });

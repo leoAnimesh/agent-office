@@ -10,6 +10,7 @@ export const IPC = {
   defaultProjectsDir: 'project:default-dir',
   closeProject: 'project:close',
   updateProject: 'project:update',
+  setProjectSkills: 'project:skills',
   snapshot: 'project:snapshot',
   sendToBoss: 'boss:send',
   listRoles: 'team:roles',
@@ -50,6 +51,7 @@ export interface AgentOfficeApi {
   defaultProjectsDir(): Promise<string>;
   closeProject(): Promise<void>;
   updateProject(patch: ProjectPatch): Promise<Project>;
+  setProjectSkills(edit: { add?: string[]; remove?: string[] }): Promise<WorkspaceSnapshot>;
   snapshot(): Promise<WorkspaceSnapshot | null>;
   sendToBoss(text: string): Promise<void>;
   listRoles(): Promise<Role[]>;

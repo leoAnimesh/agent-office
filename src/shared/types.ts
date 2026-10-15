@@ -16,7 +16,11 @@ export interface Role {
   look: Look;
 }
 
-export interface Skill { id: string; name: string; description: string; body: string }
+export interface Skill { id: string; name: string; description: string; body: string; tags: string[] }
+
+/** A skill every employee on the project gets. The user's own choices win over the boss's. */
+export interface ProjectSkill { id: string; reason: string; addedBy: 'boss' | 'user' }
+export const MAX_PROJECT_SKILLS = 12;
 
 export interface Agent {
   id: string;
@@ -76,6 +80,10 @@ export interface Project {
   bossId?: string;
   maxConcurrent: number;
   autoMerge: boolean;
+  /** Skills every employee on the project gets; undefined until the boss or the user first picks. */
+  skills?: ProjectSkill[];
+  /** Skills the user removed; the boss cannot add them back. */
+  skillsExcluded?: string[];
 }
 
 export type RunnerEvent =

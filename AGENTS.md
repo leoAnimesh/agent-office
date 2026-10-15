@@ -34,7 +34,7 @@ src/main/        Electron main (Node). Plain TS modules with injected deps, unit
   claude/          ClaudeRunner (spawns `claude -p` stream-json), streamParser, status (desk bubble),
                    args (CLI flags), locate (find claude on each OS), shellPath (GUI PATH fix), killTree
   agents/          AgentManager (hire/fire/tasks/queue/merge/message), taskRules (state machine + queue),
-                   prompt (role prompt + skills), bossTools (zod-validated MCP tool defs)
+                   prompt (role prompt + project skills), projectSkills (the project's skill set: boss picks, user edits), bossTools (zod-validated MCP tool defs)
   boss/            BossSession: the boss's long-lived claude session ↔ chat entries
   mcp/             McpHost: Streamable-HTTP MCP server on 127.0.0.1 with a bearer token
   terminal/        TerminalService (one PTY per open project, batched output, backlog), pty (lazy @lydell/node-pty), ipcArgs
@@ -109,7 +109,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - Model and agent text is rendered only as React text. Never use `dangerouslySetInnerHTML`.
 - The MCP host listens only on `127.0.0.1`, uses a random bearer token compared in constant time, and caps the body size. Its `mcp.json` is mode 0600.
 - `worktreeFor()` only opens paths inside `<repo>/.agentoffice/wt/`.
-- Roles are app-wide and only the boss changes them (`create_role` / `update_role`, no approval step). Every change is posted to the chat in full (including new instructions), the boss role is protected, `permissionMode` stays `acceptEdits`, and models and tools are fixed enums. A prompt-injected boss could still rewrite a role's instructions for every project: it is visible, not blocked.
+- Roles are app-wide and only the boss changes them (`create_role` / `update_role`, no approval step). Every change is posted to the chat in full (including new instructions), the boss role is protected, `permissionMode` stays `acceptEdits`, and models and tools are fixed enums. A prompt-injected boss could still rewrite a role's instructions for every project: it is visible, not blocked. Project skills are picked by the boss (`set_project_skills`) from the built-in library; the user's additions and removals in the Team tab always win.
 - History is read-only: refs must be local branches, hashes must match `^[0-9a-f]{7,40}# AGENTS.md
 
 This guide is for coding agents working in AgentOffice, an open-source Electron desktop app (macOS, Windows, Linux; MIT licence). In the app, a **boss** Claude Code agent hires **employee** agents, delegates tasks to them and reviews their work, all shown as a pixel-art office. This file is the only source of agent instructions; `CLAUDE.md` imports it.
@@ -272,6 +272,6 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - The IPC sender guard accepts any `file://` frame and prefix-matches the dev URL.
 - Validation messages show internal key names.
 - There's no back-off when a crashing boss is restarted.
-- With the role editor gone, the app cannot change a role's skills (roles made in chat start with none), permission mode or sprite look, delete a role, or change the boss's model after onboarding. Two role names that both slug to `role` (e.g. non-Latin names) collide.
+- With the role editor gone, role skill lists no longer do anything (employees get the project's skills), the app cannot change a role's permission mode or sprite look, delete a role, or change the boss's model after onboarding. Two role names that both slug to `role` (e.g. non-Latin names) collide.
 - Terminal: a shell that fails to start shows the error without a Restart button; reattaching (window reload) can draw one batch of output twice; the backlog can start mid escape sequence.
 - Only the Claude Code CLI is supported. Codex would plug in behind the `AgentRunner` interface (`src/main/claude/runner.ts`).

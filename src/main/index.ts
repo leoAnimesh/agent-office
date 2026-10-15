@@ -103,6 +103,7 @@ function registerIpc(svc: ProjectService, settings: SettingsStore, status: { cur
   handle(IPC.defaultProjectsDir, () => app.getPath('documents'));
   handle(IPC.closeProject, () => svc.close());
   handle(IPC.updateProject, (patch: unknown) => svc.updateProject(patch));
+  handle(IPC.setProjectSkills, (edit: unknown) => svc.setProjectSkills(edit));
   handle(IPC.snapshot, () => (svc.current() ? svc.snapshot() : null));
   handle(IPC.sendToBoss, (text: unknown) => svc.sendToBoss(str(text, 'message')));
   handle(IPC.listRoles, () => svc.listRoles());

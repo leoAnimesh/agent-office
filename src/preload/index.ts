@@ -12,6 +12,7 @@ const api: AgentOfficeApi = {
   defaultProjectsDir: () => ipcRenderer.invoke(IPC.defaultProjectsDir),
   closeProject: () => ipcRenderer.invoke(IPC.closeProject),
   updateProject: (patch) => ipcRenderer.invoke(IPC.updateProject, patch),
+  setProjectSkills: (edit) => ipcRenderer.invoke(IPC.setProjectSkills, edit),
   listSkills: () => ipcRenderer.invoke(IPC.listSkills),
   fireAgent: (agentId) => ipcRenderer.invoke(IPC.fireAgent, agentId),
   agentLog: (agentId) => ipcRenderer.invoke(IPC.agentLog, agentId),

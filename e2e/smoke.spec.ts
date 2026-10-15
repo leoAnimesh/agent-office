@@ -67,6 +67,14 @@ test('first launch → open a repo → chat with the boss → team → see the d
     await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'Team' }).click();
     await expect(win.getByRole('region', { name: 'Role library' })).toHaveCount(0);
     await expect(win.getByText('ask the boss in the chat')).toBeVisible();
+    const skills = win.getByRole('region', { name: 'Project skills' });
+    await expect(skills.getByText("The boss hasn't picked skills for this project yet.")).toBeVisible();
+    await skills.getByLabel('Add skill').selectOption('docker');
+    await skills.getByRole('button', { name: 'Add' }).click();
+    await expect(skills.getByText('Every employee on this project gets these.')).toBeVisible();
+    await expect(skills.getByText('1 / 12')).toBeVisible();
+    await skills.getByRole('button', { name: 'Remove Docker' }).click();
+    await expect(skills.getByText('0 / 12')).toBeVisible();
 
     // Each team member's actions sit behind a ⋯ menu.
     const options = win.getByRole('button', { name: 'Options for Pixel' });

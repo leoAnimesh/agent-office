@@ -20,6 +20,12 @@ export const skillSchema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().max(200),
   body: z.string().min(1).max(50_000),
+  tags: z.array(z.string().trim().min(1).max(30)).max(10).optional(),
+}).strict();
+
+export const projectSkillsEditSchema = z.object({
+  add: z.array(id).max(22).optional(),
+  remove: z.array(id).max(22).optional(),
 }).strict();
 
 export const projectPatchSchema = z.object({

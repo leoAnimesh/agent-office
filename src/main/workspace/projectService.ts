@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { Agent, CommitDetail, CommitSummary, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, Task, WorkspaceEvent, WorkspaceSnapshot } from '../../shared/types';
 import { AgentManager, type ManagerEvent, type MergeOutcome, type MessageResult } from '../agents/agentManager';
+import { applyUserEdit } from '../agents/projectSkills';
 import { bossTools, type ToolDef } from '../agents/bossTools';
 import { createClassifier } from '../agents/classifier';
 import { BossSession } from '../boss/bossSession';
@@ -14,7 +15,7 @@ import type { DataPaths } from '../store/paths';
 import { ProjectStore } from '../store/projectStore';
 import { RoleStore } from '../store/roleStore';
 import { SkillStore } from '../store/skillStore';
-import { parseOrThrow, projectPatchSchema } from '../store/validate';
+import { parseOrThrow, projectPatchSchema, projectSkillsEditSchema } from '../store/validate';
 import { ApprovalBroker } from './approvalBroker';
 import { createRepo, type NewProjectInput } from './newProject';
 import { killTree } from '../claude/killTree';
@@ -185,6 +186,8 @@ export class ProjectService extends EventEmitter {
       requestMerge: (task) => this.requestMerge(ws, task),
       report: (text) => { void ws.boss.report(text); },
       rolesChanged: () => this.emitWs(ws, { type: 'roles-changed' }),
+      skills: this.skills,
+      saveProject: async () => { await this.store.saveProject(project); this.emitWs(ws, { type: 'project', project: { ...project } }); },
     });
     const host = new McpHost(tools);
     await host.start();
@@ -243,6 +246,20 @@ export class ProjectService extends EventEmitter {
     await this.store.saveProject(ws.project);
     this.emitWs(ws, { type: 'project', project: { ...ws.project } });
     return { ...ws.project };
+  }
+
+  /** The user's edit to the project's skills; the boss is told and cannot undo the removals. */
+  async setProjectSkills(edit: unknown): Promise<WorkspaceSnapshot> {
+    const ws = this.mustWs();
+    const clean = parseOrThrow(projectSkillsEditSchema, edit, 'project skills');
+    const known = new Set((await this.skills.list()).map((s) => s.id));
+    const next = applyUserEdit(ws.project, clean, known);
+    Object.assign(ws.project, next);
+    await this.store.saveProject(ws.project);
+    this.emitWs(ws, { type: 'project', project: { ...ws.project } });
+    const change = [...(clean.add ?? []).map((id) => `+${id}`), ...(clean.remove ?? []).map((id) => `−${id}`)].join(' ');
+    if (change) void ws.boss.notify(`The user changed the project skills: ${change}. Respect these; you cannot re-add skills the user removed.`).catch(() => undefined);
+    return this.snapshot();
   }
 
   listSkills(): Promise<Skill[]> { return this.skills.list(); }

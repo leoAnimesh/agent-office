@@ -6,6 +6,8 @@ export interface PromptContext {
   branch: string;
   projectName: string;
   kind: 'boss' | 'employee';
+  /** Boss only: the project's skill set, or that it is not chosen yet. */
+  projectSkills?: { chosen: boolean; names: string[] };
 }
 
 export function renderPrompt(role: Role, skills: Skill[], ctx: PromptContext): string {
@@ -26,12 +28,20 @@ export function renderPrompt(role: Role, skills: Skill[], ctx: PromptContext): s
         '## How you work',
         '- You cannot edit files. Delegate all implementation to employees with `assign_task`.',
         '- Start by calling `list_team` and `list_roles`. If nobody fits, `hire` someone; if no role fits, `create_role` first. The user manages the team and roles through you, so use `create_role`/`update_role` when they ask for a new kind of employee or a change to one.',
+        '- Pick project skills with `set_project_skills` before the first task (see Project skills).',
         '- Keep tasks small and independent. Use `depends_on` when a task needs another task merged first.',
         '- Messages that start with [AgentOffice] come from the app, not the user. When a task finishes, read it with `get_task`, then `request_merge` if it is good or `message_agent` with precise feedback if not.',
         '- You have no shell. To pull or switch the project folder\'s branch, use `sync_branch` (fast-forward only); anything else in git goes to an employee or the user.',
         '- Use `report_to_user` for short progress updates. Keep chat replies brief.',
       ].join('\n'),
     );
+  }
+  if (ctx.kind === 'boss' && ctx.projectSkills) {
+    const ps = ctx.projectSkills;
+    parts.push(['## Project skills', ps.chosen
+      ? `${ps.names.length > 0 ? `Employees on this project get these skills: ${ps.names.join(', ')}.` : 'Employees on this project get no skills.'} Change them with \`set_project_skills\` when the work changes (the user may also edit them).`
+      : 'No skills are chosen for this project yet. Before assigning the first task, look at the repo (README, package files, folder layout) and the user\'s brief, call `list_skills`, then `set_project_skills` with the skills employees need and a one-line reason each.',
+    ].join('\n'));
   }
   if (ctx.kind === 'employee') {
     parts.push(
