@@ -315,3 +315,42 @@ test('a project terminal runs commands in the project folder', async () => {
     await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });
+
+test('history shows what the team merged, file by file', async () => {
+  const repo = await makeRepo();
+  const run = (...args: string[]) => execFileSync('git', args, { cwd: repo });
+  await fs.writeFile(path.join(repo, 'docs.md'), 'docs\n');
+  run('add', '.'); run('commit', '-q', '-m', 'Write docs');
+  run('checkout', '-q', '-b', 'ao/pixel/greeting-t-101');
+  await fs.writeFile(path.join(repo, 'greet.ts'), 'export const hi = "hello";\n');
+  run('add', '.'); run('commit', '-q', '-m', 'Add a greeting');
+  run('checkout', '-q', 'main');
+  run('merge', '--no-ff', '-q', '-m', 'Merge T-101: Add a greeting', 'ao/pixel/greeting-t-101');
+  const env = { AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: repo };
+  const { app, userData } = await launch(env);
+  try {
+    const win = await app.firstWindow();
+    await win.getByRole('button', { name: 'Browse' }).click();
+    await win.getByRole('button', { name: /Open the office/ }).click();
+    await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'History' }).click();
+
+    const list = win.getByRole('region', { name: 'Commits' });
+    await expect(list.locator('.commit-subject')).toHaveText([/T-101\s*Merge T-101: Add a greeting/, 'Write docs', 'init']);
+    await list.getByRole('button', { name: /Merge T-101/ }).click();
+    const detail = win.getByRole('region', { name: 'Commit details' });
+    await expect(detail.getByRole('heading', { name: 'Merge T-101: Add a greeting' })).toBeVisible();
+    await detail.getByRole('button', { name: /greet\.ts/ }).click();
+    await expect(win.getByRole('region', { name: 'Changes to greet.ts' }).locator('.diff-line.add')).toContainText(['+export const hi = "hello";']);
+
+    await win.getByLabel('Team merges only').check();
+    await expect(list.locator('.commit-subject')).toHaveText([/Merge T-101/]);
+    await win.getByLabel('Branch').selectOption('ao/pixel/greeting-t-101');
+    await expect(list.locator('.commit-subject')).toHaveCount(0);
+    await win.getByLabel('Team merges only').uncheck();
+    await expect(list.locator('.commit-subject').first()).toHaveText('Add a greeting');
+  } finally {
+    await app.close();
+    await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});

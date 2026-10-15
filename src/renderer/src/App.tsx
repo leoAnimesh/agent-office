@@ -11,6 +11,7 @@ import { ProjectSettingsView } from './components/ProjectSettingsView';
 import { Sidebar } from './components/Sidebar';
 import { TaskBoard } from './components/TaskBoard';
 import { TeamView } from './components/TeamView';
+import { HistoryView } from './components/HistoryView';
 import { TerminalPanel } from './components/TerminalPanel';
 import { clampHeight, keyResize, readHeight, writeHeight } from './terminal/dock';
 import { lookFor } from './sprites/sprite';
@@ -90,8 +91,9 @@ export function App() {
       case 'office': return <OfficeView ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} />;
       case 'agent': return <AgentDetailView ws={ws} roles={state.roles} agentId={state.view.agentId} logs={state.logs[state.view.agentId] ?? []} onBack={() => go({ name: 'office' })} onLogs={onLogs} onError={onError} />;
       case 'team': return <TeamView ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onError={onError} />;
-      case 'tasks': return <TaskBoard ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onNewTask={() => { go({ name: 'office' }); setTimeout(() => document.getElementById('boss-msg')?.focus(), 0); }} onError={onError} />;
+      case 'tasks': return <TaskBoard ws={ws} roles={state.roles} onOpenAgent={(id) => go({ name: 'agent', agentId: id })} onViewCommit={(sha) => go({ name: 'history', sha })} onNewTask={() => { go({ name: 'office' }); setTimeout(() => document.getElementById('boss-msg')?.focus(), 0); }} onError={onError} />;
       case 'settings': return <AppSettingsView onStatus={setStatus} onError={onError} />;
+      case 'history': return <HistoryView key={state.view.sha ?? ''} ws={ws} sha={state.view.sha} onError={onError} />;
       case 'project-settings': return <ProjectSettingsView ws={ws} onClosed={() => dispatch({ type: 'closed' })} onError={onError} />;
     }
   })();

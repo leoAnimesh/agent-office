@@ -2,10 +2,11 @@ import type { AppStatus, Project } from '../../../shared/types';
 import { claudeLabel } from '../layout/claudeLabel';
 import type { View } from '../state';
 
-const TABS: { name: 'office' | 'tasks' | 'team' | 'project-settings'; label: string }[] = [
+const TABS: { name: 'office' | 'tasks' | 'team' | 'history' | 'project-settings'; label: string }[] = [
   { name: 'office', label: 'Office' },
   { name: 'tasks', label: 'Tasks' },
   { name: 'team', label: 'Team' },
+  { name: 'history', label: 'History' },
   { name: 'project-settings', label: 'Settings' },
 ];
 
