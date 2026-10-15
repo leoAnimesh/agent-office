@@ -35,7 +35,8 @@ src/main/        Electron main (Node). Plain TS modules with injected deps, unit
                    args (CLI flags), locate (find claude on each OS), shellPath (GUI PATH fix), killTree
   agents/          AgentManager (hire/fire/tasks/queue/merge/message), taskRules (state machine + queue),
                    prompt (role prompt + project skills), projectSkills (the project's skill set: boss picks, user edits), bossTools (zod-validated MCP tool defs)
-  boss/            BossSession: the boss's long-lived claude session ↔ chat entries
+  boss/            BossSession: the boss's long-lived claude session ↔ chat entries; attachments (chat files under app
+                   data: images go to the boss as image blocks, other files as a path in a folder added with `--add-dir`)
   mcp/             McpHost: Streamable-HTTP MCP server on 127.0.0.1 with a bearer token
   terminal/        TerminalService (one PTY per open project, batched output, backlog), pty (lazy @lydell/node-pty), ipcArgs
   browser/         BrowserService (one headless Chromium per project, a private tab per employee, screencast for the Preview tab),
@@ -72,7 +73,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 7. The boss calls `request_merge`, and the user approves a card in the chat (unless auto-merge is on). `WorktreeManager.merge` then merges into the base branch, and the boss gets the outcome.
 
 **Where data lives:**
-- App data is under Electron `userData` (`dataPaths()` in `store/paths.ts`): `settings.json`, `roles/`, `skills/`, `prompts/`, and `projects/<id>/{project.json, agents.json, tasks.json, chat.jsonl, logs/<agentId>.jsonl, pending-merges.json, mcp.json}`.
+- App data is under Electron `userData` (`dataPaths()` in `store/paths.ts`): `settings.json`, `roles/`, `skills/`, `prompts/`, and `projects/<id>/{project.json, agents.json, tasks.json, chat.jsonl, logs/<agentId>.jsonl, pending-merges.json, mcp.json, attachments/}`.
 - Inside the user's repo, the only thing AgentOffice adds is `.agentoffice/`. It is excluded via `.git/info/exclude`, never via `.gitignore`.
 
 ## Invariants: don't break these
@@ -227,12 +228,13 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
 - Roles are app-wide and only the boss changes them (`create_role` / `update_role`, no approval step). Every change is posted to the chat in full (including new instructions), the boss role is protected, `permissionMode` stays `acceptEdits`, and models and tools are fixed enums. A prompt-injected boss could still rewrite a role's instructions for every project: it is visible, not blocked.
  and resolve to a commit, and a diff path must be one of that commit's changed files.
 - Employee browser tools reach only the caller's own tab and dev server (the token identifies the employee). Only `localhost` / `127.0.0.1` / `[::1]` pages can be opened or navigated to (redirects elsewhere get a 403 page). Dev server commands run without a shell in the employee's worktree. Preview input is validated (`browser/previewArgs.ts`) and agents have no channel to it. Tabs use in-memory profiles, never the user's own, and no remote-debugging port is opened. `playwright-core` is pinned exactly and unpacked from the asar.
+- Chat attachments arrive from the renderer as bytes, never paths. Main checks them (count, size, image type by magic bytes) and stores them under app data with generated names. `readAttachment` returns only image files of the open project, by id. The boss reads attached files through `--add-dir <attachments folder>`.
 - The terminal is the user's own shell: it always starts in the open project's folder (decided in main, never sent by the renderer), takes validated sizes and ≤ 64 KB writes, and has no channel from the MCP host or agents. `@lydell/node-pty` is pinned exactly (it is a beta) and unpacked from the asar (`asarUnpack`).
 - The `AO_*` dev hooks and `ELECTRON_RENDERER_URL` are read only by `testOverrides.ts`, and **only when not packaged**. Packaged builds also turn on Electron fuses (no `RUN_AS_NODE`, no `NODE_OPTIONS`, no inspect, app loaded only from the asar).
 
 ## Testing conventions
 
-- TDD: write the test, watch it fail for the right reason, then implement. Keep pure logic in small modules next to their feature (`office/model.ts`, `tasks/board.ts`, …) so it can be tested without React.
+- TDD: write the test, watch it fail for the right reason, then implement. Render-cost tests (`chat/renderCount.test.tsx`) run under `jsdom` (`// @vitest-environment jsdom`) and count re-renders, so the chat stays fast. Keep pure logic in small modules next to their feature (`office/model.ts`, `tasks/board.ts`, …) so it can be tested without React.
 - `test/fake-claude/fake-claude.mjs` stands in for the CLI. Use it through `test/helpers/runner.ts` (`fakeRunner`) or `test/helpers/manager.ts` (`harness()`, `waitFor`, `finished`). It is controlled by env vars:
   - `FAKE_CLAUDE_FIXTURE`: replay a recorded stream-json file;
   - `FAKE_CLAUDE_FILE`: append a line to a file in the cwd, to create a diff (the boss, started with `--mcp-config`, never writes);
@@ -244,6 +246,7 @@ docs/superpowers specs/ (design spec) and plans/ (implementation plans 1–3)
   - `FAKE_CLAUDE_DELAY_MS`: pause between fixture lines;
   - `FAKE_CLAUDE_ARGV_OUT`: record each launch's argv and cwd.
   - `FAKE_CLAUDE_RESULT`: use this exact text as the success result (e.g. classifier JSON).
+  - `FAKE_CLAUDE_STDIN_OUT`: append each stdin line (the user turns, including image blocks) to this file.
   - `FAKE_CLAUDE_MCP_CALLS`: a JSON list of `{ tool, args }` that an employee calls on its MCP config before replying (`$URL` becomes the last returned url); the result lists what each call returned.
   - The fake treats a launch with `--allowedTools mcp__agentoffice` as the boss (it never writes files).
 - Dev and E2E hooks, read only when unpackaged:

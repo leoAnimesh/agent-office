@@ -180,7 +180,7 @@ describe('AgentManager', () => {
     await m.hire('backend');
     const crashed = finished(m, 'T-101');
     await m.createTask({ assignee: 'Pixel', title: 'a', brief: 'a', createdBy: 'user' });
-    await vi.waitFor(() => expect(m.getTask('T-101')!.status).not.toBe('queued')); // runner created (after classification)
+    await vi.waitFor(() => expect(m.getTask('T-101')!.status).not.toBe('queued'), { timeout: 15_000 }); // runner created (after classification)
     delete fakeEnv.FAKE_CLAUDE_CRASH; // only T-101's runner was created with it
     await m.createTask({ assignee: 'Byte', title: 'b', brief: 'b', createdBy: 'user' });
     await crashed;

@@ -105,8 +105,13 @@ export interface AppStatus {
   claude: { path: string; version: string | null } | null;
 }
 
+/** An image or file sent with a chat message; the bytes live under the project's attachments folder. */
+export interface AttachmentMeta { id: string; name: string; mime: string; size: number; kind: 'image' | 'file' }
+/** An attachment on its way from the chat box to main. */
+export interface NewAttachment { name: string; mime: string; data: Uint8Array }
+
 export type ChatEntry =
-  | { kind: 'user'; at: string; text: string }
+  | { kind: 'user'; at: string; text: string; attachments?: AttachmentMeta[] }
   | { kind: 'boss'; at: string; text: string }
   | { kind: 'tool'; at: string; tool: string; input: Record<string, unknown> }
   | { kind: 'event'; at: string; text: string; taskId?: string; files?: DiffStat[] }

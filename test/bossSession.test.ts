@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
+import { AttachmentStore } from '../src/main/boss/attachments';
 import { BossSession, describeFinished, finishedChatText } from '../src/main/boss/bossSession';
 import { ClaudeRunner } from '../src/main/claude/runner';
 import type { ChatEntry, Task } from '../src/shared/types';
@@ -15,7 +16,7 @@ async function setup() {
   await env.manager.createBoss('Max');
   const chat: ChatEntry[] = [];
   const boss = new BossSession({
-    project: env.project, manager: env.manager, roles: env.roles, skills: env.skills, store: env.store,
+    attachments: new AttachmentStore(path.join(h.data, 'attachments')), project: env.project, manager: env.manager, roles: env.roles, skills: env.skills, store: env.store,
     createRunner: (o) => new ClaudeRunner({ ...o, bin: process.execPath, binArgs: [FAKE_CLAUDE], env: { ...process.env, ...h.fakeEnv } }),
     claudeBin: 'claude', promptDir: h.paths.promptDir, mcpConfigPath: path.join(h.data, 'mcp.json'), isolateUserSettings: true,
   });
@@ -96,7 +97,7 @@ describe('BossSession', () => {
     let runner: ClaudeRunner | null = null;
     h.fakeEnv.FAKE_CLAUDE_HANG = '1';
     const boss = new BossSession({
-      project: env.project, manager: env.manager, roles: env.roles, skills: env.skills, store: env.store,
+      attachments: new AttachmentStore(path.join(h.data, 'attachments')), project: env.project, manager: env.manager, roles: env.roles, skills: env.skills, store: env.store,
       createRunner: (o) => (runner = new ClaudeRunner({ ...o, bin: process.execPath, binArgs: [FAKE_CLAUDE], env: { ...process.env, ...h.fakeEnv } })),
       claudeBin: 'claude', promptDir: h.paths.promptDir, mcpConfigPath: path.join(h.data, 'mcp.json'), isolateUserSettings: true,
     });

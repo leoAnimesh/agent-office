@@ -15,7 +15,8 @@ async function busyOffice() {
   await manager.hire('qa'); // Quinn
   h.fakeEnv.FAKE_CLAUDE_HANG = '1';
   const a = await manager.createTask({ assignee: 'Pixel', title: 'a', brief: 'a', createdBy: 'boss' });
-  await vi.waitFor(() => expect(manager.getTask(a.id)!.status).toBe('working'));
+  // Starting a session takes a while on slow CI machines (worktree, prompt, MCP config): wait generously.
+  await vi.waitFor(() => expect(manager.getTask(a.id)!.status).toBe('working'), { timeout: 15_000, interval: 50 });
   delete h.fakeEnv.FAKE_CLAUDE_HANG;
   const b = await manager.createTask({ assignee: 'Byte', title: 'b', brief: 'b', createdBy: 'boss' });
   const c = await manager.createTask({ assignee: 'Quinn', title: 'c', brief: 'c', createdBy: 'boss' });

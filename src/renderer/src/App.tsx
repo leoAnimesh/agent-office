@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { AppStatus, LogEntry, WorkspaceSnapshot } from '../../shared/types';
 import { AgentDetailView } from './components/AgentDetailView';
 import { BossChat } from './components/BossChat';
@@ -78,11 +78,16 @@ export function App() {
     window.agentOffice.getStatus().then(setStatus, () => setStatus({ platform: 'unknown', claude: null }));
     window.agentOffice.snapshot().then((ws) => { if (ws) opened(ws); else setNoSnapshot(true); }, () => setNoSnapshot(true));
     refreshRoles();
-    return window.agentOffice.onEvent((event) => {
+    // Files dropped outside the chat do nothing (instead of the window trying to open them).
+    const guard = (e: DragEvent) => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); };
+    document.addEventListener('dragover', guard);
+    document.addEventListener('drop', guard);
+    const off = window.agentOffice.onEvent((event) => {
       // The boss created or changed a role: reload names and looks so new hires show properly.
       if (event.type === 'roles-changed') refreshRoles();
       else dispatch({ type: 'event', event });
     });
+    return () => { off(); document.removeEventListener('dragover', guard); document.removeEventListener('drop', guard); };
   }, [refreshRoles, opened]);
 
   useEffect(() => {
@@ -103,6 +108,10 @@ export function App() {
     if (projectId && (viewName === 'office' || viewName === 'tasks' || viewName === 'team' || viewName === 'history' || viewName === 'preview')) writeProjectUi(localStore(), projectId, { view: viewName });
   }, [projectId, viewName]);
   useEffect(() => { if (projectId) writeProjectUi(localStore(), projectId, { terminal: termOpen }); }, [termOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A stable look for the chat header, so the memoized chat is not re-rendered by every agent event.
+  const bossAgent = state.ws?.agents.find((a) => a.kind === 'boss');
+  const bossLook = useMemo(() => (bossAgent ? lookFor(bossAgent, state.roles) : lookFor({ roleId: 'boss' }, state.roles)), [bossAgent?.id, bossAgent?.roleId, state.roles]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!status) return <main className="boot"><p>Looking for Claude Code…</p></main>;
   if (reopening) return <main className="boot"><p>Reopening {reopening.split(/[\\/]/).filter(Boolean).pop()}…</p></main>;
@@ -153,7 +162,7 @@ export function App() {
           <div className="view">{view}</div>
           {withChat && (
             <aside className="chat-panel">
-              <BossChat chat={ws.chat} merges={ws.merges} boss={boss} bossLook={boss ? lookFor(boss, state.roles) : lookFor({ roleId: 'boss' }, state.roles)} bossModel={bossRole?.model ?? 'opus'} stream={state.bossStream} busy={state.bossBusy} onError={onError} />
+              <BossChat chat={ws.chat} merges={ws.merges} boss={boss} bossLook={bossLook} bossModel={bossRole?.model ?? 'opus'} stream={state.bossStream} busy={state.bossBusy} onError={onError} />
             </aside>
           )}
         </div>

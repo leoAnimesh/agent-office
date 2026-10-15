@@ -50,3 +50,20 @@ describe('userMessageLine', () => {
     expect(userMessageLine('hi\nthere')).toBe('{"type":"user","message":{"role":"user","content":"hi\\nthere"}}\n');
   });
 });
+describe('images and extra folders', () => {
+  it('sends text alone as a plain string, and text with images as content blocks', () => {
+    expect(JSON.parse(userMessageLine('hi'))).toEqual({ type: 'user', message: { role: 'user', content: 'hi' } });
+    expect(JSON.parse(userMessageLine({ text: 'look', images: [{ mime: 'image/png', base64: 'AAA=' }] }))).toEqual({
+      type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'look' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAA=' } }] },
+    });
+    expect(JSON.parse(userMessageLine({ text: '', images: [{ mime: 'image/png', base64: 'AAA=' }] })).message.content).toEqual([
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAA=' } },
+    ]);
+  });
+
+  it('adds --add-dir before the variadic tool lists', () => {
+    const a = buildClaudeArgs({ addDirs: ['/data/att'], tools: ['Read'], allowedTools: ['mcp__agentoffice'] });
+    expect(a.slice(a.indexOf('--add-dir'), a.indexOf('--add-dir') + 2)).toEqual(['--add-dir', '/data/att']);
+    expect(a.indexOf('--add-dir')).toBeLessThan(a.indexOf('--tools'));
+  });
+});

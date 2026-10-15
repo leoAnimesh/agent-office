@@ -1,16 +1,24 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { Agent, ChatEntry, Look, MergeRequest } from '../../../shared/types';
+import { Fragment, memo, useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import type { Agent, ChatEntry, Look, MergeRequest, NewAttachment } from '../../../shared/types';
 import { describeToolCall } from '../chat/describe';
 import { FileChanges, legacyFinishedText } from '../chat/fileChanges';
 import { Markdown } from '../chat/Markdown';
-import { useReveal } from '../chat/reveal';
+import { AttachmentList } from '../chat/AttachmentList';
+import { ChatComposer } from '../chat/ChatComposer';
+import { StreamingBubble } from '../chat/StreamingBubble';
 import { NO_UNSEEN, onMessages, onReachedBottom, onSent, type Unseen } from '../chat/unseen';
 import { Avatar } from '../sprites/Avatar';
 import { STATUS_COLORS, STATUS_LABEL } from '../sprites/sprite';
 
-function Entry({ e }: { e: ChatEntry }) {
+// Memoized: entries are append-only and keep their identity, so old messages never re-render.
+const Entry = memo(function Entry({ e }: { e: ChatEntry }) {
   switch (e.kind) {
-    case 'user': return <div className="msg user pre">{e.text}</div>;
+    case 'user': return (
+      <div className="msg user">
+        <div className="pre">{e.text}</div>
+        {e.attachments && e.attachments.length > 0 && <AttachmentList list={e.attachments} />}
+      </div>
+    );
     case 'boss': return <div className="msg boss"><Markdown text={e.text} /></div>;
     case 'report': return <div className="msg report"><Markdown text={e.text} /></div>;
     case 'error': return <div className="msg error pre" role="alert">{e.text}</div>;
@@ -34,16 +42,55 @@ function Entry({ e }: { e: ChatEntry }) {
       </div>
     );
   }
-}
+});
 
 interface Props { chat: ChatEntry[]; merges: MergeRequest[]; boss: Agent | undefined; bossLook: Look; bossModel: string; stream: string | null; busy: boolean; onError: (m: string) => void }
 
-export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy, onError }: Props) {
-  const [draft, setDraft] = useState('');
+interface ListProps { chat: ChatEntry[]; markerIndex: number | null; hideIndex: number | null; marker: RefObject<HTMLDivElement | null> }
+
+/** The saved conversation. Re-renders only when a message is added (not while typing or streaming). */
+const MessageList = memo(function MessageList({ chat, markerIndex, hideIndex, marker }: ListProps) {
+  return (
+    <>
+      {chat.length === 0 && <p className="muted">Tell the boss what to build. It will hire people and hand out tasks.</p>}
+      {chat.map((e, i) => (
+        <Fragment key={i}>
+          {markerIndex === i && (
+            <div ref={marker} className="new-marker" role="separator" aria-label="New messages"><span>New messages</span></div>
+          )}
+          {/* The boss's reply that just landed is still being revealed by the streaming bubble below. */}
+          {i !== hideIndex && <Entry e={e} />}
+        </Fragment>
+      ))}
+    </>
+  );
+});
+
+const MergeCards = memo(function MergeCards({ merges, onAnswer }: { merges: MergeRequest[]; onAnswer: (id: string, ok: boolean) => void }) {
+  return (
+    <>
+      {merges.map((m) => (
+        <div key={m.requestId} className="merge-card" role="group" aria-label={`Merge request for ${m.taskId}`}>
+          <div><strong>Merge {m.taskId}?</strong> {m.title} <span className="muted">by {m.agentName}</span></div>
+          {m.summary && <div className="small"><Markdown text={m.summary} /></div>}
+          {m.diffStat.length > 0 && <ul className="mono small files">{m.diffStat.map((f) => <li key={f.path}>{f.path} <span className="add">+{f.add}</span> <span className="del">−{f.del}</span></li>)}</ul>}
+          <div className="row">
+            <button type="button" className="btn primary small" onClick={() => onAnswer(m.requestId, true)}>Merge</button>
+            <button type="button" className="btn small" onClick={() => onAnswer(m.requestId, false)}>Decline</button>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+});
+
+export const BossChat = memo(function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy, onError }: Props) {
   const box = useRef<HTMLDivElement>(null);
   // Follow new output only while the reader is at the bottom. Otherwise mark where the unseen
   // messages start and offer a button that jumps to that marker.
   const [atBottom, setAtBottom] = useState(true);
+  const atBottomRef = useRef(atBottom);
+  atBottomRef.current = atBottom;
   const [unseen, setUnseen] = useState<Unseen>(NO_UNSEEN);
   const prevCount = useRef(chat.length);
   const marker = useRef<HTMLDivElement>(null);
@@ -59,27 +106,25 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy
     const el = box.current;
     if (!el) return;
     const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    if (near !== atBottom) el.dataset.trace = `${el.dataset.trace ?? ''}|scroll top=${Math.round(el.scrollTop)} h=${el.scrollHeight} c=${el.clientHeight} near=${near}`.slice(-600);
     setAtBottom(near);
     if (near) setUnseen(onReachedBottom);
   };
-  // Typewriter: the streaming reply and, once it lands, the same message keep revealing smoothly.
+  // Typewriter: the streaming reply and, once it lands, the same message keep revealing in one bubble.
   const [liveIndex, setLiveIndex] = useState<number | null>(null);
   useLayoutEffect(() => { if (stream !== null && liveIndex === null) setLiveIndex(chat.length); }, [stream, liveIndex, chat.length]);
   const liveEntry = liveIndex !== null ? chat[liveIndex] : undefined;
   const landed = stream === null && liveEntry?.kind === 'boss' ? liveEntry.text : null;
-  const liveText = stream ?? landed;
-  const shown = useReveal(liveText);
-  useEffect(() => {
-    if (liveIndex !== null && stream === null && (landed === null || shown >= landed.length)) setLiveIndex(null);
-  }, [liveIndex, stream, landed, shown]);
+  const bubbleText = stream ?? landed;
+  // The bubble keeps the view pinned to the bottom as it grows, without re-rendering the chat.
+  const stick = useCallback(() => { if (atBottomRef.current) { const el = box.current; if (el) el.scrollTop = el.scrollHeight; } }, []);
+  const landedDone = useCallback(() => setLiveIndex(null), []);
+  useLayoutEffect(() => { if (stream === null && liveIndex !== null && landed === null) setLiveIndex(null); }, [stream, liveIndex, landed]);
 
   // Layout effects: stick to the bottom before the browser paints, so there is no flicker and no
   // late scroll that would wrongly mark the reader as "at the bottom".
   useLayoutEffect(() => {
     const e = { prevCount: prevCount.current, count: chat.length, atBottom };
     setUnseen((u) => onMessages(u, e));
-    if (box.current) box.current.dataset.trace = `${box.current.dataset.trace ?? ''}|msg ${e.prevCount}->${e.count} bottom=${e.atBottom}`.slice(-600);
     prevCount.current = chat.length;
     if (atBottom) scrollToEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,23 +132,38 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy
   useLayoutEffect(() => {
     if (atBottom) scrollToEnd();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [merges.length, stream, busy, shown]);
+  }, [merges.length, busy, stream === null]);
 
-  const send = async () => {
-    const text = draft.trim();
-    if (!text) return;
-    setDraft('');
+  const toBottomRef = useRef(toBottom);
+  toBottomRef.current = toBottom;
+  const onSend = useCallback(async (text: string, files: NewAttachment[]) => {
     setUnseen(onSent);
-    toBottom();
-    try { await window.agentOffice.sendToBoss(text); } catch (e) { onError(String(e)); setDraft(text); }
+    toBottomRef.current();
+    try { await window.agentOffice.sendToBoss(text, files.length > 0 ? files : undefined); return true; } catch (e) { onError(String(e)); return false; }
+  }, [onError]);
+  const answer = useCallback((id: string, ok: boolean) => { window.agentOffice.answerMerge(id, ok).catch((e: unknown) => onError(String(e))); }, [onError]);
+  // Files dragged anywhere over the chat are handed to the composer.
+  const [dragging, setDragging] = useState(false);
+  const [dropped, setDropped] = useState<File[] | null>(null);
+  const takeDropped = useCallback(() => setDropped(null), []);
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
+  // dragover repeats while a file hovers; if it stops (drag cancelled or left the window) the hint goes away.
+  const dragTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hovering = () => {
+    setDragging(true);
+    if (dragTimer.current) clearTimeout(dragTimer.current);
+    dragTimer.current = setTimeout(() => setDragging(false), 400);
   };
-  const answer = (id: string, ok: boolean) => { window.agentOffice.answerMerge(id, ok).catch((e: unknown) => onError(String(e))); };
   const status = boss?.status ?? 'idle';
   const name = boss?.name ?? 'The boss';
   const activity = boss?.status === 'working' ? boss.bubble : 'thinking';
 
   return (
-    <section className="chat" aria-label="Boss chat">
+    <section className={dragging ? 'chat dragging' : 'chat'} aria-label="Boss chat"
+      onDragOver={(e) => { if (hasFiles(e)) { e.preventDefault(); hovering(); } }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+      onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); setDragging(false); setDropped(Array.from(e.dataTransfer.files)); }}>
+      {dragging && <div className="drop-hint" aria-hidden="true">Drop to attach</div>}
       <div className="chat-head">
         <Avatar look={bossLook} size={40} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -115,43 +175,15 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy
       <div className="messages-wrap">
       <div className="messages" ref={box} onScroll={onScroll} role="log" aria-label="Conversation with the boss"
         data-at-bottom={atBottom} data-unseen={unseen.count} data-marker={unseen.markerIndex ?? ''} data-count={chat.length}>
-        {chat.length === 0 && <p className="muted">Tell the boss what to build. It will hire people and hand out tasks.</p>}
-        {chat.map((e, i) => (
-          <Fragment key={i}>
-            {unseen.markerIndex === i && (
-              <div ref={marker} className="new-marker" role="separator" aria-label="New messages"><span>New messages</span></div>
-            )}
-            {i === liveIndex && landed !== null && shown < landed.length ? (
-              <div className="msg boss streaming" aria-busy="true">
-                <Markdown text={landed.slice(0, shown)} />
-                <span className="cursor-blink stream-cursor" aria-hidden="true">▌</span>
-              </div>
-            ) : <Entry e={e} />}
-          </Fragment>
-        ))}
-        {stream && (
-          <div className="msg boss streaming" aria-busy="true">
-            <Markdown text={stream.slice(0, shown)} />
-            <span className="cursor-blink stream-cursor" aria-hidden="true">▌</span>
-          </div>
-        )}
+        <MessageList chat={chat} markerIndex={unseen.markerIndex} hideIndex={landed !== null ? liveIndex : null} marker={marker} />
+        {bubbleText !== null && <StreamingBubble text={bubbleText} onGrow={stick} onDone={landed !== null ? landedDone : undefined} />}
         {busy && !stream && (
           <div className="msg thinking small" role="status">
             <span className="dots" aria-hidden="true"><span /><span /><span /></span>
             {name} is {activity}…
           </div>
         )}
-        {merges.map((m) => (
-          <div key={m.requestId} className="merge-card" role="group" aria-label={`Merge request for ${m.taskId}`}>
-            <div><strong>Merge {m.taskId}?</strong> {m.title} <span className="muted">by {m.agentName}</span></div>
-            {m.summary && <div className="small"><Markdown text={m.summary} /></div>}
-            {m.diffStat.length > 0 && <ul className="mono small files">{m.diffStat.map((f) => <li key={f.path}>{f.path} <span className="add">+{f.add}</span> <span className="del">−{f.del}</span></li>)}</ul>}
-            <div className="row">
-              <button type="button" className="btn primary small" onClick={() => answer(m.requestId, true)}>Merge</button>
-              <button type="button" className="btn small" onClick={() => answer(m.requestId, false)}>Decline</button>
-            </div>
-          </div>
-        ))}
+        <MergeCards merges={merges} onAnswer={answer} />
       </div>
       {(unseen.count > 0 || (!atBottom && (stream || busy))) && (
         <button type="button" className="btn small jump" onClick={jump}>
@@ -159,16 +191,7 @@ export function BossChat({ chat, merges, boss, bossLook, bossModel, stream, busy
         </button>
       )}
       </div>
-      <form className="composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-        <label htmlFor="boss-msg" className="small muted">Message the boss</label>
-        <textarea id="boss-msg" className="input" rows={3} value={draft} placeholder="Describe what the team should build…"
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
-        <div className="row">
-          <span className="small muted">Enter to send · Shift+Enter for a new line</span>
-          <button type="submit" className="btn teal" style={{ marginLeft: 'auto' }}>Send</button>
-        </div>
-      </form>
+      <ChatComposer onSend={onSend} dropped={dropped} onDroppedTaken={takeDropped} />
     </section>
   );
-}
+});

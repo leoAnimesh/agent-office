@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -28,12 +28,16 @@ function Link({ href, children }: { href?: string; children?: ReactNode }) {
   );
 }
 
-export function Markdown({ text }: { text: string }) {
+const PLUGINS = [remarkGfm, remarkHtmlAsText];
+const COMPONENTS = { a: Link };
+
+/** Memoized: a chat re-renders often (typing, streaming), but a message's markdown only changes with its text. */
+export const Markdown = memo(function Markdown({ text }: { text: string }) {
   return (
     <div className="md">
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkHtmlAsText]} components={{ a: Link }}>
+      <ReactMarkdown remarkPlugins={PLUGINS} components={COMPONENTS}>
         {text}
       </ReactMarkdown>
     </div>
   );
-}
+});

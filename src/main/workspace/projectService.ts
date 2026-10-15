@@ -15,11 +15,12 @@ import { BrowserService } from '../browser/browserService';
 import { DevServerService } from '../browser/devServers';
 import { employeeTools } from '../browser/employeeTools';
 import { previewRows } from '../browser/previewRows';
+import { AttachmentStore } from '../boss/attachments';
 import type { DataPaths } from '../store/paths';
 import { ProjectStore } from '../store/projectStore';
 import { RoleStore } from '../store/roleStore';
 import { SkillStore } from '../store/skillStore';
-import { parseOrThrow, projectPatchSchema, projectSkillsEditSchema } from '../store/validate';
+import { attachmentsSchema, parseOrThrow, projectPatchSchema, projectSkillsEditSchema } from '../store/validate';
 import { ApprovalBroker } from './approvalBroker';
 import { createRepo, type NewProjectInput } from './newProject';
 import { killTree } from '../claude/killTree';
@@ -46,6 +47,7 @@ interface Workspace {
   devServers: DevServerService;
   /** The employees' tool server (browser and dev servers), one token per employee. */
   office: McpHost;
+  attachments: AttachmentStore;
   broker: ApprovalBroker;
   tools: ToolDef[];
   /** What each answered approval card led to (null when declined or dropped), so mergeNow can report failures. */
@@ -225,11 +227,12 @@ export class ProjectService extends EventEmitter {
       await manager.shutdown();
       throw err;
     }
+    const attachments = new AttachmentStore(this.d.paths.attachmentsDir(id));
     const boss = new BossSession({
-      project, manager, roles: this.roles, skills: this.skills, store: this.store, createRunner,
+      attachments, project, manager, roles: this.roles, skills: this.skills, store: this.store, createRunner,
       claudeBin: this.claudeBin, promptDir: this.d.paths.promptDir, mcpConfigPath, isolateUserSettings: isolate,
     });
-    ws = { project, manager, host, boss, broker, tools, browser, devServers, office, outcomes: new Map() };
+    ws = { project, manager, host, boss, broker, tools, browser, devServers, office, attachments, outcomes: new Map() };
     manager.on('event', (e: ManagerEvent) => this.forward(ws, e));
     boss.on('chat', (entry) => this.emitWs(ws, { type: 'chat', entry }));
     boss.on('stream', (text: string | null) => this.emitWs(ws, { type: 'boss-stream', text }));
@@ -262,7 +265,15 @@ export class ProjectService extends EventEmitter {
     return { project: { ...ws.project }, agents: ws.manager.agents(), tasks: ws.manager.tasks(), chat: await ws.boss.history(200), merges: ws.broker.pending() };
   }
 
-  sendToBoss(text: string): Promise<void> { return this.mustWs().boss.send(text); }
+  /** A message from the user, with optional attachments (checked here: they come from the renderer). */
+  async sendToBoss(text: string, attachments?: unknown): Promise<void> {
+    // Refused, not cut: a shortened brief would reach the boss without the user knowing.
+    if (text.length > 100_000) throw new Error('The message is too long (at most 100,000 characters)');
+    const files = attachments === undefined ? [] : parseOrThrow(attachmentsSchema, attachments, 'attachments');
+    return this.mustWs().boss.send(text, files);
+  }
+
+  readAttachment(id: string): Promise<string> { return this.mustWs().attachments.readImage(id); }
 
   async updateProject(patch: unknown): Promise<Project> {
     const ws = this.mustWs();

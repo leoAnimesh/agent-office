@@ -28,6 +28,13 @@ export const projectSkillsEditSchema = z.object({
   remove: z.array(id).max(22).optional(),
 }).strict();
 
+/** Chat attachments from the renderer; sizes, types and names are checked again in AttachmentStore. */
+export const attachmentsSchema = z.array(z.object({
+  name: z.string().max(255),
+  mime: z.string().max(100),
+  data: z.instanceof(Uint8Array),
+}).strict()).max(5, 'At most 5 attachments per message');
+
 export const projectPatchSchema = z.object({
   maxConcurrent: z.number().int().min(1).max(8).optional(),
   autoMerge: z.boolean().optional(),

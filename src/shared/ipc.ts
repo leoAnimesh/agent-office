@@ -1,4 +1,4 @@
-import type { Agent, AppSettings, CommitDetail, CommitSummary, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot, TerminalEvent, PreviewTab, PreviewFrame, PreviewInput } from './types';
+import type { Agent, AppSettings, CommitDetail, CommitSummary, AppStatus, CreateProjectInput, LogEntry, OpenOptions, Project, ProjectPatch, Role, Skill, WorkspaceEvent, WorkspaceSnapshot, TerminalEvent, PreviewTab, PreviewFrame, PreviewInput, NewAttachment } from './types';
 
 export const IPC = {
   appStatus: 'app:status',
@@ -13,6 +13,7 @@ export const IPC = {
   setProjectSkills: 'project:skills',
   snapshot: 'project:snapshot',
   sendToBoss: 'boss:send',
+  readAttachment: 'boss:attachment',
   listRoles: 'team:roles',
   listSkills: 'team:skills',
   hire: 'team:hire',
@@ -61,7 +62,9 @@ export interface AgentOfficeApi {
   updateProject(patch: ProjectPatch): Promise<Project>;
   setProjectSkills(edit: { add?: string[]; remove?: string[] }): Promise<WorkspaceSnapshot>;
   snapshot(): Promise<WorkspaceSnapshot | null>;
-  sendToBoss(text: string): Promise<void>;
+  sendToBoss(text: string, attachments?: NewAttachment[]): Promise<void>;
+  /** An image attachment of the open project as a data URL. */
+  readAttachment(id: string): Promise<string>;
   listRoles(): Promise<Role[]>;
   listSkills(): Promise<Skill[]>;
   hire(roleId: string, name?: string): Promise<Agent>;

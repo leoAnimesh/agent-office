@@ -12,6 +12,8 @@ export interface ClaudeLaunch {
   includePartialMessages?: boolean;
   /** Restrict the built-in tools to exactly these (MCP tools stay available). */
   tools?: string[];
+  /** Extra folders the agent may read (e.g. chat attachments). */
+  addDirs?: string[];
   /** Load only project/local settings so the user's global hooks and plugins stay out. */
   isolateUserSettings?: boolean;
 }
@@ -26,12 +28,25 @@ export function buildClaudeArgs(l: ClaudeLaunch): string[] {
   else if (l.sessionId) a.push('--session-id', l.sessionId);
   if (l.isolateUserSettings) a.push('--setting-sources', 'project,local');
   if (l.includePartialMessages) a.push('--include-partial-messages');
+  if (l.addDirs && l.addDirs.length > 0) a.push('--add-dir', ...l.addDirs);
   if (l.tools) a.push('--tools', ...(l.tools.length > 0 ? l.tools : ['']));
   // Variadic flag goes last so it cannot swallow anything after it.
   if (l.allowedTools && l.allowedTools.length > 0) a.push('--allowedTools', ...l.allowedTools);
   return a;
 }
 
-export function userMessageLine(text: string): string {
-  return JSON.stringify({ type: 'user', message: { role: 'user', content: text } }) + '\n';
+export interface ImageBlock { mime: string; base64: string }
+/** A user turn: plain text, or text with images the model can see. */
+export type UserMessage = string | { text: string; images: ImageBlock[] };
+
+export function userMessageLine(msg: UserMessage): string {
+  if (typeof msg === 'string' || msg.images.length === 0) {
+    const text = typeof msg === 'string' ? msg : msg.text;
+    return JSON.stringify({ type: 'user', message: { role: 'user', content: text } }) + '\n';
+  }
+  const content = [
+    ...(msg.text.trim() ? [{ type: 'text', text: msg.text }] : []),
+    ...msg.images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mime, data: i.base64 } })),
+  ];
+  return JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n';
 }
