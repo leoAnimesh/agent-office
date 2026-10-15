@@ -321,6 +321,15 @@ export class ProjectService extends EventEmitter {
     const ws = this.mustWs();
     const clean: ProjectPatch = parseOrThrow(projectPatchSchema, patch, 'project settings');
     Object.assign(ws.project, clean);
+    if (clean.browserTools === false) {
+      // Turned off: nobody keeps a key, a tab, a dev server or a device.
+      for (const a of ws.manager.agents()) {
+        ws.office.removeClient(a.id);
+        ws.devices.release(a.id);
+        void ws.browser.closeFor(a.id);
+        void ws.devServers.stop(a.id);
+      }
+    }
     await this.store.saveProject(ws.project);
     this.emitWs(ws, { type: 'project', project: { ...ws.project } });
     return { ...ws.project };
@@ -530,7 +539,8 @@ export class ProjectService extends EventEmitter {
       case 'task-finished': return this.emitWs(ws, { type: 'tasks', tasks: ws.manager.tasks() });
       case 'agent-event': return this.emitWs(ws, { type: 'agent-event', agentId: e.agentId, event: e.event, at: new Date().toISOString() });
       case 'error': return this.emitWs(ws, { type: 'error', message: e.message });
-      case 'work-ended': void ws.devServers.stop(e.agentId); ws.devices.release(e.agentId); return undefined;
+      // The session is over: its key to the browser and device tools stops working (a new session gets a new one).
+      case 'work-ended': void ws.devServers.stop(e.agentId); ws.devices.release(e.agentId); ws.office.removeClient(e.agentId); return undefined;
       case 'fired': ws.devices.release(e.agentId); void ws.devServers.stop(e.agentId); void ws.browser.closeFor(e.agentId); ws.office.removeClient(e.agentId); return undefined;
       default: return undefined;
     }
