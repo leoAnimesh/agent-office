@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { CommitDetail, CommitSummary, WorkspaceSnapshot } from '../../../shared/types';
 import { splitPath } from '../chat/fileChanges';
 import { diffLineKind, timeAgo } from '../history/format';
+import { localStore, readProjectUi, writeProjectUi } from '../memory';
 
 interface Props { ws: WorkspaceSnapshot; sha?: string; onError: (m: string) => void }
 
@@ -10,8 +11,10 @@ const PAGE = 100;
 /** Read-only git history: what the team changed, commit by commit. Nothing here checks out or changes the repo. */
 export function HistoryView({ ws, sha, onError }: Props) {
   const [branches, setBranches] = useState<string[]>([]);
-  const [branch, setBranch] = useState(ws.project.baseBranch);
-  const [mergesOnly, setMergesOnly] = useState(false);
+  // The branch and filter the user last looked at in this project.
+  const [remembered] = useState(() => readProjectUi(localStore(), ws.project.id));
+  const [branch, setBranch] = useState(remembered.historyBranch ?? ws.project.baseBranch);
+  const [mergesOnly, setMergesOnly] = useState(remembered.mergesOnly);
   const [commits, setCommits] = useState<CommitSummary[]>([]);
   const [more, setMore] = useState(false);
   const [selected, setSelected] = useState<string | null>(sha ?? null);
@@ -20,7 +23,14 @@ export function HistoryView({ ws, sha, onError }: Props) {
   const [diff, setDiff] = useState<string | null>(null);
   const fail = (e: unknown) => onError(String(e));
 
-  useEffect(() => { window.agentOffice.historyBranches().then(setBranches, fail); }, [ws.project.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    window.agentOffice.historyBranches().then((list) => {
+      setBranches(list);
+      // A remembered branch that was deleted since: fall back to the main branch.
+      setBranch((b) => (list.includes(b) ? b : ws.project.baseBranch));
+    }, fail);
+  }, [ws.project.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { writeProjectUi(localStore(), ws.project.id, { historyBranch: branch, mergesOnly }); }, [ws.project.id, branch, mergesOnly]);
 
   const load = (skip: number) => window.agentOffice.historyList(branch, skip, mergesOnly).then((page) => {
     setCommits((prev) => (skip === 0 ? page : [...prev, ...page]));
@@ -29,7 +39,9 @@ export function HistoryView({ ws, sha, onError }: Props) {
   }, fail);
   // New tasks merge in while the view is open: reload the list when the task list changes.
   const doneCount = ws.tasks.filter((t) => t.status === 'done').length;
-  useEffect(() => { void load(0); }, [branch, mergesOnly, doneCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Wait for the branch list before loading a remembered branch, which may have been deleted.
+  const ready = branch === ws.project.baseBranch || branches.includes(branch);
+  useEffect(() => { if (ready) void load(0); }, [branch, mergesOnly, doneCount, ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setDetail(null); setFile(null); setDiff(null);

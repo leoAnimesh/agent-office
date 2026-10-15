@@ -327,9 +327,9 @@ test('history shows what the team merged, file by file', async () => {
   run('checkout', '-q', 'main');
   run('merge', '--no-ff', '-q', '-m', 'Merge T-101: Add a greeting', 'ao/pixel/greeting-t-101');
   const env = { AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: repo };
-  const { app, userData } = await launch(env);
+  let { app, userData } = await launch(env);
   try {
-    const win = await app.firstWindow();
+    let win = await app.firstWindow();
     await win.getByRole('button', { name: 'Browse' }).click();
     await win.getByRole('button', { name: /Open the office/ }).click();
     await win.getByRole('navigation', { name: 'Project views' }).getByRole('button', { name: 'History' }).click();
@@ -348,6 +348,16 @@ test('history shows what the team merged, file by file', async () => {
     await expect(list.locator('.commit-subject')).toHaveCount(0);
     await win.getByLabel('Team merges only').uncheck();
     await expect(list.locator('.commit-subject').first()).toHaveText('Add a greeting');
+
+    // Relaunching reopens the project on the same tab, branch and filter, with no trip through onboarding.
+    await win.getByLabel('Team merges only').check();
+    await app.close();
+    ({ app } = await launch(env, userData));
+    win = await app.firstWindow();
+    await expect(win.getByRole('region', { name: 'Commits' })).toBeVisible();
+    await expect(win.getByLabel('Branch')).toHaveValue('ao/pixel/greeting-t-101');
+    await expect(win.getByLabel('Team merges only')).toBeChecked();
+    await expect(win.getByRole('button', { name: 'Browse' })).toHaveCount(0);
   } finally {
     await app.close();
     await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });

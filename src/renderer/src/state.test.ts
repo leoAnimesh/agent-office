@@ -16,6 +16,10 @@ describe('ui reducer', () => {
     expect(reducer(opened, { type: 'navigate', view: { name: 'agent', agentId: 'a' } }).view).toEqual({ name: 'agent', agentId: 'a' });
   });
 
+  it('opens on a remembered tab when one is given', () => {
+    expect(reducer(initialState, { type: 'snapshot', ws, view: { name: 'history' } }).view).toEqual({ name: 'history' });
+  });
+
   it('leaves an agent page when that agent is fired', () => {
     const s = reducer(opened, { type: 'navigate', view: { name: 'agent', agentId: 'a' } });
     expect(reducer(s, { type: 'event', event: { type: 'agents', agents: [] } }).view).toEqual({ name: 'team' });
