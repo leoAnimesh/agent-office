@@ -274,3 +274,23 @@
 .preview-canvas { flex: 1; min-height: 240px; width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
 .preview-canvas:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 .preview-empty { align-items: center; justify-content: center; }
+
+/* Chat attachments */
+.attach-chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.attach-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 6px; border: 1px solid var(--line-2); border-radius: 8px; min-width: 0; max-width: 100%; background: var(--panel-2); }
+.attach-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; }
+.attach-name { min-width: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attach-problem { margin: 0; color: var(--red-soft); }
+.msg-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.msg.user .pre:empty { display: none; }
+.attach-shot { padding: 0; border: 0; background: none; cursor: zoom-in; border-radius: 6px; }
+.attach-shot img { display: block; max-width: 180px; max-height: 140px; border-radius: 6px; }
+.lightbox { padding: 12px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; color: var(--text); }
+.lightbox::backdrop { background: rgba(0, 0, 0, 0.7); }
+.lightbox img { display: block; max-width: 80vw; max-height: 75vh; margin-bottom: 8px; }
+.chat.dragging .composer { outline: 2px dashed var(--teal); outline-offset: -6px; }
+.drop-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(20, 21, 31, 0.75); color: var(--teal); font-weight: 600; pointer-events: none; z-index: 5; }
+.msg-attachments { align-items: flex-start; }
+/* File chips inside the user's (amber) bubble: dark text on a light tint, not the panel colours. */
+.msg.user .attach-chip { background: rgba(0, 0, 0, 0.1); border-color: rgba(0, 0, 0, 0.25); color: var(--amber-ink); }
+.msg.user .attach-chip .muted { color: var(--amber-ink); opacity: 0.75; }

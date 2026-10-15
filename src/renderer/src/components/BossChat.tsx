@@ -1,8 +1,9 @@
 import { Fragment, memo, useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import type { Agent, ChatEntry, Look, MergeRequest } from '../../../shared/types';
+import type { Agent, ChatEntry, Look, MergeRequest, NewAttachment } from '../../../shared/types';
 import { describeToolCall } from '../chat/describe';
 import { FileChanges, legacyFinishedText } from '../chat/fileChanges';
 import { Markdown } from '../chat/Markdown';
+import { AttachmentList } from '../chat/AttachmentList';
 import { ChatComposer } from '../chat/ChatComposer';
 import { StreamingBubble } from '../chat/StreamingBubble';
 import { NO_UNSEEN, onMessages, onReachedBottom, onSent, type Unseen } from '../chat/unseen';
@@ -12,7 +13,12 @@ import { STATUS_COLORS, STATUS_LABEL } from '../sprites/sprite';
 // Memoized: entries are append-only and keep their identity, so old messages never re-render.
 const Entry = memo(function Entry({ e }: { e: ChatEntry }) {
   switch (e.kind) {
-    case 'user': return <div className="msg user pre">{e.text}</div>;
+    case 'user': return (
+      <div className="msg user">
+        <div className="pre">{e.text}</div>
+        {e.attachments && e.attachments.length > 0 && <AttachmentList list={e.attachments} />}
+      </div>
+    );
     case 'boss': return <div className="msg boss"><Markdown text={e.text} /></div>;
     case 'report': return <div className="msg report"><Markdown text={e.text} /></div>;
     case 'error': return <div className="msg error pre" role="alert">{e.text}</div>;
@@ -130,18 +136,34 @@ export const BossChat = memo(function BossChat({ chat, merges, boss, bossLook, b
 
   const toBottomRef = useRef(toBottom);
   toBottomRef.current = toBottom;
-  const onSend = useCallback(async (text: string) => {
+  const onSend = useCallback(async (text: string, files: NewAttachment[]) => {
     setUnseen(onSent);
     toBottomRef.current();
-    try { await window.agentOffice.sendToBoss(text); return true; } catch (e) { onError(String(e)); return false; }
+    try { await window.agentOffice.sendToBoss(text, files.length > 0 ? files : undefined); return true; } catch (e) { onError(String(e)); return false; }
   }, [onError]);
   const answer = useCallback((id: string, ok: boolean) => { window.agentOffice.answerMerge(id, ok).catch((e: unknown) => onError(String(e))); }, [onError]);
+  // Files dragged anywhere over the chat are handed to the composer.
+  const [dragging, setDragging] = useState(false);
+  const [dropped, setDropped] = useState<File[] | null>(null);
+  const takeDropped = useCallback(() => setDropped(null), []);
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
+  // dragover repeats while a file hovers; if it stops (drag cancelled or left the window) the hint goes away.
+  const dragTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hovering = () => {
+    setDragging(true);
+    if (dragTimer.current) clearTimeout(dragTimer.current);
+    dragTimer.current = setTimeout(() => setDragging(false), 400);
+  };
   const status = boss?.status ?? 'idle';
   const name = boss?.name ?? 'The boss';
   const activity = boss?.status === 'working' ? boss.bubble : 'thinking';
 
   return (
-    <section className="chat" aria-label="Boss chat">
+    <section className={dragging ? 'chat dragging' : 'chat'} aria-label="Boss chat"
+      onDragOver={(e) => { if (hasFiles(e)) { e.preventDefault(); hovering(); } }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+      onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); setDragging(false); setDropped(Array.from(e.dataTransfer.files)); }}>
+      {dragging && <div className="drop-hint" aria-hidden="true">Drop to attach</div>}
       <div className="chat-head">
         <Avatar look={bossLook} size={40} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -169,7 +191,7 @@ export const BossChat = memo(function BossChat({ chat, merges, boss, bossLook, b
         </button>
       )}
       </div>
-      <ChatComposer onSend={onSend} />
+      <ChatComposer onSend={onSend} dropped={dropped} onDroppedTaken={takeDropped} />
     </section>
   );
 });

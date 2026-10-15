@@ -407,3 +407,54 @@ test('the Preview tab shows an employee\'s browser tab live', async () => {
     await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });
+
+test('pastes and drops attachments into the boss chat', async () => {
+  const repo = await makeRepo();
+  const env = { AO_CLAUDE_BIN: process.execPath, AO_CLAUDE_ARGS: JSON.stringify([FAKE]), AO_E2E_PICK_FOLDER: repo };
+  const { app, userData } = await launch(env);
+  try {
+    const win = await app.firstWindow();
+    await win.getByRole('button', { name: 'Browse' }).click();
+    await win.getByRole('button', { name: /Open the office/ }).click();
+    const box = win.getByLabel('Message the boss');
+    // A 1×1 PNG pasted from the clipboard.
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const paste = (b64: string, name: string, type: string) => box.evaluate((el, a) => {
+      const bin = atob(a.b64); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const dt = new DataTransfer(); dt.items.add(new File([bytes], a.name, { type: a.type }));
+      el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    }, { b64, name, type });
+    await paste(png, 'dot.png', 'image/png');
+    const chips = win.getByRole('list', { name: 'Attachments' });
+    await expect(chips.getByText('dot.png')).toBeVisible();
+    await chips.getByRole('button', { name: 'Remove dot.png' }).click();
+    await expect(chips).toHaveCount(0);
+    await paste(png, 'dot.png', 'image/png');
+    await expect(win.getByRole('list', { name: 'Attachments' }).getByText('dot.png')).toBeVisible();
+    // A plain-text paste is left to the text box (not taken over as an attachment).
+    const textPasteTakenOver = await box.evaluate((el) => {
+      const dt = new DataTransfer(); dt.setData('text/plain', 'pasted words');
+      const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+      el.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    });
+    expect(textPasteTakenOver).toBe(false);
+    await box.fill('what is this?');
+    await box.press('Enter');
+    const sent = win.locator('.msg.user', { hasText: 'what is this?' });
+    await expect(sent.getByRole('button', { name: 'Open dot.png' }).locator('img')).toBeVisible();
+    // Drop a text file on the chat panel.
+    await win.locator('section.chat').evaluate((el) => {
+      const dt = new DataTransfer(); dt.items.add(new File(['hello notes'], 'notes.txt', { type: 'text/plain' }));
+      el.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }));
+      el.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    });
+    await expect(win.getByRole('list', { name: 'Attachments' }).getByText('notes.txt')).toBeVisible();
+    await win.getByRole('button', { name: 'Send' }).click();
+    await expect(win.locator('.msg.user').last()).toContainText('notes.txt');
+  } finally {
+    await app.close();
+    await fs.rm(repo, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    await fs.rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});

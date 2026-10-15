@@ -78,11 +78,16 @@ export function App() {
     window.agentOffice.getStatus().then(setStatus, () => setStatus({ platform: 'unknown', claude: null }));
     window.agentOffice.snapshot().then((ws) => { if (ws) opened(ws); else setNoSnapshot(true); }, () => setNoSnapshot(true));
     refreshRoles();
-    return window.agentOffice.onEvent((event) => {
+    // Files dropped outside the chat do nothing (instead of the window trying to open them).
+    const guard = (e: DragEvent) => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); };
+    document.addEventListener('dragover', guard);
+    document.addEventListener('drop', guard);
+    const off = window.agentOffice.onEvent((event) => {
       // The boss created or changed a role: reload names and looks so new hires show properly.
       if (event.type === 'roles-changed') refreshRoles();
       else dispatch({ type: 'event', event });
     });
+    return () => { off(); document.removeEventListener('dragover', guard); document.removeEventListener('drop', guard); };
   }, [refreshRoles, opened]);
 
   useEffect(() => {
