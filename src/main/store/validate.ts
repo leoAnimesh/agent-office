@@ -31,6 +31,7 @@ export const projectSkillsEditSchema = z.object({
 export const projectPatchSchema = z.object({
   maxConcurrent: z.number().int().min(1).max(8).optional(),
   autoMerge: z.boolean().optional(),
+  browserTools: z.boolean().optional(),
 }).strict();
 
 export const settingsSchema = z.object({

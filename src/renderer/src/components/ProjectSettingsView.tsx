@@ -7,11 +7,12 @@ interface Props { ws: WorkspaceSnapshot; onClosed: () => void; onError: (m: stri
 export function ProjectSettingsView({ ws, onClosed, onError }: Props) {
   const [max, setMax] = useState(String(ws.project.maxConcurrent));
   const [autoMerge, setAutoMerge] = useState(ws.project.autoMerge);
+  const [browserTools, setBrowserTools] = useState(ws.project.browserTools !== false);
   const [note, setNote] = useState<string | null>(null);
 
   const save = async () => {
     try {
-      await window.agentOffice.updateProject({ maxConcurrent: Number(max), autoMerge });
+      await window.agentOffice.updateProject({ maxConcurrent: Number(max), autoMerge, browserTools });
       setNote('Project settings saved.');
     } catch (e) { onError(String(e)); }
   };
@@ -29,6 +30,7 @@ export function ProjectSettingsView({ ws, onClosed, onError }: Props) {
           <input id="set-max" className="input" type="number" min={1} max={8} value={max} onChange={(e) => setMax(e.target.value)} style={{ maxWidth: 120 }} />
         </div>
         <label className="row"><input type="checkbox" checked={autoMerge} onChange={(e) => setAutoMerge(e.target.checked)} style={{ width: 18, height: 18 }} /> Merge finished work without asking me</label>
+        <label className="row"><input type="checkbox" checked={browserTools} onChange={(e) => setBrowserTools(e.target.checked)} style={{ width: 18, height: 18 }} /> Employees can use a browser to check their work</label>
         <div className="row"><button type="button" className="btn primary" onClick={() => void save()}>Save project settings</button></div>
       </section>
       <section className="panel-box" aria-labelledby="set-close">

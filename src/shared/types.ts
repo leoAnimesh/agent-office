@@ -84,6 +84,8 @@ export interface Project {
   skills?: ProjectSkill[];
   /** Skills the user removed; the boss cannot add them back. */
   skillsExcluded?: string[];
+  /** Employees get the browser tools (undefined = on). */
+  browserTools?: boolean;
 }
 
 export type RunnerEvent =
@@ -130,6 +132,7 @@ export interface WorkspaceSnapshot {
 
 export type WorkspaceEvent =
   | { type: 'roles-changed' }
+  | { type: 'preview-changed' }
   | { type: 'agents'; agents: Agent[] }
   | { type: 'tasks'; tasks: Task[] }
   | { type: 'chat'; entry: ChatEntry }
@@ -147,7 +150,15 @@ export type TerminalEvent =
   | { type: 'exit'; projectId: string; exitCode: number };
 
 export interface AppSettings { claudePath: string | null; isolateUserSettings: boolean; autoModelMigrated?: boolean; allToolsMigrated?: boolean }
-export interface ProjectPatch { maxConcurrent?: number; autoMerge?: boolean}
+export interface ProjectPatch { maxConcurrent?: number; autoMerge?: boolean; browserTools?: boolean }
 export interface OpenOptions { bossName?: string; bossModel?: string }
 export interface CreateProjectInput extends OpenOptions { parentDir: string; name: string; brief?: string }
 export interface LogEntry { at: string; event: RunnerEvent }
+
+export interface PreviewTab { agentId: string; url: string; title: string; devServer: { url: string; running: boolean } | null }
+export interface PreviewFrame { agentId: string; data: string; width: number; height: number }
+export type PreviewInput =
+  | { kind: 'click'; x: number; y: number; button: 'left' | 'right' }
+  | { kind: 'wheel'; x: number; y: number; dy: number }
+  | { kind: 'key'; key: string }
+  | { kind: 'text'; text: string };

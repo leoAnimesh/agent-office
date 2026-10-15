@@ -69,3 +69,11 @@ describe('renderPrompt (boss project skills)', () => {
     expect(renderPrompt(boss, [], { ...ctx, projectSkills: { chosen: true, names: [] } })).toContain('Employees on this project get no skills.');
   });
 });
+describe('renderPrompt (browser tools)', () => {
+  it('tells employees how to check UI work only when the browser is on', () => {
+    const on = renderPrompt(role, [], { agentName: 'Pixel', bossName: 'Max', branch: 'b', projectName: 'demo', kind: 'employee', browserTools: true });
+    expect(on).toContain('`start_dev_server`');
+    expect(on).toContain('`browser_open`');
+    expect(renderPrompt(role, [], { agentName: 'Pixel', bossName: 'Max', branch: 'b', projectName: 'demo', kind: 'employee' })).not.toContain('start_dev_server');
+  });
+});

@@ -26,6 +26,8 @@ export interface AgentManagerDeps {
   promptDir: string;
   isolateUserSettings: boolean;
   classify: TaskClassifier;
+  /** The employee's MCP config file (browser tools), or null when they are off. */
+  employeeMcp?: (agent: Agent) => Promise<string | null>;
   now?: () => Date;
 }
 
@@ -35,7 +37,10 @@ export type ManagerEvent =
   | { type: 'tasks-changed' }
   | { type: 'task-finished'; task: Task; agent: Agent }
   | { type: 'agent-replied'; agent: Agent; text: string; ok: boolean }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  /** A task stopped running (finished, failed, paused or cancelled): its dev server can go. */
+  | { type: 'work-ended'; agentId: string }
+  | { type: 'fired'; agentId: string };
 
 export type MergeOutcome = MergeResult | { status: 'not_ready'; reason: string };
 
@@ -310,6 +315,7 @@ export class AgentManager extends EventEmitter {
       await this.d.worktrees.remove(agent.name);
       this.agentList = this.agentList.filter((a) => a.id !== agent.id);
       await this.saveAgents();
+      this.emitEvent({ type: 'fired', agentId: agent.id });
     });
   }
 
@@ -347,7 +353,8 @@ export class AgentManager extends EventEmitter {
         const wt = await this.d.worktrees.prepare(agent.name, open.branch, this.d.project.baseBranch);
         agent.worktreePath = wt;
         const fresh = !agent.sessionId;
-        const runner = this.spawn(agent, role, wt, await this.writePrompt(agent, role, open.branch), open.id, launchModel(role.model, open.model));
+        const mcp = (await this.d.employeeMcp?.(agent)) ?? null;
+        const runner = this.spawn(agent, role, wt, await this.writePrompt(agent, role, open.branch), open.id, launchModel(role.model, open.model), mcp);
         this.setStatus(open, 'queued');
         this.setStatus(open, 'working', { attempts: open.attempts + 1 });
         await this.saveTasks();
@@ -360,7 +367,8 @@ export class AgentManager extends EventEmitter {
 
       if (!agent.sessionId || !agent.worktreePath) throw new UserError(`${agent.name} has not worked on anything yet. Assign a task instead.`);
       const branch = await git(agent.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD']);
-      const runner = this.spawn(agent, role, agent.worktreePath, await this.writePrompt(agent, role, branch), null, launchModel(role.model));
+      const mcp = (await this.d.employeeMcp?.(agent)) ?? null;
+      const runner = this.spawn(agent, role, agent.worktreePath, await this.writePrompt(agent, role, branch), null, launchModel(role.model), mcp);
       agent.status = 'thinking';
       agent.bubble = 'Reading a message…';
       runner.start();
@@ -416,7 +424,8 @@ export class AgentManager extends EventEmitter {
     agent.bubble = 'Starting…';
 
     const promptFile = await this.writePrompt(agent, role, task.branch);
-    const runner = this.spawn(agent, role, wt, promptFile, task.id, launchModel(role.model, task.model));
+    const mcp = (await this.d.employeeMcp?.(agent)) ?? null;
+    const runner = this.spawn(agent, role, wt, promptFile, task.id, launchModel(role.model, task.model), mcp);
     const message = taskMessage(task);
     this.setStatus(task, 'working', { attempts: task.attempts + 1 });
     await this.saveTasks();
@@ -471,19 +480,20 @@ export class AgentManager extends EventEmitter {
     const promptFile = path.join(this.d.promptDir, `${agent.id}.md`);
     await fs.mkdir(this.d.promptDir, { recursive: true });
     await fs.writeFile(promptFile, renderPrompt(role, skills, {
-      agentName: agent.name, bossName: boss?.name ?? 'the boss', branch, projectName: this.d.project.name, kind: 'employee',
+      agentName: agent.name, bossName: boss?.name ?? 'the boss', branch, projectName: this.d.project.name, kind: 'employee', browserTools: this.d.project.browserTools !== false,
     }));
     return promptFile;
   }
 
-  private spawn(agent: Agent, role: Role, cwd: string, promptFile: string, taskId: string | null, model: string): AgentRunner {
+  private spawn(agent: Agent, role: Role, cwd: string, promptFile: string, taskId: string | null, model: string, mcp: string | null): AgentRunner {
     const runner = this.d.createRunner({
       bin: this.d.claudeBin,
       cwd,
       launch: {
         model,
         permissionMode: role.permissionMode,
-        allowedTools: role.allowedTools,
+        allowedTools: mcp ? [...role.allowedTools, 'mcp__office'] : role.allowedTools,
+        mcpConfigPath: mcp ?? undefined,
         appendSystemPromptFile: promptFile,
         resume: agent.sessionId,
         sessionId: agent.sessionId ? undefined : randomUUID(),
@@ -568,6 +578,7 @@ export class AgentManager extends EventEmitter {
     assertTransition(task, to);
     const from = task.status;
     Object.assign(task, patch, { status: to, updatedAt: this.now() });
+    if (from === 'working' && to !== 'working') this.emitEvent({ type: 'work-ended', agentId: task.assigneeId });
     // A queue position only means something while queued: drop it on the way out, go to the front on the way back.
     if (from === 'queued' && to !== 'queued') task.order = undefined;
     if (from !== 'queued' && to === 'queued') this.toFrontOfQueue(task);
