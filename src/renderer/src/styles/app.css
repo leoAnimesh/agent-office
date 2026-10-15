@@ -195,17 +195,21 @@
 #terminal-toggle[aria-pressed="true"] { border-color: var(--teal); color: var(--teal); }
 
 /* History: commit list on the left, the selected commit and its diffs on the right */
-.history { display: grid; grid-template-columns: minmax(280px, 40%) minmax(0, 1fr); gap: 20px; align-items: start; }
-.history-list, .history-detail { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.history { display: grid; grid-template-columns: minmax(280px, 40%) minmax(0, 1fr); gap: 20px; height: 100%; min-height: 0; }
+/* The History tab fills the view: the commit list and the detail pane each scroll on their own. */
+.view:has(> .history) { overflow: hidden; display: flex; flex-direction: column; }
+.view:has(> .history) > .history { flex: 1; }
+.history-list, .history-detail { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.history-detail { overflow-y: auto; padding-right: 6px; }
 .history-filters { gap: 10px; }
-.commit-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.commit-list { list-style: none; margin: 0; padding: 0 6px 0 0; display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; overflow-y: auto; }
+.history-list > .btn { align-self: flex-start; flex: none; }
 .commit-row { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); }
 .commit-row:hover { border-color: var(--line-2); }
 .commit-row[aria-current="true"] { border-color: var(--teal); background: #1f2433; }
 .commit-subject { font-weight: 500; overflow-wrap: anywhere; }
 .commit-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .commit-stat { margin-left: auto; }
-.history-detail { position: sticky; top: 0; }
 .history-title { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
 .history-body { margin: 0; color: var(--muted); }
 .history-files-title { margin: 6px 0 0; font-size: 14px; }
@@ -213,11 +217,16 @@
 .history-file { width: 100%; display: flex; align-items: baseline; min-width: 0; padding: 4px 8px; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--text); font-family: var(--font-mono); font-size: 12px; text-align: left; }
 .history-file:hover { background: var(--panel-2); }
 .history-file[aria-pressed="true"] { border-color: var(--teal); background: var(--panel-2); }
-.diff { border: 1px solid var(--line); border-radius: 6px; background: #0f1018; max-height: 60vh; overflow: auto; }
+.diff { border: 1px solid var(--line); border-radius: 6px; background: #0f1018; overflow-x: auto; flex: none; }
 .diff-body { margin: 0; padding: 8px 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; }
 .diff-line { display: block; padding: 0 12px; white-space: pre; }
 .diff-line.add { background: rgba(139, 212, 122, .12); color: var(--green); }
 .diff-line.del { background: rgba(255, 122, 107, .12); color: var(--red-soft); }
 .diff-line.hunk { color: var(--blue); }
 .diff-line.meta { color: var(--muted); }
-@media (max-width: 1100px) { .history { grid-template-columns: 1fr; } .history-detail { position: static; } }
+@media (max-width: 1100px) {
+  .history { grid-template-columns: 1fr; height: auto; }
+  .view:has(> .history) { overflow: auto; display: block; }
+  .commit-list { max-height: 50vh; }
+  .history-detail { overflow: visible; }
+}
